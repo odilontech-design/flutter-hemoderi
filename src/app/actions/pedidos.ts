@@ -1,0 +1,420 @@
+"use server";
+
+import { revalidatePath } from "next/cache";
+import type { Prisma, StatusPedido } from "@prisma/client";
+import { prisma } from "@/lib/prisma";
+import { exigirClinica, exigirInterno, registrarAuditoria } from "@/lib/sessao";
+import { equipamentoLivre, parametros, temBloqueio, verificarAlocacao } from "@/lib/alocacao";
+import { calcularRepasse } from "@/lib/repasse";
+import { podeTransicionar } from "@/lib/pedido";
+import { competenciaDe, dataDeISO } from "@/lib/data";
+import { enfileirarMensagem } from "@/lib/integracoes/whatsapp";
+import { sincronizarEvento } from "@/lib/integracoes/google-agenda";
+import { marcarNegocioGanho } from "@/lib/integracoes/pipedrive";
+
+export type Resultado = { ok: boolean; erro?: string; avisos?: string[] };
+
+function atualizarTelas() {
+  revalidatePath("/painel");
+  revalidatePath("/painel/pedidos");
+  revalidatePath("/painel/agenda");
+  revalidatePath("/painel/financeiro");
+  revalidatePath("/portal");
+  revalidatePath("/profissional");
+}
+
+/**
+ * Numeração sequencial do pedido.
+ *
+ * Sai de dentro da mesma transação que cria o pedido: dois atendentes
+ * marcando ao mesmo tempo — rotina com 5 pessoas na operação — não podem
+ * receber o mesmo número, e `numero` é único no banco justamente para que
+ * uma corrida vire erro visível em vez de dois pedidos com a mesma
+ * identidade.
+ */
+async function proximoNumero(tx: Prisma.TransactionClient): Promise<number> {
+  const config = await tx.parametros.update({
+    where: { id: "hemoderi" },
+    data: { proximoNumeroPedido: { increment: 1 } },
+    select: { proximoNumeroPedido: true },
+  });
+  return config.proximoNumeroPedido - 1;
+}
+
+/** Preço do serviço para a clínica: o negociado, quando existe; senão a tabela. */
+async function valorDoServico(clinicaId: string, servicoId: string): Promise<number> {
+  const [negociado, servico] = await Promise.all([
+    prisma.precoClinica.findUnique({
+      where: { clinicaId_servicoId: { clinicaId, servicoId } },
+      select: { valorCentavos: true },
+    }),
+    prisma.servico.findUnique({ where: { id: servicoId }, select: { valorPadraoCentavos: true } }),
+  ]);
+  return negociado?.valorCentavos ?? servico?.valorPadraoCentavos ?? 0;
+}
+
+async function repasseDoPedido(profissionalId: string, servicoId: string, valorServicoCentavos: number) {
+  const [regra, servico, profissional, config] = await Promise.all([
+    prisma.regraRepasse.findUnique({
+      where: { profissionalId_servicoId: { profissionalId, servicoId } },
+      select: { percent: true, fixoCentavos: true },
+    }),
+    prisma.servico.findUnique({
+      where: { id: servicoId },
+      select: { repassePercent: true, repasseFixoCentavos: true },
+    }),
+    prisma.profissional.findUnique({
+      where: { id: profissionalId },
+      select: { repassePercentPadrao: true },
+    }),
+    parametros(),
+  ]);
+
+  return calcularRepasse({
+    valorServicoCentavos,
+    regra,
+    servico,
+    profissional,
+    percentPadrao: config.repassePercentPadrao,
+  });
+}
+
+// ─── Criação ────────────────────────────────────────────────────────────────
+
+/**
+ * Pedido aberto pela equipe interna. Pode já nascer alocado quando o
+ * atendente sabe quem vai atender — é o caminho mais comum hoje, e obrigar a
+ * passar por duas telas só transformaria um telefonema em dois cliques a mais.
+ */
+export async function criarPedido(_anterior: Resultado, dados: FormData): Promise<Resultado> {
+  const sessao = await exigirInterno();
+
+  const clinicaId = String(dados.get("clinicaId") ?? "");
+  const servicoId = String(dados.get("servicoId") ?? "");
+  const profissionalId = String(dados.get("profissionalId") ?? "") || null;
+  const dataISO = String(dados.get("data") ?? "");
+  const horaInicio = String(dados.get("horaInicio") ?? "");
+  if (!clinicaId || !servicoId || !dataISO || !horaInicio) {
+    return { ok: false, erro: "Clínica, serviço, data e hora são obrigatórios." };
+  }
+
+  // Garante a linha única de Parametros antes de numerar o pedido: numerar
+  // é um update, e num banco recém-criado não haveria o que atualizar.
+  await parametros();
+
+  const servico = await prisma.servico.findFirst({ where: { id: servicoId, ativo: true } });
+  if (!servico) return { ok: false, erro: "Serviço indisponível." };
+
+  const data = dataDeISO(dataISO);
+  const impedimentos = await verificarAlocacao({
+    clinicaId,
+    profissionalId,
+    data,
+    horaInicio,
+    duracaoMin: servico.duracaoMin,
+  });
+  if (temBloqueio(impedimentos)) {
+    return { ok: false, erro: impedimentos.filter((i) => i.bloqueante).map((i) => i.mensagem).join(" ") };
+  }
+
+  const valorServicoCentavos = await valorDoServico(clinicaId, servicoId);
+
+  let valorRepasseCentavos = 0;
+  if (profissionalId) {
+    valorRepasseCentavos = (await repasseDoPedido(profissionalId, servicoId, valorServicoCentavos)).valorCentavos;
+  }
+
+  const equipamentoId =
+    profissionalId && servico.exigeEquipamento
+      ? await equipamentoLivre(data, horaInicio, servico.duracaoMin)
+      : null;
+  if (profissionalId && servico.exigeEquipamento && !equipamentoId) {
+    return { ok: false, erro: "Nenhum equipamento livre nesse horário." };
+  }
+
+  const pedido = await prisma.$transaction(async (tx) => {
+    const numero = await proximoNumero(tx);
+    return tx.pedido.create({
+      data: {
+        numero,
+        clinicaId,
+        servicoId,
+        profissionalId,
+        equipamentoId,
+        data,
+        horaInicio,
+        duracaoMin: servico.duracaoMin,
+        status: profissionalId ? "ALOCADO" : "CONFIRMADO",
+        origem: "INTERNO",
+        valorServicoCentavos,
+        valorRepasseCentavos,
+        pacienteNome: String(dados.get("pacienteNome") ?? "") || null,
+        pacienteContato: String(dados.get("pacienteContato") ?? "") || null,
+        observacoes: String(dados.get("observacoes") ?? "") || null,
+        criadoPorId: sessao.usuarioId,
+      },
+    });
+  });
+
+  await registrarAuditoria(sessao.usuarioId, "Pedido", pedido.id, "criar", `nº ${pedido.numero}`);
+  await enfileirarMensagem(pedido.id, "CONFIRMACAO");
+  if (profissionalId) await enfileirarMensagem(pedido.id, "ALOCACAO");
+  await sincronizarEvento(pedido.id);
+
+  atualizarTelas();
+  return { ok: true, avisos: impedimentos.filter((i) => !i.bloqueante).map((i) => i.mensagem) };
+}
+
+/**
+ * Solicitação aberta pela própria clínica no portal. Nasce SOLICITADO: é
+ * pedido, não compromisso. A equipe confirma — e é essa confirmação que
+ * separa o autoatendimento de um canal onde qualquer um marca qualquer coisa.
+ */
+export async function solicitarPedido(_anterior: Resultado, dados: FormData): Promise<Resultado> {
+  const sessao = await exigirClinica();
+
+  const servicoId = String(dados.get("servicoId") ?? "");
+  const profissionalId = String(dados.get("profissionalId") ?? "") || null;
+  const dataISO = String(dados.get("data") ?? "");
+  const horaInicio = String(dados.get("horaInicio") ?? "");
+  if (!servicoId || !dataISO || !horaInicio) {
+    return { ok: false, erro: "Serviço, data e hora são obrigatórios." };
+  }
+
+  const [servico, config] = await Promise.all([
+    prisma.servico.findFirst({ where: { id: servicoId, ativo: true } }),
+    parametros(),
+  ]);
+  if (!servico) return { ok: false, erro: "Serviço indisponível." };
+
+  const data = dataDeISO(dataISO);
+  const limite = new Date(Date.now() + config.antecedenciaMinimaHoras * 60 * 60 * 1000);
+  if (new Date(`${dataISO}T${horaInicio}:00-03:00`) < limite) {
+    return {
+      ok: false,
+      erro: `Agendamentos pelo portal precisam de ${config.antecedenciaMinimaHoras}h de antecedência. Para urgências, fale com a central.`,
+    };
+  }
+
+  const impedimentos = await verificarAlocacao({
+    clinicaId: sessao.clinicaId,
+    profissionalId,
+    data,
+    horaInicio,
+    duracaoMin: servico.duracaoMin,
+  });
+  if (temBloqueio(impedimentos)) {
+    return { ok: false, erro: "Esse horário acabou de ficar indisponível. Escolha outro." };
+  }
+
+  const valorServicoCentavos = await valorDoServico(sessao.clinicaId, servicoId);
+
+  const pedido = await prisma.$transaction(async (tx) => {
+    const numero = await proximoNumero(tx);
+    return tx.pedido.create({
+      data: {
+        numero,
+        clinicaId: sessao.clinicaId,
+        servicoId,
+        // A preferência de profissional fica registrada, mas quem aloca é a
+        // equipe: o portal não pode comprometer a agenda de um prestador.
+        observacoes: [
+          String(dados.get("observacoes") ?? ""),
+          profissionalId ? "Preferência de profissional indicada pela clínica." : "",
+        ]
+          .filter(Boolean)
+          .join(" ") || null,
+        data,
+        horaInicio,
+        duracaoMin: servico.duracaoMin,
+        status: "SOLICITADO",
+        origem: "PORTAL_CLINICA",
+        valorServicoCentavos,
+        pacienteNome: String(dados.get("pacienteNome") ?? "") || null,
+        pacienteContato: String(dados.get("pacienteContato") ?? "") || null,
+        criadoPorId: sessao.usuarioId,
+      },
+    });
+  });
+
+  await registrarAuditoria(sessao.usuarioId, "Pedido", pedido.id, "solicitar", `nº ${pedido.numero}`);
+  atualizarTelas();
+  return { ok: true };
+}
+
+// ─── Esteira ────────────────────────────────────────────────────────────────
+
+async function transicionar(pedidoId: string, para: StatusPedido, usuarioId: string): Promise<Resultado> {
+  const pedido = await prisma.pedido.findUnique({ where: { id: pedidoId }, select: { status: true } });
+  if (!pedido) return { ok: false, erro: "Pedido não encontrado." };
+  if (!podeTransicionar(pedido.status, para)) {
+    return { ok: false, erro: `Não é possível ir de ${pedido.status} para ${para}.` };
+  }
+  await prisma.pedido.update({ where: { id: pedidoId }, data: { status: para } });
+  await registrarAuditoria(usuarioId, "Pedido", pedidoId, "status", `${pedido.status} → ${para}`);
+  return { ok: true };
+}
+
+export async function confirmarPedido(pedidoId: string): Promise<Resultado> {
+  const sessao = await exigirInterno();
+  const resultado = await transicionar(pedidoId, "CONFIRMADO", sessao.usuarioId);
+  if (resultado.ok) {
+    await enfileirarMensagem(pedidoId, "CONFIRMACAO");
+    await sincronizarEvento(pedidoId);
+    atualizarTelas();
+  }
+  return resultado;
+}
+
+export async function alocarPedido(pedidoId: string, profissionalId: string): Promise<Resultado> {
+  const sessao = await exigirInterno();
+
+  const pedido = await prisma.pedido.findUnique({
+    where: { id: pedidoId },
+    include: { servico: { select: { id: true, duracaoMin: true, exigeEquipamento: true } } },
+  });
+  if (!pedido) return { ok: false, erro: "Pedido não encontrado." };
+  if (!podeTransicionar(pedido.status, "ALOCADO")) {
+    return { ok: false, erro: "Só é possível alocar um pedido confirmado." };
+  }
+
+  const impedimentos = await verificarAlocacao({
+    clinicaId: pedido.clinicaId,
+    profissionalId,
+    data: pedido.data,
+    horaInicio: pedido.horaInicio,
+    duracaoMin: pedido.duracaoMin,
+    ignorarPedidoId: pedido.id,
+  });
+  if (temBloqueio(impedimentos)) {
+    return { ok: false, erro: impedimentos.filter((i) => i.bloqueante).map((i) => i.mensagem).join(" ") };
+  }
+
+  const equipamentoId = pedido.servico.exigeEquipamento
+    ? await equipamentoLivre(pedido.data, pedido.horaInicio, pedido.duracaoMin, pedido.id)
+    : null;
+  if (pedido.servico.exigeEquipamento && !equipamentoId) {
+    return { ok: false, erro: "Nenhum equipamento livre nesse horário." };
+  }
+
+  const repasse = await repasseDoPedido(profissionalId, pedido.servicoId, pedido.valorServicoCentavos);
+
+  await prisma.pedido.update({
+    where: { id: pedido.id },
+    data: {
+      profissionalId,
+      equipamentoId,
+      status: "ALOCADO",
+      valorRepasseCentavos: repasse.valorCentavos,
+    },
+  });
+
+  await registrarAuditoria(
+    sessao.usuarioId,
+    "Pedido",
+    pedido.id,
+    "alocar",
+    `repasse por ${repasse.origem}`
+  );
+  await enfileirarMensagem(pedido.id, "ALOCACAO");
+  await sincronizarEvento(pedido.id);
+
+  atualizarTelas();
+  return { ok: true, avisos: impedimentos.filter((i) => !i.bloqueante).map((i) => i.mensagem) };
+}
+
+/** Devolve o pedido à fila quando o profissional desiste. */
+export async function desalocarPedido(pedidoId: string): Promise<Resultado> {
+  const sessao = await exigirInterno();
+  const resultado = await transicionar(pedidoId, "CONFIRMADO", sessao.usuarioId);
+  if (resultado.ok) {
+    await prisma.pedido.update({
+      where: { id: pedidoId },
+      data: { profissionalId: null, equipamentoId: null, valorRepasseCentavos: 0 },
+    });
+    // A mensagem de alocação é apagada para que o próximo profissional
+    // alocado receba a dele — a unicidade é por pedido × tipo.
+    await prisma.mensagemWhatsapp
+      .delete({ where: { pedidoId_tipo: { pedidoId, tipo: "ALOCACAO" } } })
+      .catch(() => undefined);
+    atualizarTelas();
+  }
+  return resultado;
+}
+
+export async function cancelarPedido(pedidoId: string, motivo: string): Promise<Resultado> {
+  const sessao = await exigirInterno();
+  const resultado = await transicionar(pedidoId, "CANCELADO", sessao.usuarioId);
+  if (resultado.ok) {
+    await prisma.pedido.update({
+      where: { id: pedidoId },
+      data: { canceladoEm: new Date(), motivoCancelamento: motivo || null },
+    });
+    await prisma.mensagemWhatsapp.updateMany({
+      where: { pedidoId, status: "PENDENTE" },
+      data: { status: "CANCELADA" },
+    });
+    atualizarTelas();
+  }
+  return resultado;
+}
+
+/**
+ * Fecha o pedido a partir do relatório do profissional.
+ *
+ * O repasse nasce aqui e só aqui — REALIZADO gera, FALTOU não. É a regra que
+ * o financeiro assume inteira: o que aparece em "a pagar" passou por um
+ * relatório que alguém assinou.
+ */
+export async function registrarResultado(
+  pedidoId: string,
+  compareceu: boolean,
+  usuarioId: string
+): Promise<Resultado> {
+  const pedido = await prisma.pedido.findUnique({
+    where: { id: pedidoId },
+    select: {
+      id: true,
+      status: true,
+      data: true,
+      profissionalId: true,
+      valorRepasseCentavos: true,
+    },
+  });
+  if (!pedido) return { ok: false, erro: "Pedido não encontrado." };
+
+  const destino: StatusPedido = compareceu ? "REALIZADO" : "FALTOU";
+  if (!podeTransicionar(pedido.status, destino)) {
+    return { ok: false, erro: "Só um pedido alocado pode ser finalizado." };
+  }
+
+  await prisma.pedido.update({ where: { id: pedido.id }, data: { status: destino } });
+
+  if (compareceu && pedido.profissionalId) {
+    await prisma.repasse.upsert({
+      where: { pedidoId: pedido.id },
+      update: { valorCentavos: pedido.valorRepasseCentavos },
+      create: {
+        pedidoId: pedido.id,
+        profissionalId: pedido.profissionalId,
+        // Competência é o mês do ATENDIMENTO, não o do envio do relatório:
+        // relatório atrasado não empurra o custo para o mês seguinte.
+        competencia: competenciaDe(pedido.data),
+        valorCentavos: pedido.valorRepasseCentavos,
+      },
+    });
+    await marcarNegocioGanho(pedido.id);
+  }
+
+  await registrarAuditoria(usuarioId, "Pedido", pedido.id, "resultado", destino);
+  await enfileirarMensagem(pedido.id, "RESULTADO");
+
+  atualizarTelas();
+  return { ok: true };
+}
+
+/** Caminho da equipe interna para o caso em que o profissional não preenche. */
+export async function marcarResultadoInterno(pedidoId: string, compareceu: boolean): Promise<Resultado> {
+  const sessao = await exigirInterno();
+  return registrarResultado(pedidoId, compareceu, sessao.usuarioId);
+}
