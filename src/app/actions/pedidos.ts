@@ -6,8 +6,8 @@ import { prisma } from "@/lib/prisma";
 import { exigirClinica, exigirInterno, registrarAuditoria } from "@/lib/sessao";
 import { equipamentoLivre, parametros, temBloqueio, verificarAlocacao } from "@/lib/alocacao";
 import { calcularRepasse } from "@/lib/repasse";
-import { podeTransicionar } from "@/lib/pedido";
-import { competenciaDe, dataDeISO } from "@/lib/data";
+import { podeTransicionar, STATUS_ATIVOS } from "@/lib/pedido";
+import { competenciaDe, dataDeISO, instanteDoAtendimento, isoDeData } from "@/lib/data";
 import { enfileirarMensagem } from "@/lib/integracoes/whatsapp";
 import { sincronizarEvento } from "@/lib/integracoes/google-agenda";
 import { marcarNegocioGanho } from "@/lib/integracoes/pipedrive";
@@ -209,6 +209,19 @@ export async function solicitarPedido(_anterior: Resultado, dados: FormData): Pr
 
   const valorServicoCentavos = await valorDoServico(sessao.clinicaId, servicoId);
 
+  // O profissional escolhido fica GRAVADO no pedido, e não como frase em
+  // observações. Ele é o que a clínica pediu e o que a equipe vai confirmar —
+  // e é a agenda dele que o reagendamento pelo portal consulta depois.
+  //
+  // Isso segura o horário desse profissional enquanto o pedido está
+  // SOLICITADO: é reserva provisória, não alocação. O que separa as duas é o
+  // status, e é a equipe que faz a segunda. Segurar é de propósito — duas
+  // clínicas pedindo o mesmo horário e as duas recebendo "ok" é pior do que
+  // a segunda ver o horário indisponível na hora.
+  const profissional = profissionalId
+    ? await prisma.profissional.findFirst({ where: { id: profissionalId, ativo: true }, select: { id: true } })
+    : null;
+
   const pedido = await prisma.$transaction(async (tx) => {
     const numero = await proximoNumero(tx);
     return tx.pedido.create({
@@ -216,14 +229,8 @@ export async function solicitarPedido(_anterior: Resultado, dados: FormData): Pr
         numero,
         clinicaId: sessao.clinicaId,
         servicoId,
-        // A preferência de profissional fica registrada, mas quem aloca é a
-        // equipe: o portal não pode comprometer a agenda de um prestador.
-        observacoes: [
-          String(dados.get("observacoes") ?? ""),
-          profissionalId ? "Preferência de profissional indicada pela clínica." : "",
-        ]
-          .filter(Boolean)
-          .join(" ") || null,
+        profissionalId: profissional?.id ?? null,
+        observacoes: String(dados.get("observacoes") ?? "") || null,
         data,
         horaInicio,
         duracaoMin: servico.duracaoMin,
@@ -408,6 +415,143 @@ export async function registrarResultado(
 
   await registrarAuditoria(usuarioId, "Pedido", pedido.id, "resultado", destino);
   await enfileirarMensagem(pedido.id, "RESULTADO");
+
+  atualizarTelas();
+  return { ok: true };
+}
+
+// ─── Portal da clínica ──────────────────────────────────────────────────────
+
+/**
+ * Janela em que a clínica ainda mexe no próprio pedido sozinha.
+ *
+ * Vale a mesma antecedência mínima do agendamento: mais perto do que isso, o
+ * profissional já se organizou para o deslocamento e o equipamento já foi
+ * separado. Desmarcar em cima da hora continua possível — mas pela central,
+ * falando com alguém, que é o que dá à operação a chance de remanejar.
+ */
+async function dentroDaJanelaDaClinica(data: Date, horaInicio: string): Promise<boolean> {
+  const config = await parametros();
+  const limite = new Date(Date.now() + config.antecedenciaMinimaHoras * 60 * 60 * 1000);
+  return instanteDoAtendimento(data, horaInicio) >= limite;
+}
+
+async function pedidoDaClinica(pedidoId: string, clinicaId: string) {
+  // O filtro por clinicaId é o que impede mexer no pedido de outra clínica
+  // trocando o id na URL.
+  return prisma.pedido.findFirst({
+    where: { id: pedidoId, clinicaId },
+    include: { servico: { select: { duracaoMin: true } } },
+  });
+}
+
+/**
+ * Reagendamento pelo portal.
+ *
+ * O profissional já alocado continua no pedido se estiver livre no novo
+ * horário — trocar de profissional a cada mudança de hora seria perder o
+ * combinado com quem já conhece o caso. Se ele não estiver livre, o
+ * reagendamento é recusado com o motivo, e a clínica escolhe outro horário.
+ */
+export async function reagendarPedido(_anterior: Resultado, dados: FormData): Promise<Resultado> {
+  const sessao = await exigirClinica();
+
+  const pedidoId = String(dados.get("pedidoId") ?? "");
+  const dataISO = String(dados.get("data") ?? "");
+  const horaInicio = String(dados.get("horaInicio") ?? "");
+  if (!dataISO || !horaInicio) return { ok: false, erro: "Escolha a nova data e o novo horário." };
+
+  const pedido = await pedidoDaClinica(pedidoId, sessao.clinicaId);
+  if (!pedido) return { ok: false, erro: "Pedido não encontrado." };
+  if (!STATUS_ATIVOS.includes(pedido.status)) {
+    return { ok: false, erro: "Este atendimento já foi finalizado." };
+  }
+
+  if (!(await dentroDaJanelaDaClinica(pedido.data, pedido.horaInicio))) {
+    const config = await parametros();
+    return {
+      ok: false,
+      erro: `Faltam menos de ${config.antecedenciaMinimaHoras}h para este atendimento. Fale com a central para remarcar.`,
+    };
+  }
+
+  const novaData = dataDeISO(dataISO);
+  if (!(await dentroDaJanelaDaClinica(novaData, horaInicio))) {
+    const config = await parametros();
+    return { ok: false, erro: `O novo horário precisa de ${config.antecedenciaMinimaHoras}h de antecedência.` };
+  }
+
+  const impedimentos = await verificarAlocacao({
+    clinicaId: sessao.clinicaId,
+    profissionalId: pedido.profissionalId,
+    equipamentoId: pedido.equipamentoId,
+    data: novaData,
+    horaInicio,
+    duracaoMin: pedido.duracaoMin,
+    ignorarPedidoId: pedido.id,
+  });
+  if (temBloqueio(impedimentos)) {
+    return { ok: false, erro: impedimentos.filter((i) => i.bloqueante).map((i) => i.mensagem).join(" ") };
+  }
+
+  await prisma.pedido.update({
+    where: { id: pedido.id },
+    data: { data: novaData, horaInicio },
+  });
+
+  // Confirmação e lembrete antigos não valem mais: apagados, a fila remonta
+  // com a data nova em vez de avisar a clínica do horário que não existe.
+  await prisma.mensagemWhatsapp.deleteMany({
+    where: { pedidoId: pedido.id, tipo: { in: ["CONFIRMACAO", "ALOCACAO", "LEMBRETE"] }, status: "PENDENTE" },
+  });
+  await enfileirarMensagem(pedido.id, "CONFIRMACAO");
+  if (pedido.profissionalId) await enfileirarMensagem(pedido.id, "ALOCACAO");
+  await sincronizarEvento(pedido.id);
+
+  await registrarAuditoria(
+    sessao.usuarioId,
+    "Pedido",
+    pedido.id,
+    "reagendar-portal",
+    `${isoDeData(pedido.data)} ${pedido.horaInicio} → ${dataISO} ${horaInicio}`
+  );
+
+  atualizarTelas();
+  return { ok: true };
+}
+
+/** Cancelamento pelo portal, na mesma janela do reagendamento. */
+export async function cancelarPeloPortal(pedidoId: string, motivo: string): Promise<Resultado> {
+  const sessao = await exigirClinica();
+
+  const pedido = await pedidoDaClinica(pedidoId, sessao.clinicaId);
+  if (!pedido) return { ok: false, erro: "Pedido não encontrado." };
+  if (!podeTransicionar(pedido.status, "CANCELADO")) {
+    return { ok: false, erro: "Este atendimento já foi finalizado." };
+  }
+
+  if (!(await dentroDaJanelaDaClinica(pedido.data, pedido.horaInicio))) {
+    const config = await parametros();
+    return {
+      ok: false,
+      erro: `Faltam menos de ${config.antecedenciaMinimaHoras}h para este atendimento. Fale com a central para cancelar.`,
+    };
+  }
+
+  await prisma.pedido.update({
+    where: { id: pedido.id },
+    data: {
+      status: "CANCELADO",
+      canceladoEm: new Date(),
+      motivoCancelamento: motivo ? `Cancelado pela clínica: ${motivo}` : "Cancelado pela clínica.",
+    },
+  });
+  await prisma.mensagemWhatsapp.updateMany({
+    where: { pedidoId: pedido.id, status: "PENDENTE" },
+    data: { status: "CANCELADA" },
+  });
+
+  await registrarAuditoria(sessao.usuarioId, "Pedido", pedido.id, "cancelar-portal", motivo || undefined);
 
   atualizarTelas();
   return { ok: true };

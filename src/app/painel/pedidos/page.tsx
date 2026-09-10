@@ -126,6 +126,7 @@ export default async function Esteira({ searchParams }: { searchParams: { filtro
                 pedidoId={pedido.id}
                 status={pedido.status}
                 profissionais={profissionais}
+                profissionalSolicitadoId={pedido.profissionalId}
               />
             </Cartao>
           ))}

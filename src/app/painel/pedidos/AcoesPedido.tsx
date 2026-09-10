@@ -23,14 +23,19 @@ export function AcoesPedido({
   pedidoId,
   status,
   profissionais,
+  profissionalSolicitadoId,
 }: {
   pedidoId: string;
   status: StatusPedido;
   profissionais: { id: string; nome: string }[];
+  /** Quem a clínica pediu no portal, quando pediu alguém. */
+  profissionalSolicitadoId?: string | null;
 }) {
   const [pendente, iniciar] = useTransition();
   const [mensagem, setMensagem] = useState<{ texto: string; erro: boolean } | null>(null);
-  const [profissionalId, setProfissionalId] = useState("");
+  // Já vem preenchido com quem a clínica pediu: confirmar o que foi pedido é
+  // o caso comum, e obrigar a reencontrar o nome na lista é atrito à toa.
+  const [profissionalId, setProfissionalId] = useState(profissionalSolicitadoId ?? "");
 
   function executar(acao: () => Promise<{ ok: boolean; erro?: string; avisos?: string[] }>) {
     setMensagem(null);
@@ -66,6 +71,7 @@ export function AcoesPedido({
             {profissionais.map((p) => (
               <option key={p.id} value={p.id}>
                 {p.nome}
+                {p.id === profissionalSolicitadoId ? " (pedido pela clínica)" : ""}
               </option>
             ))}
           </Selecao>

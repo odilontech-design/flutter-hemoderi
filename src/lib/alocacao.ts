@@ -187,7 +187,12 @@ export async function horariosDisponiveis({
 }: {
   clinicaId: string;
   servicoId: string;
-  profissionalId: string;
+  /**
+   * Nulo quando ainda não há profissional definido. Nesse caso a janela é a
+   * do expediente da operação — não há agenda individual a consultar, e as
+   * travas que restam (sala e equipamento) continuam valendo.
+   */
+  profissionalId: string | null;
   dataISO: string;
   ignorarPedidoId?: string;
   exigirAntecedencia?: boolean;
@@ -198,8 +203,8 @@ export async function horariosDisponiveis({
     parametros(),
     prisma.servico.findUnique({ where: { id: servicoId } }),
     prisma.clinica.findUnique({ where: { id: clinicaId }, select: { salas: true } }),
-    prisma.disponibilidade.findMany({ where: { profissionalId } }),
-    prisma.bloqueio.findMany({ where: { profissionalId, data } }),
+    profissionalId ? prisma.disponibilidade.findMany({ where: { profissionalId } }) : [],
+    profissionalId ? prisma.bloqueio.findMany({ where: { profissionalId, data } }) : [],
   ]);
   if (!servico || !clinica) return [];
 
@@ -208,7 +213,11 @@ export async function horariosDisponiveis({
       data,
       status: { in: STATUS_ATIVOS },
       ...(ignorarPedidoId ? { id: { not: ignorarPedidoId } } : {}),
-      OR: [{ clinicaId }, { profissionalId }, { equipamentoId: { not: null } }],
+      OR: [
+        { clinicaId },
+        ...(profissionalId ? [{ profissionalId }] : []),
+        { equipamentoId: { not: null } },
+      ],
     },
     select: {
       horaInicio: true,
@@ -225,7 +234,10 @@ export async function horariosDisponiveis({
     inicio: paraMinutos(config.horaAbertura),
     fim: paraMinutos(config.horaFechamento),
   };
-  const declaradas = janelasDoDia(disponibilidades, data.getUTCDay());
+  // Sem profissional escolhido, a janela é o expediente inteiro.
+  const declaradas = profissionalId
+    ? janelasDoDia(disponibilidades, data.getUTCDay())
+    : [expediente];
   const dentroDoExpediente = mesclarIntervalos(declaradas)
     .map((j) => ({ inicio: Math.max(j.inicio, expediente.inicio), fim: Math.min(j.fim, expediente.fim) }))
     .filter((j) => j.fim > j.inicio);

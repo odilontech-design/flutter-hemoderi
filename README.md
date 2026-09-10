@@ -45,9 +45,10 @@ em "a pagar" passou por um relatório que alguém assinou.
 | --- | --- |
 | **Esteira de pedidos** | Ciclo ponta a ponta: solicitado → confirmado → alocado → realizado/faltou, com a fila do que está parado esperando alguém |
 | **Alocação** | Profissional, equipamento, sala e disponibilidade verificados juntos; o que trava, trava, e o que é combinável vira aviso |
-| **Portal da clínica** | Agendamento 24h com horários que a operação consegue cumprir, histórico e acompanhamento dos próprios pedidos |
+| **Portal da clínica** | Agendamento 24h com horários que a operação consegue cumprir, reagendamento e cancelamento pela própria clínica, histórico e link/QR Code de divulgação |
 | **Portal do profissional** | Agenda individual, declaração de disponibilidade, ausências, relatório pós-atendimento e ganhos abertos linha a linha |
 | **Financeiro** | A receber das clínicas e a pagar aos profissionais como duas contas separadas, com a margem entre elas |
+| **Painel do dia** | O que acontece hoje, o que está parado esperando alguém, produtividade por profissional e taxa de comparecimento |
 | **Fechamento** | Fatura por clínica e competência, baixa de repasses em lote e exportação mensal em CSV para a contabilidade |
 | **Automações** | Fila de WhatsApp para confirmação, alocação, lembrete e resultado, com rastro de envio |
 
@@ -123,11 +124,18 @@ npm run db:usuario -- --email=voce@hemoderi.com.br --nome="Seu Nome" --senha='..
 npm test        # regras puras: agenda, repasse, dinheiro, esteira
 npm run typecheck
 npm run build
+npm run fumaca  # ciclo completo no navegador (precisa da app rodando + seed)
 ```
 
-Os testes cobrem o que é fácil de quebrar sem perceber: sobreposição de
-horários, emenda de janelas de disponibilidade, a cadeia de repasse e as
+Os testes unitários cobrem o que é fácil de quebrar sem perceber: sobreposição
+de horários, emenda de janelas de disponibilidade, a cadeia de repasse e as
 transições permitidas da esteira.
+
+O `npm run fumaca` cobre o que eles não alcançam: percorre no navegador o
+caminho que o dinheiro faz — a clínica agenda pelo portal, remarca, a equipe
+confirma e aloca, o atendimento é fechado e o repasse nasce no financeiro.
+É para ambiente de teste, nunca contra a base de produção: ele cria e fecha um
+atendimento de verdade.
 
 ## Onde fica o quê
 
@@ -138,6 +146,7 @@ src/lib/alocacao.ts         as quatro travas juntas, consultando o banco
 src/lib/repasse.ts          a cadeia de regras de repasse
 src/lib/pedido.ts           a máquina de status da esteira
 src/lib/sessao.ts           as guardas dos três níveis de acesso
+scripts/fumaca.mjs          teste de fumaça do ciclo completo, no navegador
 src/app/painel/             equipe Hemoderi
 src/app/portal/             clínica contratante
 src/app/profissional/       prestador
@@ -149,6 +158,9 @@ src/lib/integracoes/        PipeDrive, Google Agenda e WhatsApp
 O núcleo operacional e os dois portais estão de pé; as integrações externas
 estão desenhadas e desligadas até a Fase 4 — sem as variáveis de ambiente elas
 registram a intenção em `SincronizacaoExterna` em vez de fingir sucesso.
+
+Para publicar, siga [`docs/deploy.md`](docs/deploy.md) — Neon e Vercel, com o
+`/api/saude` para conferir em um comando se o deploy está de pé de verdade.
 
 O cronograma por fase está em [`docs/roadmap.md`](docs/roadmap.md), e o que
 precisa vir da Hemoderi para destravar a Fase 0 está em

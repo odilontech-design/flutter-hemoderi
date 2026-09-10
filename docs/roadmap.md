@@ -13,7 +13,7 @@ Dilon Saúde | Operações.
 | Fase 0 | Semana 1 | Insumos e desenho: fluxo mapeado e regras de repasse validadas | insumos pendentes |
 | Fase 1 | Semanas 1–3 | Dilon Zap no ar | outro repositório |
 | Fase 2 | Semanas 4–9 | Núcleo operacional: agenda central, esteira de alocação, três níveis de acesso | **implementado** |
-| Fase 3 | Semanas 10–14 | Portais e financeiro | **implementado**, pendente QR Code e reagendamento pelo portal |
+| Fase 3 | Semanas 10–14 | Portais e financeiro | **implementado** |
 | Fase 4 | Semanas 15–16 | Integrações e go-live | desenhado, desligado |
 
 ## O que já está de pé
@@ -24,9 +24,15 @@ com as quatro travas (profissional, equipamento, sala, disponibilidade);
 controle de status ponta a ponta.
 
 **Módulo 02 — portal do cliente.** Agendamento 24h com escolha de serviço,
-profissional e horário; histórico dos próprios pedidos.
-*Falta:* reagendamento e cancelamento pelo portal, link e QR Code de
-divulgação por clínica (o slug já existe em `Clinica.slug`).
+profissional e horário; histórico dos próprios pedidos; reagendamento e
+cancelamento pela própria clínica, dentro da janela de antecedência; link
+curto e QR Code de divulgação por clínica.
+
+O profissional escolhido no portal fica gravado no pedido como **reserva
+provisória**: já segura o horário dele, mas o compromisso só existe quando a
+equipe aloca. Segurar é de propósito — duas clínicas pedindo o mesmo horário e
+as duas recebendo "ok" é pior do que a segunda ver o horário indisponível na
+hora.
 
 **Módulo 03 — portal do profissional.** Agenda individual, declaração de
 disponibilidade e ausências, relatório pós-atendimento, ganhos realizados e a
@@ -34,8 +40,9 @@ receber abertos linha a linha.
 
 **Módulo 04 — financeiro e relatórios.** Repasse calculado a partir do
 relatório; a receber e a pagar em visões separadas; painel diário com
-atendimentos, faturamento e margem; exportação mensal em CSV.
-*Falta:* fechar a lista de indicadores do painel com a equipe depois de duas
+atendimentos, faturamento, margem, produtividade por profissional e taxa de
+comparecimento; exportação mensal em CSV.
+*A rever:* a lista de indicadores do painel, com a equipe, depois de duas
 semanas de uso real — indicador escolhido antes do uso vira gráfico que
 ninguém abre.
 
@@ -55,6 +62,12 @@ A rotina de lembretes já roda de hora em hora (`vercel.json` → `crons`) e é
 idempotente: quando o endpoint de envio existir, ela passa a entregar sem
 nenhuma outra mudança.
 
+## Publicar
+
+O passo a passo está em [`deploy.md`](deploy.md): Neon na região de São Paulo,
+Vercel em `gru1`, migrations aplicadas sozinhas no build e `/api/saude` para
+conferir o resultado em um comando.
+
 ## Antes do go-live
 
 - [ ] Preencher parâmetros reais da operação (`Parametros`): horário de
@@ -68,3 +81,6 @@ nenhuma outra mudança.
 - [ ] Definir o terceiro depositário do escrow trimestral (Cláusula 6.1.1).
 - [ ] Treinamento da equipe interna e material curto para clínicas e
       profissionais.
+- [ ] Definir o domínio final ANTES de imprimir os QR Codes: o link do QR sai
+      de `NEXTAUTH_URL`, e trocar o domínio depois invalida o que já foi
+      distribuído.

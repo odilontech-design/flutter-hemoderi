@@ -21,7 +21,8 @@ export default async function Hoje() {
   const competencia = competenciaAtual();
   const inicioMes = new Date(`${competencia}-01T00:00:00.000Z`);
 
-  const [doDia, pendentes, semProfissional, realizadosMes, repassesMes, aReceber] = await Promise.all([
+  const [doDia, pendentes, semProfissional, realizadosMes, repassesMes, aReceber, porProfissional, faltasMes] =
+    await Promise.all([
     prisma.pedido.findMany({
       where: { data: hoje, status: { notIn: ["CANCELADO"] } },
       orderBy: { horaInicio: "asc" },
@@ -43,7 +44,28 @@ export default async function Hoje() {
       _sum: { valorCentavos: true },
     }),
     prisma.fatura.aggregate({ where: { status: "ABERTA" }, _sum: { valorCentavos: true } }),
+    // Produtividade da competência: quem atendeu quanto, e quanto isso gerou.
+    prisma.pedido.groupBy({
+      by: ["profissionalId"],
+      where: { status: "REALIZADO", data: { gte: inicioMes }, profissionalId: { not: null } },
+      _count: true,
+      _sum: { valorServicoCentavos: true },
+      orderBy: { _count: { profissionalId: "desc" } },
+      take: 8,
+    }),
+    prisma.pedido.count({ where: { status: "FALTOU", data: { gte: inicioMes } } }),
   ]);
+
+  const profissionais = await prisma.profissional.findMany({
+    where: { id: { in: porProfissional.map((p) => p.profissionalId as string) } },
+    select: { id: true, nome: true },
+  });
+
+  // Taxa de comparecimento: dos atendimentos que chegaram ao fim no mês,
+  // quantos aconteceram. É o número que diz se o problema de capacidade é de
+  // agenda ou de falta — e as duas coisas se resolvem de formas diferentes.
+  const fechadosMes = realizadosMes._count + faltasMes;
+  const comparecimento = fechadosMes > 0 ? Math.round((realizadosMes._count / fechadosMes) * 100) : null;
 
   const faturado = realizadosMes._sum.valorServicoCentavos ?? 0;
   const custo = realizadosMes._sum.valorRepasseCentavos ?? 0;
@@ -118,6 +140,47 @@ export default async function Hoje() {
           </Link>
         </div>
       </div>
+
+      <Cartao>
+        <div className="flex flex-wrap items-baseline justify-between gap-2 mb-3">
+          <div className="font-display font-bold text-navy text-sm">Produtividade do mês</div>
+          {comparecimento != null && (
+            <div className="text-[11px] text-gray-500">
+              Comparecimento: <strong className="text-navy">{comparecimento}%</strong> ({faltasMes}{" "}
+              falta{faltasMes === 1 ? "" : "s"} em {fechadosMes} atendimentos fechados)
+            </div>
+          )}
+        </div>
+
+        {porProfissional.length === 0 ? (
+          <Vazio>Nenhum atendimento realizado neste mês ainda.</Vazio>
+        ) : (
+          <Tabela cabecalho={["Profissional", "Atendimentos", "Serviços gerados", "Participação"]}>
+            {porProfissional.map((linha) => {
+              const profissional = profissionais.find((p) => p.id === linha.profissionalId);
+              const participacao =
+                realizadosMes._count > 0 ? Math.round((linha._count / realizadosMes._count) * 100) : 0;
+              return (
+                <tr key={linha.profissionalId} className="border-b border-gray-100 last:border-0">
+                  <td className="py-2 pr-3 font-semibold text-navy">{profissional?.nome ?? "—"}</td>
+                  <td className="py-2 pr-3">{linha._count}</td>
+                  <td className="py-2 pr-3 text-gray-600">
+                    {formatarReais(linha._sum.valorServicoCentavos ?? 0)}
+                  </td>
+                  <td className="py-2 pr-3">
+                    <div className="flex items-center gap-2">
+                      <div className="h-1.5 w-24 bg-gray-100 rounded-full overflow-hidden">
+                        <div className="h-full bg-navy rounded-full" style={{ width: `${participacao}%` }} />
+                      </div>
+                      <span className="text-gray-500 text-[10px]">{participacao}%</span>
+                    </div>
+                  </td>
+                </tr>
+              );
+            })}
+          </Tabela>
+        )}
+      </Cartao>
     </>
   );
 }

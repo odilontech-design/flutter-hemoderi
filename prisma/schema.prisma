@@ -389,8 +389,10 @@ model Pedido {
   servicoId String
   servico   Servico @relation(fields: [servicoId], references: [id])
 
-  /// Nulo até a alocação. É a fila de trabalho da equipe: pedido confirmado
-  /// sem profissional é o que precisa de ação hoje.
+  /// Quem vai atender. Em SOLICITADO é o profissional que a clínica pediu no
+  /// portal — reserva provisória, que já segura o horário dele; em ALOCADO é
+  /// compromisso assumido pela equipe. O status é o que separa os dois.
+  /// Nulo enquanto ninguém foi indicado: é a fila de trabalho da equipe.
   profissionalId String?
   profissional   Profissional? @relation(fields: [profissionalId], references: [id])
 

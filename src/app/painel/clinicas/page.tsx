@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 import { exigirInterno } from "@/lib/sessao";
 import { Campo, Cartao, Rotulo, Tabela, Titulo, Vazio } from "@/components/ui";
@@ -28,7 +29,12 @@ export default async function Clinicas() {
               {clinicas.map((clinica) => (
                 <tr key={clinica.id} className="border-b border-gray-100 last:border-0">
                   <td className="py-2 pr-3">
-                    <div className="font-semibold text-navy">{clinica.nome}</div>
+                    <Link
+                      href={`/painel/clinicas/${clinica.id}`}
+                      className="font-semibold text-navy hover:underline"
+                    >
+                      {clinica.nome}
+                    </Link>
                     <div className="text-[10px] text-gray-400">{clinica.telefone ?? "sem telefone"}</div>
                   </td>
                   <td className="py-2 pr-3 text-gray-500">

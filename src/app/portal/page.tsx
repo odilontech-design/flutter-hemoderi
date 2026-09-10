@@ -4,6 +4,8 @@ import { exigirClinica } from "@/lib/sessao";
 import { Cartao, Kpi, SeloStatus, Tabela, Titulo, Vazio } from "@/components/ui";
 import { formatarDataCurta, hojeUTC } from "@/lib/data";
 import { STATUS_ATIVOS } from "@/lib/pedido";
+import { AcoesClinica } from "./AcoesClinica";
+import { CartaoDivulgacao } from "@/components/CartaoDivulgacao";
 
 export const dynamic = "force-dynamic";
 
@@ -16,7 +18,7 @@ export default async function MeusAgendamentos() {
   const sessao = await exigirClinica();
   const hoje = hojeUTC();
 
-  const [proximos, historico, total] = await Promise.all([
+  const [proximos, historico, total, clinica] = await Promise.all([
     prisma.pedido.findMany({
       where: { clinicaId: sessao.clinicaId, data: { gte: hoje }, status: { in: STATUS_ATIVOS } },
       orderBy: [{ data: "asc" }, { horaInicio: "asc" }],
@@ -29,6 +31,7 @@ export default async function MeusAgendamentos() {
       include: { servico: { select: { nome: true } }, profissional: { select: { nome: true } } },
     }),
     prisma.pedido.count({ where: { clinicaId: sessao.clinicaId, status: "REALIZADO" } }),
+    prisma.clinica.findUnique({ where: { id: sessao.clinicaId }, select: { slug: true, nome: true } }),
   ]);
 
   return (
@@ -61,7 +64,7 @@ export default async function MeusAgendamentos() {
         {proximos.length === 0 ? (
           <Vazio>Nenhum atendimento agendado.</Vazio>
         ) : (
-          <Tabela cabecalho={["Data", "Hora", "Serviço", "Profissional", "Paciente", "Status"]}>
+          <Tabela cabecalho={["Data", "Hora", "Serviço", "Profissional", "Paciente", "Status", ""]}>
             {proximos.map((pedido) => (
               <tr key={pedido.id} className="border-b border-gray-100 last:border-0">
                 <td className="py-2 pr-3 font-semibold">{formatarDataCurta(pedido.data)}</td>
@@ -74,13 +77,16 @@ export default async function MeusAgendamentos() {
                 <td className="py-2 pr-3">
                   <SeloStatus status={pedido.status} />
                 </td>
+                <td className="py-2">
+                  <AcoesClinica pedidoId={pedido.id} />
+                </td>
               </tr>
             ))}
           </Tabela>
         )}
       </Cartao>
 
-      <Cartao>
+      <Cartao className="mb-3">
         <div className="font-display font-bold text-navy text-sm mb-3">Histórico</div>
         {historico.length === 0 ? (
           <Vazio>Ainda sem histórico.</Vazio>
@@ -99,6 +105,8 @@ export default async function MeusAgendamentos() {
           </Tabela>
         )}
       </Cartao>
+
+      {clinica && <CartaoDivulgacao slug={clinica.slug} nome={clinica.nome} />}
     </>
   );
 }

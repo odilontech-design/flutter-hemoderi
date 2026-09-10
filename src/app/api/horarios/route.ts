@@ -1,5 +1,6 @@
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
+import { prisma } from "@/lib/prisma";
 import { horariosDisponiveis } from "@/lib/alocacao";
 
 // Rota de dados vivos: nunca pré-renderizada no build.
@@ -27,15 +28,28 @@ export async function GET(requisicao: Request) {
         ? url.searchParams.get("clinicaId")
         : null;
 
-  if (!clinicaId || !servicoId || !profissionalId || !data) {
+  if (!clinicaId || !servicoId || !data) {
     return Response.json({ horarios: [] });
   }
+
+  // No reagendamento, o pedido não pode conflitar consigo mesmo. Só sai da
+  // conta um pedido que pertence a quem está perguntando.
+  const pedidoParaIgnorar = url.searchParams.get("ignorarPedidoId");
+  const ignorarPedidoId = pedidoParaIgnorar
+    ? (
+        await prisma.pedido.findFirst({
+          where: { id: pedidoParaIgnorar, clinicaId },
+          select: { id: true },
+        })
+      )?.id
+    : undefined;
 
   const horarios = await horariosDisponiveis({
     clinicaId,
     servicoId,
-    profissionalId,
+    profissionalId: profissionalId || null,
     dataISO: data,
+    ignorarPedidoId,
     // A antecedência mínima vale para quem agenda sozinho; a equipe interna
     // encaixa urgência.
     exigirAntecedencia: sessao.user.papel === "CLINICA",
