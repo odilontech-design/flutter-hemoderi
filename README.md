@@ -110,6 +110,11 @@ Acessos criados pelo seed (senha `hemoderi123`):
 | Clínica | `clinica-santa-rita@exemplo.com.br` |
 | Profissional | `ana@exemplo.com.br` |
 
+O catálogo semeado já são os 18 itens reais do site/catálogo do WhatsApp da
+Hemoderi (nome e categoria); duração, preço e inventário de equipamento estão
+com estimativa — ver `docs/fase-0-insumos.md` para o que falta confirmar
+antes do go-live.
+
 Em produção, o primeiro acesso interno é criado pela linha de comando — quem
 cria um usuário interno enxerga a operação inteira, e essa porta não se abre
 pela internet:

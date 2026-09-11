@@ -253,9 +253,20 @@ export async function horariosDisponiveis({
     duracaoMin: servico.duracaoMin,
   });
 
-  const equipamentosLivres = servico.exigeEquipamento
-    ? await prisma.equipamento.count({ where: { status: "DISPONIVEL" } })
-    : 0;
+  // O pool considerado é só o do TIPO que o serviço exige — um AirFlow não
+  // substitui um laser LiteTouch. Sem tipo definido, cai no comportamento de
+  // antes (qualquer equipamento disponível), só para não travar cadastro
+  // incompleto.
+  const poolEquipamentos = servico.exigeEquipamento
+    ? await prisma.equipamento.findMany({
+        where: {
+          status: "DISPONIVEL",
+          ...(servico.tipoEquipamento ? { tipo: servico.tipoEquipamento } : {}),
+        },
+        select: { id: true },
+      })
+    : [];
+  const idsDoPool = new Set(poolEquipamentos.map((e) => e.id));
 
   const limite = exigirAntecedencia
     ? new Date(Date.now() + config.antecedenciaMinimaHoras * 60 * 60 * 1000)
@@ -272,27 +283,41 @@ export async function horariosDisponiveis({
     if (naClinica >= clinica.salas) return false;
 
     if (servico.exigeEquipamento) {
+      if (poolEquipamentos.length === 0) return false;
       const emUso = pedidosDoDia.filter(
-        (p) => p.equipamentoId && haSobreposicao(alvo, intervaloDe(p.horaInicio, p.duracaoMin))
+        (p) =>
+          p.equipamentoId &&
+          idsDoPool.has(p.equipamentoId) &&
+          haSobreposicao(alvo, intervaloDe(p.horaInicio, p.duracaoMin))
       ).length;
-      if (emUso >= equipamentosLivres) return false;
+      if (emUso >= poolEquipamentos.length) return false;
     }
 
     return true;
   });
 }
 
-/** Primeiro equipamento livre no horário — usado ao alocar serviço que exige. */
+/**
+ * Primeiro equipamento livre no horário — usado ao alocar serviço que exige.
+ *
+ * `tipoEquipamento` restringe a busca ao tipo que o serviço pede (casa com
+ * Equipamento.tipo). Sem tipo definido, considera qualquer equipamento
+ * disponível — comportamento de transição para cadastro ainda incompleto.
+ */
 export async function equipamentoLivre(
   data: Date,
   horaInicio: string,
   duracaoMin: number,
+  tipoEquipamento?: string | null,
   ignorarPedidoId?: string
 ): Promise<string | null> {
   const alvo = intervaloDe(horaInicio, duracaoMin);
 
   const [equipamentos, pedidos] = await Promise.all([
-    prisma.equipamento.findMany({ where: { status: "DISPONIVEL" }, select: { id: true } }),
+    prisma.equipamento.findMany({
+      where: { status: "DISPONIVEL", ...(tipoEquipamento ? { tipo: tipoEquipamento } : {}) },
+      select: { id: true },
+    }),
     prisma.pedido.findMany({
       where: {
         data,

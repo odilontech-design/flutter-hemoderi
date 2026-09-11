@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import bcrypt from "bcryptjs";
 import { prisma } from "@/lib/prisma";
+import type { CategoriaServico } from "@prisma/client";
 import { exigirInterno } from "@/lib/sessao";
 import { gerarSlug } from "@/lib/slug";
 import { lerCentavos } from "@/lib/dinheiro";
@@ -112,18 +113,28 @@ export async function salvarServico(_anterior: Resultado, dados: FormData): Prom
   const nome = String(dados.get("nome") ?? "").trim();
   if (!nome) return { ok: false, erro: "Informe o nome do serviço." };
 
+  const categoria = String(dados.get("categoria") ?? "");
+  if (!["ODONTOLOGIA", "ESTETICA", "SAUDE"].includes(categoria)) {
+    return { ok: false, erro: "Selecione a categoria do serviço." };
+  }
+
   const duracao = Number(dados.get("duracaoMin") ?? 60);
   const percent = String(dados.get("repassePercent") ?? "").replace(",", ".");
   const fixo = String(dados.get("repasseFixo") ?? "");
+  const exigeEquipamento = String(dados.get("exigeEquipamento") ?? "") === "sim";
 
   const comum = {
     nome,
+    categoria: categoria as CategoriaServico,
     descricao: String(dados.get("descricao") ?? "") || null,
     duracaoMin: Number.isFinite(duracao) && duracao > 0 ? Math.trunc(duracao) : 60,
     valorPadraoCentavos: lerCentavos(String(dados.get("valorPadrao") ?? "")),
     repassePercent: percent ? Number(percent) : null,
     repasseFixoCentavos: fixo ? lerCentavos(fixo) : null,
-    exigeEquipamento: String(dados.get("exigeEquipamento") ?? "") === "sim",
+    exigeEquipamento,
+    // Sem "exige equipamento", tipo não faz sentido — mantém o dado limpo em
+    // vez de deixar um tipo órfão de um serviço que não usa mais equipamento.
+    tipoEquipamento: exigeEquipamento ? String(dados.get("tipoEquipamento") ?? "").trim() || null : null,
   };
 
   if (id) {

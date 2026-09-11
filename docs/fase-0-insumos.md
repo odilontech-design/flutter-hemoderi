@@ -10,18 +10,31 @@ referência de valor ou de regra.
 
 ## 1. Tabela de serviços
 
-Para cada serviço prestado hoje:
+Os 18 itens do catálogo comercial (site/catálogo do WhatsApp) já estão
+cadastrados — nome e categoria vêm de lá. **Três campos ficaram com
+estimativa e precisam de confirmação da equipe antes do go-live real:**
 
-| Informação | Onde entra |
-| --- | --- |
-| Nome do serviço | `Servico.nome` |
-| Duração cheia, incluindo preparo | `Servico.duracaoMin` |
-| Valor cobrado da clínica (tabela) | `Servico.valorPadraoCentavos` |
-| Exige equipamento da Hemoderi? | `Servico.exigeEquipamento` |
+| Informação | Onde entra | Estado |
+| --- | --- | --- |
+| Nome do serviço | `Servico.nome` | ✅ do catálogo real |
+| Categoria (Odontologia/Estética/Saúde) | `Servico.categoria` | ⚠️ nossa leitura do catálogo — alguns itens cruzam especialidade (PRF, Sedação Consciente) e merecem revisão |
+| Duração cheia, incluindo preparo | `Servico.duracaoMin` | ⚠️ estimativa por tipo de procedimento, não veio de nenhuma fonte da Hemoderi |
+| Valor cobrado da clínica (tabela) | `Servico.valorPadraoCentavos` | Zerado de propósito — ver item 2 |
+| Exige equipamento da Hemoderi? | `Servico.exigeEquipamento` + `Servico.tipoEquipamento` | ⚠️ presumido pelo tipo de item (ex.: fotografia e sedação marcados como "não exige", por serem mais sobre o profissional que sobre o aparelho) |
 
 A **duração cheia** importa mais do que parece: é ela que define o bloco na
 agenda e o cálculo de conflito. Duração subestimada gera dois atendimentos que
-o sistema considera possíveis e a operação não cumpre.
+o sistema considera possíveis e a operação não cumpre. A lista completa está
+em `prisma/seed.ts`, com o comentário de cada estimativa — é mais rápido
+revisar ali linha a linha do que recadastrar do zero.
+
+**`tipoEquipamento`** é o que a alocação usa para reservar o aparelho
+certo — um AirFlow não substitui um laser LiteTouch. Ele precisa casar
+exatamente com o campo `tipo` do equipamento cadastrado (tela **Serviços e
+equipamentos**). Seis dos dezoito serviços (as variações de PRF) compartilham
+o tipo "Centrífuga PRF": confirmar quantas centrífugas a operação tem de
+verdade — o seed chutou 2, e é esse número que decide quantos atendimentos de
+PRF cabem ao mesmo tempo.
 
 ## 2. Preço negociado por clínica
 

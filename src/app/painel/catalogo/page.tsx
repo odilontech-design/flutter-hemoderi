@@ -15,13 +15,25 @@ const ROTULO_EQUIPAMENTO: Record<string, string> = {
   INATIVO: "Inativo",
 };
 
+// As três frentes do catálogo comercial — a mesma divisão que a Hemoderi usa
+// no site e no catálogo do WhatsApp.
+const ROTULO_CATEGORIA: Record<string, string> = {
+  ODONTOLOGIA: "Odontologia",
+  ESTETICA: "Estética",
+  SAUDE: "Saúde",
+};
+
 export default async function Catalogo() {
   await exigirInterno();
 
   const [servicos, equipamentos] = await Promise.all([
-    prisma.servico.findMany({ orderBy: [{ ativo: "desc" }, { nome: "asc" }] }),
+    prisma.servico.findMany({ orderBy: [{ ativo: "desc" }, { categoria: "asc" }, { nome: "asc" }] }),
     prisma.equipamento.findMany({ orderBy: { nome: "asc" } }),
   ]);
+
+  // Sugestões para o campo de tipo, para reduzir o erro de digitação que
+  // quebraria o casamento com Equipamento.tipo na hora de alocar.
+  const tiposDeEquipamento = Array.from(new Set(equipamentos.map((e) => e.tipo).filter(Boolean))) as string[];
 
   return (
     <>
@@ -33,12 +45,19 @@ export default async function Catalogo() {
           {servicos.length === 0 ? (
             <Vazio>Nenhum serviço cadastrado.</Vazio>
           ) : (
-            <Tabela cabecalho={["Serviço", "Duração", "Valor de tabela", "Repasse", "Equipamento", ""]}>
+            <Tabela cabecalho={["Serviço", "Categoria", "Duração", "Valor de tabela", "Repasse", "Equipamento", ""]}>
               {servicos.map((servico) => (
                 <tr key={servico.id} className="border-b border-gray-100 last:border-0">
                   <td className="py-2 pr-3 font-semibold text-navy">{servico.nome}</td>
+                  <td className="py-2 pr-3 text-gray-500">{ROTULO_CATEGORIA[servico.categoria]}</td>
                   <td className="py-2 pr-3 text-gray-500">{servico.duracaoMin} min</td>
-                  <td className="py-2 pr-3">{formatarReais(servico.valorPadraoCentavos)}</td>
+                  <td className="py-2 pr-3">
+                    {servico.valorPadraoCentavos > 0 ? (
+                      formatarReais(servico.valorPadraoCentavos)
+                    ) : (
+                      <span className="text-gray-400">a negociar</span>
+                    )}
+                  </td>
                   <td className="py-2 pr-3">
                     {servico.repasseFixoCentavos != null
                       ? formatarReais(servico.repasseFixoCentavos)
@@ -46,7 +65,9 @@ export default async function Catalogo() {
                         ? formatarPercent(servico.repassePercent)
                         : <span className="text-gray-400">padrão</span>}
                   </td>
-                  <td className="py-2 pr-3 text-gray-500">{servico.exigeEquipamento ? "exige" : "—"}</td>
+                  <td className="py-2 pr-3 text-gray-500">
+                    {servico.exigeEquipamento ? servico.tipoEquipamento ?? "exige (tipo livre)" : "—"}
+                  </td>
                   <td className="py-2">
                     <BotaoAcao
                       acao={alternarServico.bind(null, servico.id, !servico.ativo)}
@@ -69,6 +90,19 @@ export default async function Catalogo() {
               <Campo name="nome" required />
             </div>
             <div>
+              <Rotulo>Categoria</Rotulo>
+              <Selecao name="categoria" defaultValue="">
+                <option value="" disabled>
+                  Selecione…
+                </option>
+                {Object.entries(ROTULO_CATEGORIA).map(([valor, rotulo]) => (
+                  <option key={valor} value={valor}>
+                    {rotulo}
+                  </option>
+                ))}
+              </Selecao>
+            </div>
+            <div>
               <Rotulo>Descrição</Rotulo>
               <Area name="descricao" rows={2} />
             </div>
@@ -79,7 +113,7 @@ export default async function Catalogo() {
               </div>
               <div>
                 <Rotulo>Valor de tabela</Rotulo>
-                <Campo name="valorPadrao" placeholder="R$ 200,00" />
+                <Campo name="valorPadrao" placeholder="em branco = a negociar por clínica" />
               </div>
             </div>
             <div className="grid grid-cols-2 gap-2">
@@ -98,6 +132,20 @@ export default async function Catalogo() {
                 <option value="nao">Não</option>
                 <option value="sim">Sim — reserva um aparelho na alocação</option>
               </Selecao>
+            </div>
+            <div>
+              <Rotulo>Tipo de equipamento exigido</Rotulo>
+              <Campo name="tipoEquipamento" list="tipos-equipamento" placeholder="ex.: Laser LiteTouch" />
+              <datalist id="tipos-equipamento">
+                {tiposDeEquipamento.map((tipo) => (
+                  <option key={tipo} value={tipo} />
+                ))}
+              </datalist>
+              <div className="text-[10px] text-gray-400 mt-1">
+                Precisa casar exatamente com o &ldquo;Tipo&rdquo; do equipamento cadastrado abaixo —
+                é por esse campo que a alocação reserva o aparelho certo, não só &ldquo;algum
+                aparelho livre&rdquo;. Só importa quando &ldquo;Exige equipamento&rdquo; é Sim.
+              </div>
             </div>
           </FormularioAcao>
         </Cartao>

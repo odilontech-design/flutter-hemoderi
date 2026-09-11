@@ -126,7 +126,7 @@ export async function criarPedido(_anterior: Resultado, dados: FormData): Promis
 
   const equipamentoId =
     profissionalId && servico.exigeEquipamento
-      ? await equipamentoLivre(data, horaInicio, servico.duracaoMin)
+      ? await equipamentoLivre(data, horaInicio, servico.duracaoMin, servico.tipoEquipamento)
       : null;
   if (profissionalId && servico.exigeEquipamento && !equipamentoId) {
     return { ok: false, erro: "Nenhum equipamento livre nesse horário." };
@@ -278,7 +278,9 @@ export async function alocarPedido(pedidoId: string, profissionalId: string): Pr
 
   const pedido = await prisma.pedido.findUnique({
     where: { id: pedidoId },
-    include: { servico: { select: { id: true, duracaoMin: true, exigeEquipamento: true } } },
+    include: {
+      servico: { select: { id: true, duracaoMin: true, exigeEquipamento: true, tipoEquipamento: true } },
+    },
   });
   if (!pedido) return { ok: false, erro: "Pedido não encontrado." };
   if (!podeTransicionar(pedido.status, "ALOCADO")) {
@@ -298,7 +300,13 @@ export async function alocarPedido(pedidoId: string, profissionalId: string): Pr
   }
 
   const equipamentoId = pedido.servico.exigeEquipamento
-    ? await equipamentoLivre(pedido.data, pedido.horaInicio, pedido.duracaoMin, pedido.id)
+    ? await equipamentoLivre(
+        pedido.data,
+        pedido.horaInicio,
+        pedido.duracaoMin,
+        pedido.servico.tipoEquipamento,
+        pedido.id
+      )
     : null;
   if (pedido.servico.exigeEquipamento && !equipamentoId) {
     return { ok: false, erro: "Nenhum equipamento livre nesse horário." };

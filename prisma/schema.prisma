@@ -161,9 +161,10 @@ model Clinica {
 }
 
 model Servico {
-  id        String  @id @default(cuid())
+  id        String           @id @default(cuid())
   nome      String
   descricao String?
+  categoria CategoriaServico
 
   /// Duração cheia do atendimento, incluindo preparo. É ela que define o
   /// bloco na agenda do profissional e o cálculo de conflito — não o horário
@@ -171,7 +172,9 @@ model Servico {
   duracaoMin Int @default(60)
 
   /// Preço de tabela cobrado da clínica. Uma clínica com preço negociado
-  /// sobrescreve este valor em PrecoClinica.
+  /// sobrescreve este valor em PrecoClinica. Zero não é "grátis": é "tabela
+  /// ainda não precificada" — o catálogo comercial nasce sem preço público
+  /// porque o modelo é negociado por clínica.
   valorPadraoCentavos Int @default(0)
 
   /// Regra de repasse do serviço. Preenchida só quando o serviço foge do
@@ -184,6 +187,13 @@ model Servico {
   /// verdadeiro, alocar o pedido exige reservar um equipamento livre.
   exigeEquipamento Boolean @default(false)
 
+  /// QUAL equipamento o serviço exige, pelo campo Equipamento.tipo — não
+  /// basta "algum equipamento livre": um AirFlow não substitui um laser
+  /// LiteTouch. Nulo com exigeEquipamento=true cai no comportamento antigo
+  /// (qualquer equipamento disponível), útil só enquanto o parque de
+  /// equipamentos ainda não tem o tipo cadastrado.
+  tipoEquipamento String?
+
   ativo        Boolean   @default(true)
   criadoEm     DateTime  @default(now())
   atualizadoEm DateTime  @updatedAt
@@ -194,6 +204,17 @@ model Servico {
   pedidos       Pedido[]
 
   @@index([ativo])
+  @@index([categoria])
+}
+
+/// As três frentes do catálogo comercial da Hemoderi — a própria empresa
+/// organiza a divulgação assim (site e catálogo do WhatsApp), e é a divisão
+/// que faz sentido para relatório: cada área tem público, sazonalidade e
+/// margem diferentes.
+enum CategoriaServico {
+  ODONTOLOGIA
+  ESTETICA
+  SAUDE
 }
 
 /// Preço negociado de um serviço para uma clínica específica. A tabela de
@@ -230,6 +251,8 @@ enum StatusEquipamento {
 model Equipamento {
   id         String  @id @default(cuid())
   nome       String
+  /// Casa com Servico.tipoEquipamento — é o que a alocação usa para reservar
+  /// o aparelho certo, não só "algum aparelho livre".
   tipo       String?
   /// Número de patrimônio/série. Único porque é assim que a equipe identifica
   /// o aparelho quando ele volta com defeito.
@@ -244,6 +267,7 @@ model Equipamento {
   pedidos Pedido[]
 
   @@index([status])
+  @@index([tipo])
 }
 
 /// O prestador. Trabalha em modelo de disponibilidade declarada (gig): não
