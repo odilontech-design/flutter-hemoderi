@@ -52,7 +52,7 @@ export default async function Esteira({ searchParams }: { searchParams: { filtro
         acao={
           <Link
             href="/painel/pedidos/novo"
-            className="bg-navy text-white text-xs font-semibold px-3 py-2 rounded-lg hover:bg-navyDeep"
+            className="bg-bordo text-white text-xs font-semibold px-3 py-2 rounded-lg hover:bg-bordoEscuro"
           >
             + Novo pedido
           </Link>
@@ -68,7 +68,7 @@ export default async function Esteira({ searchParams }: { searchParams: { filtro
             href={`/painel/pedidos?filtro=${f.chave}`}
             className={`text-[11px] font-semibold px-3 py-1.5 rounded-full border ${
               f.chave === filtro.chave
-                ? "bg-navy text-white border-navy"
+                ? "bg-bordo text-white border-bordo"
                 : "bg-white text-gray-600 border-gray-300 hover:bg-gray-50"
             }`}
           >
@@ -88,7 +88,7 @@ export default async function Esteira({ searchParams }: { searchParams: { filtro
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div className="min-w-0">
                   <div className="flex items-center gap-2 mb-1">
-                    <span className="font-display font-bold text-navy text-sm">#{pedido.numero}</span>
+                    <span className="font-display font-bold text-bordo text-sm">#{pedido.numero}</span>
                     <SeloStatus status={pedido.status} />
                     {pedido.origem === "PORTAL_CLINICA" && (
                       <span className="text-[9px] uppercase tracking-wide text-gray-400">portal</span>
@@ -102,7 +102,7 @@ export default async function Esteira({ searchParams }: { searchParams: { filtro
                     {pedido.profissional ? (
                       pedido.profissional.nome
                     ) : (
-                      <span className="text-hemo font-semibold">sem profissional</span>
+                      <span className="text-red-600 font-semibold">sem profissional</span>
                     )}
                   </div>
                   {pedido.observacoes && (
@@ -111,7 +111,7 @@ export default async function Esteira({ searchParams }: { searchParams: { filtro
                 </div>
 
                 <div className="text-right shrink-0">
-                  <div className="text-xs font-semibold text-navy">
+                  <div className="text-xs font-semibold text-bordo">
                     {formatarReais(pedido.valorServicoCentavos)}
                   </div>
                   {pedido.valorRepasseCentavos > 0 && (

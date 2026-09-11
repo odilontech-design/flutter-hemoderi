@@ -118,7 +118,7 @@ export function FormularioAgendamento({
             {horarios.map((hora) => (
               <label key={hora} className="cursor-pointer">
                 <input type="radio" name="horaInicio" value={hora} required className="peer sr-only" />
-                <span className="block text-xs font-semibold px-3 py-2 rounded-lg border border-gray-300 peer-checked:bg-navy peer-checked:text-white peer-checked:border-navy">
+                <span className="block text-xs font-semibold px-3.5 py-2.5 rounded-lg border border-gray-300 peer-checked:bg-bordo peer-checked:text-white peer-checked:border-bordo">
                   {hora}
                 </span>
               </label>

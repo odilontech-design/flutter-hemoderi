@@ -21,7 +21,7 @@ export function AcoesClinica({ pedidoId }: { pedidoId: string }) {
     <div className="flex flex-wrap items-center gap-2">
       <Link
         href={`/portal/reagendar/${pedidoId}`}
-        className="text-[11px] font-semibold text-navy border border-gray-300 rounded-lg px-2.5 py-1.5 hover:bg-gray-50"
+        className="text-[11px] font-semibold text-bordo border border-gray-300 rounded-lg px-2.5 py-1.5 hover:bg-gray-50"
       >
         Reagendar
       </Link>
@@ -40,7 +40,7 @@ export function AcoesClinica({ pedidoId }: { pedidoId: string }) {
       >
         Cancelar
       </Botao>
-      {erro && <span className="text-[11px] text-hemo">{erro}</span>}
+      {erro && <span className="text-[11px] text-red-600">{erro}</span>}
     </div>
   );
 }

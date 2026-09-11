@@ -114,7 +114,7 @@ export function AcoesPedido({
       </Botao>
 
       {mensagem && (
-        <span className={`text-[11px] ${mensagem.erro ? "text-hemo" : "text-amber-700"}`}>{mensagem.texto}</span>
+        <span className={`text-[11px] ${mensagem.erro ? "text-red-600" : "text-amber-700"}`}>{mensagem.texto}</span>
       )}
     </div>
   );

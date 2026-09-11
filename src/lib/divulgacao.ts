@@ -34,6 +34,6 @@ export async function qrCodeDataUri(url: string): Promise<string> {
     width: 512,
     margin: 1,
     errorCorrectionLevel: "M",
-    color: { dark: "#03254C", light: "#FFFFFF" },
+    color: { dark: "#9C3A32", light: "#FFFFFF" }, // bordô da marca — QR impresso já sai na cor certa
   });
 }

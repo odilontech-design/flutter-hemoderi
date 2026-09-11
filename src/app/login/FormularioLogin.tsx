@@ -45,7 +45,7 @@ export function FormularioLogin() {
         <Rotulo>Senha</Rotulo>
         <Campo name="senha" type="password" required autoComplete="current-password" />
       </div>
-      {erro && <div className="text-[11px] text-hemo">{erro}</div>}
+      {erro && <div className="text-[11px] text-red-600">{erro}</div>}
       <Botao type="submit" disabled={enviando} className="w-full py-2.5">
         {enviando ? "Entrando…" : "Entrar"}
       </Botao>

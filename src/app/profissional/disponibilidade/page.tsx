@@ -35,7 +35,7 @@ export default async function Disponibilidade() {
 
       <div className="grid lg:grid-cols-2 gap-3">
         <Cartao>
-          <div className="font-display font-bold text-navy text-sm mb-1">Minha semana</div>
+          <div className="font-display font-bold text-bordo text-sm mb-1">Minha semana</div>
           <div className="text-[11px] text-gray-500 mb-3">
             A central só oferece você em horários dentro dessas janelas.
           </div>
@@ -47,7 +47,7 @@ export default async function Disponibilidade() {
               {janelas.map((janela) => (
                 <div key={janela.id} className="flex items-center justify-between gap-2 text-xs border-b border-gray-100 pb-1.5 last:border-0">
                   <span>
-                    <strong className="text-navy">{DIAS[janela.diaSemana]}</strong> · {janela.horaInicio} às{" "}
+                    <strong className="text-bordo">{DIAS[janela.diaSemana]}</strong> · {janela.horaInicio} às{" "}
                     {janela.horaFim}
                   </span>
                   <BotaoAcao acao={removerDisponibilidade.bind(null, janela.id)} variante="perigo">
@@ -83,7 +83,7 @@ export default async function Disponibilidade() {
         </Cartao>
 
         <Cartao>
-          <div className="font-display font-bold text-navy text-sm mb-1">Ausências</div>
+          <div className="font-display font-bold text-bordo text-sm mb-1">Ausências</div>
           <div className="text-[11px] text-gray-500 mb-3">
             Vence a janela da semana em um dia específico. Não cancela atendimento já alocado — para
             isso, avise a central.
@@ -96,7 +96,7 @@ export default async function Disponibilidade() {
               {ausencias.map((ausencia) => (
                 <div key={ausencia.id} className="flex items-center justify-between gap-2 text-xs border-b border-gray-100 pb-1.5 last:border-0">
                   <span>
-                    <strong className="text-navy">{formatarData(ausencia.data)}</strong>{" "}
+                    <strong className="text-bordo">{formatarData(ausencia.data)}</strong>{" "}
                     {ausencia.horaInicio ? `· ${ausencia.horaInicio}–${ausencia.horaFim}` : "· dia inteiro"}
                     {ausencia.motivo ? ` · ${ausencia.motivo}` : ""}
                   </span>

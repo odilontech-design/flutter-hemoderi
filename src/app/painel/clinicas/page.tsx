@@ -31,7 +31,7 @@ export default async function Clinicas() {
                   <td className="py-2 pr-3">
                     <Link
                       href={`/painel/clinicas/${clinica.id}`}
-                      className="font-semibold text-navy hover:underline"
+                      className="font-semibold text-bordo hover:underline"
                     >
                       {clinica.nome}
                     </Link>
@@ -66,7 +66,7 @@ export default async function Clinicas() {
         </Cartao>
 
         <Cartao>
-          <div className="font-display font-bold text-navy text-sm mb-3">Nova clínica</div>
+          <div className="font-display font-bold text-bordo text-sm mb-3">Nova clínica</div>
           <FormularioAcao acao={salvarClinica} botao="Cadastrar clínica">
             <div>
               <Rotulo>Nome</Rotulo>

@@ -54,7 +54,7 @@ export default async function Ganhos({ searchParams }: { searchParams: { compete
             >
               ‹
             </Link>
-            <span className="font-semibold text-navy">{competenciaPorExtenso(competencia)}</span>
+            <span className="font-semibold text-bordo">{competenciaPorExtenso(competencia)}</span>
             <Link
               href={`/profissional/ganhos?competencia=${competenciaVizinha(competencia, 1)}`}
               className="px-2 py-1 text-gray-500"

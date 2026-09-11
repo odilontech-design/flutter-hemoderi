@@ -91,7 +91,7 @@ export default async function Financeiro({ searchParams }: { searchParams: { com
             >
               ‹
             </Link>
-            <span className="font-semibold text-navy">{competenciaPorExtenso(competencia)}</span>
+            <span className="font-semibold text-bordo">{competenciaPorExtenso(competencia)}</span>
             <Link
               href={`/painel/financeiro?competencia=${competenciaVizinha(competencia, 1)}`}
               className="px-2 py-1 text-gray-500"
@@ -100,7 +100,7 @@ export default async function Financeiro({ searchParams }: { searchParams: { com
             </Link>
             <a
               href={`/painel/financeiro/exportar?competencia=${competencia}`}
-              className="ml-2 border border-gray-300 rounded-lg px-3 py-1.5 font-semibold text-navy hover:bg-gray-50"
+              className="ml-2 border border-gray-300 rounded-lg px-3 py-1.5 font-semibold text-bordo hover:bg-gray-50"
             >
               Exportar CSV
             </a>
@@ -123,7 +123,7 @@ export default async function Financeiro({ searchParams }: { searchParams: { com
 
       <div className="grid lg:grid-cols-2 gap-3">
         <Cartao>
-          <div className="font-display font-bold text-navy text-sm mb-3">A receber · clínicas</div>
+          <div className="font-display font-bold text-bordo text-sm mb-3">A receber · clínicas</div>
 
           {aFaturar.length > 0 && (
             <div className="mb-4">
@@ -133,7 +133,7 @@ export default async function Financeiro({ searchParams }: { searchParams: { com
                   const clinica = clinicas.find((c) => c.id === linha.clinicaId);
                   return (
                     <tr key={linha.clinicaId} className="border-b border-gray-100 last:border-0">
-                      <td className="py-2 pr-3 font-semibold text-navy">{clinica?.nome ?? "—"}</td>
+                      <td className="py-2 pr-3 font-semibold text-bordo">{clinica?.nome ?? "—"}</td>
                       <td className="py-2 pr-3 text-gray-500">{linha._count}</td>
                       <td className="py-2 pr-3">{formatarReais(linha._sum.valorServicoCentavos ?? 0)}</td>
                       <td className="py-2">
@@ -178,7 +178,7 @@ export default async function Financeiro({ searchParams }: { searchParams: { com
         </Cartao>
 
         <Cartao>
-          <div className="font-display font-bold text-navy text-sm mb-3">A pagar · profissionais</div>
+          <div className="font-display font-bold text-bordo text-sm mb-3">A pagar · profissionais</div>
           {porProfissional.length === 0 ? (
             <Vazio>Nenhum repasse nesta competência.</Vazio>
           ) : (
@@ -186,7 +186,7 @@ export default async function Financeiro({ searchParams }: { searchParams: { com
               {porProfissional.map((profissional) => (
                 <tr key={profissional.id} className="border-b border-gray-100 last:border-0">
                   <td className="py-2 pr-3">
-                    <div className="font-semibold text-navy">{profissional.nome}</div>
+                    <div className="font-semibold text-bordo">{profissional.nome}</div>
                     <div className="text-[10px] text-gray-400">{profissional.chavePix ?? "sem chave PIX"}</div>
                   </td>
                   <td className="py-2 pr-3">

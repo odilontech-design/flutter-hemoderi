@@ -46,7 +46,7 @@ export default async function Agenda({ searchParams }: { searchParams: { data?: 
             <Link href={`/painel/agenda?data=${isoDeData(somarDias(data, -1))}`} className="px-2 py-1 text-gray-500">
               ‹ anterior
             </Link>
-            <Link href="/painel/agenda" className="px-2 py-1 text-navy font-semibold">
+            <Link href="/painel/agenda" className="px-2 py-1 text-bordo font-semibold">
               hoje
             </Link>
             <Link href={`/painel/agenda?data=${isoDeData(somarDias(data, 1))}`} className="px-2 py-1 text-gray-500">
@@ -59,15 +59,15 @@ export default async function Agenda({ searchParams }: { searchParams: { data?: 
       </Titulo>
 
       {semProfissional.length > 0 && (
-        <Cartao className="mb-3 border-hemo/30">
-          <div className="font-display font-bold text-hemo text-sm mb-2">
+        <Cartao className="mb-3 border-red-200">
+          <div className="font-display font-bold text-red-600 text-sm mb-2">
             {semProfissional.length} atendimento(s) sem profissional neste dia
           </div>
           <div className="space-y-1">
             {semProfissional.map((pedido) => (
               <div key={pedido.id} className="text-xs text-gray-600">
                 {pedido.horaInicio} · {pedido.clinica.nome} · {pedido.servico.nome}{" "}
-                <Link href="/painel/pedidos" className="text-navy font-semibold">
+                <Link href="/painel/pedidos" className="text-bordo font-semibold">
                   alocar
                 </Link>
               </div>
@@ -88,7 +88,7 @@ export default async function Agenda({ searchParams }: { searchParams: { data?: 
           return (
             <Cartao key={profissional.id} className="!p-4">
               <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
-                <div className="font-semibold text-navy text-sm">{profissional.nome}</div>
+                <div className="font-semibold text-bordo text-sm">{profissional.nome}</div>
                 <div className="text-[10px] text-gray-400">
                   {ausente
                     ? "ausência marcada"

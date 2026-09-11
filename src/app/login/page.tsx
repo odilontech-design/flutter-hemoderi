@@ -4,7 +4,7 @@ export const dynamic = "force-dynamic";
 
 export default function Login() {
   return (
-    <div className="min-h-screen flex items-center justify-center bg-navyDeep px-4">
+    <div className="min-h-screen flex items-center justify-center bg-bordoEscuro px-4">
       <div className="w-full max-w-sm">
         <div className="text-center mb-6">
           <div className="font-display font-extrabold text-2xl text-white">Hemoderi</div>

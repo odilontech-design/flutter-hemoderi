@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { Botao, Campo, Tabela } from "@/components/ui";
+import { Botao, Campo } from "@/components/ui";
 import { salvarPreco } from "@/app/actions/cadastros";
 import { formatarReais } from "@/lib/dinheiro";
 
@@ -18,14 +18,27 @@ type LinhaServico = {
  * Salva linha a linha em vez de tudo de uma vez: quem ajusta preço mexe em um
  * serviço e confere, não reescreve a tabela inteira — e um formulário único
  * transformaria a correção de um valor num risco de sobrescrever os outros.
+ *
+ * Linhas em flexbox, não `<table>`: misturar texto com um campo de largura
+ * fixa e um botão é exatamente o caso em que o table-layout:auto do navegador
+ * reparte mal a largura entre colunas tão diferentes — o botão pode vazar
+ * pixels pra fora da própria tabela sem aviso. Flexbox com quebra de linha
+ * lida com isso de graça: no celular, cada pedaço quebra pra linha de baixo
+ * em vez de espremer ou cortar.
  */
 export function TabelaPrecos({ clinicaId, servicos }: { clinicaId: string; servicos: LinhaServico[] }) {
   return (
-    <Tabela cabecalho={["Serviço", "Tabela", "Preço desta clínica", ""]}>
+    <div>
+      <div className="hidden sm:flex text-left text-gray-500 border-b border-gray-200 text-xs font-semibold py-2 gap-4">
+        <div className="flex-1">Serviço</div>
+        <div className="w-20 shrink-0">Tabela</div>
+        <div className="w-32 shrink-0">Preço desta clínica</div>
+        <div className="w-20 shrink-0" />
+      </div>
       {servicos.map((servico) => (
         <LinhaPreco key={servico.id} clinicaId={clinicaId} servico={servico} />
       ))}
-    </Tabela>
+    </div>
   );
 }
 
@@ -49,23 +62,26 @@ function LinhaPreco({ clinicaId, servico }: { clinicaId: string; servico: LinhaS
   }
 
   return (
-    <tr className="border-b border-gray-100 last:border-0">
-      <td className="py-2 pr-3 font-semibold text-navy">{servico.nome}</td>
-      <td className="py-2 pr-3 text-gray-400">{formatarReais(servico.valorPadraoCentavos)}</td>
-      <td className="py-2 pr-3">
+    <div className="flex flex-wrap items-center gap-x-4 gap-y-2 border-b border-gray-100 last:border-0 py-3 text-xs">
+      <div className="font-semibold text-bordo basis-full sm:basis-0 sm:flex-1">{servico.nome}</div>
+      <div className="text-gray-400 sm:w-20 sm:shrink-0">
+        <span className="sm:hidden text-gray-400">Tabela: </span>
+        {formatarReais(servico.valorPadraoCentavos)}
+      </div>
+      <div className="sm:w-32 sm:shrink-0">
         <Campo
           value={valor}
           onChange={(e) => setValor(e.target.value)}
           placeholder="usa a tabela"
-          className="!w-32 !py-1.5"
+          className="!py-1.5 w-32"
         />
-      </td>
-      <td className="py-2 whitespace-nowrap">
+      </div>
+      <div className="flex items-center gap-2 sm:w-20 sm:shrink-0">
         <Botao variante="secundario" disabled={pendente} onClick={salvar}>
           Salvar
         </Botao>
-        {mensagem && <span className="text-[10px] text-gray-500 ml-2">{mensagem}</span>}
-      </td>
-    </tr>
+        {mensagem && <span className="text-[10px] text-gray-500">{mensagem}</span>}
+      </div>
+    </div>
   );
 }

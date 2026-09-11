@@ -41,14 +41,14 @@ export default async function Catalogo() {
 
       <div className="grid lg:grid-cols-3 gap-3 mb-6">
         <Cartao className="lg:col-span-2">
-          <div className="font-display font-bold text-navy text-sm mb-3">Serviços</div>
+          <div className="font-display font-bold text-bordo text-sm mb-3">Serviços</div>
           {servicos.length === 0 ? (
             <Vazio>Nenhum serviço cadastrado.</Vazio>
           ) : (
             <Tabela cabecalho={["Serviço", "Categoria", "Duração", "Valor de tabela", "Repasse", "Equipamento", ""]}>
               {servicos.map((servico) => (
                 <tr key={servico.id} className="border-b border-gray-100 last:border-0">
-                  <td className="py-2 pr-3 font-semibold text-navy">{servico.nome}</td>
+                  <td className="py-2 pr-3 font-semibold text-bordo">{servico.nome}</td>
                   <td className="py-2 pr-3 text-gray-500">{ROTULO_CATEGORIA[servico.categoria]}</td>
                   <td className="py-2 pr-3 text-gray-500">{servico.duracaoMin} min</td>
                   <td className="py-2 pr-3">
@@ -83,7 +83,7 @@ export default async function Catalogo() {
         </Cartao>
 
         <Cartao>
-          <div className="font-display font-bold text-navy text-sm mb-3">Novo serviço</div>
+          <div className="font-display font-bold text-bordo text-sm mb-3">Novo serviço</div>
           <FormularioAcao acao={salvarServico} botao="Cadastrar serviço">
             <div>
               <Rotulo>Nome</Rotulo>
@@ -153,14 +153,14 @@ export default async function Catalogo() {
 
       <div className="grid lg:grid-cols-3 gap-3">
         <Cartao className="lg:col-span-2">
-          <div className="font-display font-bold text-navy text-sm mb-3">Equipamentos</div>
+          <div className="font-display font-bold text-bordo text-sm mb-3">Equipamentos</div>
           {equipamentos.length === 0 ? (
             <Vazio>Nenhum equipamento cadastrado.</Vazio>
           ) : (
             <Tabela cabecalho={["Equipamento", "Tipo", "Patrimônio", "Status"]}>
               {equipamentos.map((equipamento) => (
                 <tr key={equipamento.id} className="border-b border-gray-100 last:border-0">
-                  <td className="py-2 pr-3 font-semibold text-navy">{equipamento.nome}</td>
+                  <td className="py-2 pr-3 font-semibold text-bordo">{equipamento.nome}</td>
                   <td className="py-2 pr-3 text-gray-500">{equipamento.tipo ?? "—"}</td>
                   <td className="py-2 pr-3 text-gray-500">{equipamento.patrimonio ?? "—"}</td>
                   <td className="py-2 pr-3">{ROTULO_EQUIPAMENTO[equipamento.status]}</td>
@@ -175,7 +175,7 @@ export default async function Catalogo() {
         </Cartao>
 
         <Cartao>
-          <div className="font-display font-bold text-navy text-sm mb-3">Novo equipamento</div>
+          <div className="font-display font-bold text-bordo text-sm mb-3">Novo equipamento</div>
           <FormularioAcao acao={salvarEquipamento} botao="Cadastrar equipamento">
             <div>
               <Rotulo>Nome</Rotulo>

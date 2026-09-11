@@ -40,7 +40,7 @@ export default async function MeusAgendamentos() {
         acao={
           <Link
             href="/portal/agendar"
-            className="bg-navy text-white text-xs font-semibold px-3 py-2 rounded-lg hover:bg-navyDeep"
+            className="bg-bordo text-white text-xs font-semibold px-3 py-2 rounded-lg hover:bg-bordoEscuro"
           >
             + Agendar atendimento
           </Link>
@@ -60,7 +60,7 @@ export default async function MeusAgendamentos() {
       </div>
 
       <Cartao className="mb-3">
-        <div className="font-display font-bold text-navy text-sm mb-3">Próximos</div>
+        <div className="font-display font-bold text-bordo text-sm mb-3">Próximos</div>
         {proximos.length === 0 ? (
           <Vazio>Nenhum atendimento agendado.</Vazio>
         ) : (
@@ -87,7 +87,7 @@ export default async function MeusAgendamentos() {
       </Cartao>
 
       <Cartao className="mb-3">
-        <div className="font-display font-bold text-navy text-sm mb-3">Histórico</div>
+        <div className="font-display font-bold text-bordo text-sm mb-3">Histórico</div>
         {historico.length === 0 ? (
           <Vazio>Ainda sem histórico.</Vazio>
         ) : (

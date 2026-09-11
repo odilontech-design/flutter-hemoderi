@@ -12,3 +12,7 @@ next-env.d.ts
 
 .DS_Store
 .vercel
+
+# Capturas de tela geradas por scripts de teste na raiz (o correto é o
+# scratchpad da sessão ou os.tmpdir(), mas isto é uma rede de segurança).
+/*.png

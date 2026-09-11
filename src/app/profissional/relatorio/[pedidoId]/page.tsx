@@ -24,7 +24,7 @@ export default async function Relatorio({ params }: { params: { pedidoId: string
       <Titulo>Relatório do atendimento</Titulo>
       <Cartao className="max-w-xl">
         <div className="mb-4 pb-4 border-b border-gray-100">
-          <div className="font-display font-bold text-navy text-sm">
+          <div className="font-display font-bold text-bordo text-sm">
             #{pedido.numero} · {pedido.servico.nome}
           </div>
           <div className="text-xs text-gray-500 mt-1">

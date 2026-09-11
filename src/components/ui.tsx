@@ -14,7 +14,7 @@ export function Cartao({
 export function Titulo({ children, acao }: { children: React.ReactNode; acao?: React.ReactNode }) {
   return (
     <div className="flex items-center justify-between gap-3 mb-5">
-      <h1 className="font-display font-extrabold text-navy text-xl">{children}</h1>
+      <h1 className="font-display font-extrabold text-bordo text-xl">{children}</h1>
       {acao}
     </div>
   );
@@ -24,7 +24,7 @@ export function Kpi({ rotulo, valor, sub }: { rotulo: string; valor: string; sub
   return (
     <Cartao>
       <div className="text-[11px] text-gray-500 mb-1">{rotulo}</div>
-      <div className="text-xl font-display font-extrabold text-navy">{valor}</div>
+      <div className="text-xl font-display font-extrabold text-bordo">{valor}</div>
       {sub && <div className="text-[10px] text-gray-400 mt-1">{sub}</div>}
     </Cartao>
   );
@@ -47,7 +47,7 @@ export function Rotulo({ children }: { children: React.ReactNode }) {
 }
 
 const CAMPO =
-  "w-full border border-gray-300 rounded-lg px-3 py-2 text-sm outline-none focus:border-navy focus:ring-1 focus:ring-navy";
+  "w-full border border-gray-300 rounded-lg px-3 py-2 text-sm outline-none focus:border-bordo focus:ring-1 focus:ring-bordo";
 
 export function Campo(props: React.InputHTMLAttributes<HTMLInputElement>) {
   return <input {...props} className={`${CAMPO} ${props.className ?? ""}`} />;
@@ -67,9 +67,9 @@ export function Botao({
   ...props
 }: React.ButtonHTMLAttributes<HTMLButtonElement> & { variante?: "primario" | "secundario" | "perigo" }) {
   const estilos = {
-    primario: "bg-navy text-white hover:bg-navyDeep",
-    secundario: "bg-white text-navy border border-gray-300 hover:bg-gray-50",
-    perigo: "bg-white text-hemo border border-hemo/40 hover:bg-hemo/5",
+    primario: "bg-bordo text-white hover:bg-bordoEscuro",
+    secundario: "bg-white text-bordo border border-gray-300 hover:bg-gray-50",
+    perigo: "bg-white text-red-600 border border-red-300 hover:bg-red-50",
   }[variante];
   return (
     <button
@@ -81,8 +81,22 @@ export function Botao({
 
 export function Tabela({ cabecalho, children }: { cabecalho: string[]; children: React.ReactNode }) {
   return (
-    <div className="overflow-x-auto">
-      <table className="w-full text-xs">
+    // min-w-0 quebra o vício clássico do CSS Grid: sem ele, o item do grid
+    // recusa encolher além do conteúdo mínimo da tabela, empurra a própria
+    // coluna para além da viewport, e o overflow-x-hidden do <main> corta
+    // tudo silenciosamente — sem barra de rolagem, sem aviso. Com min-w-0,
+    // quem estoura a largura é só esta div, que sabe lidar com isso:
+    // overflow-x-auto vira scroll de verdade. min-w-full (não w-full) no
+    // table é o que deixa a tabela crescer além do container quando o
+    // conteúdo pede — w-full a espremeria até cortar texto no meio.
+    //
+    // Não serve para toda tabela: uma linha que mistura texto com um campo de
+    // largura fixa e um botão (como a tabela de preço por clínica) esbarra em
+    // como o table-layout:auto do navegador reparte largura entre células tão
+    // diferentes — o botão pode vazar pixels da própria tabela. Nesse caso,
+    // linhas em flexbox servem melhor que <table> (ver TabelaPrecos).
+    <div className="overflow-x-auto min-w-0 -mx-5 px-5 sm:mx-0 sm:px-0">
+      <table className="min-w-full text-xs">
         <thead>
           <tr className="text-left text-gray-500 border-b border-gray-200">
             {cabecalho.map((c) => (

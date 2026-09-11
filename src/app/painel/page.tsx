@@ -95,7 +95,7 @@ export default async function Hoje() {
 
       <div className="grid lg:grid-cols-3 gap-3 mb-6">
         <Cartao className="lg:col-span-2">
-          <div className="font-display font-bold text-navy text-sm mb-3">Agenda do dia</div>
+          <div className="font-display font-bold text-bordo text-sm mb-3">Agenda do dia</div>
           {doDia.length === 0 ? (
             <Vazio>Nenhum atendimento marcado para hoje.</Vazio>
           ) : (
@@ -106,7 +106,7 @@ export default async function Hoje() {
                   <td className="py-2 pr-3">{pedido.clinica.nome}</td>
                   <td className="py-2 pr-3 text-gray-500">{pedido.servico.nome}</td>
                   <td className="py-2 pr-3">
-                    {pedido.profissional?.nome ?? <span className="text-hemo font-semibold">a alocar</span>}
+                    {pedido.profissional?.nome ?? <span className="text-red-600 font-semibold">a alocar</span>}
                   </td>
                   <td className="py-2 pr-3">
                     <SeloStatus status={pedido.status} />
@@ -120,21 +120,21 @@ export default async function Hoje() {
         <div className="space-y-3">
           <Cartao>
             <div className="text-[11px] text-gray-500 mb-1">A receber de clínicas</div>
-            <div className="text-lg font-display font-extrabold text-navy">
+            <div className="text-lg font-display font-extrabold text-bordo">
               {formatarReais(aReceber._sum.valorCentavos ?? 0)}
             </div>
             <div className="text-[10px] text-gray-400 mt-1">faturas em aberto</div>
           </Cartao>
           <Cartao>
             <div className="text-[11px] text-gray-500 mb-1">A pagar a profissionais</div>
-            <div className="text-lg font-display font-extrabold text-navy">
+            <div className="text-lg font-display font-extrabold text-bordo">
               {formatarReais(repassesMes._sum.valorCentavos ?? 0)}
             </div>
             <div className="text-[10px] text-gray-400 mt-1">repasses pendentes da competência</div>
           </Cartao>
           <Link
             href="/painel/pedidos"
-            className="block bg-navy text-white rounded-2xl p-5 text-center text-xs font-semibold hover:bg-navyDeep"
+            className="block bg-bordo text-white rounded-2xl p-5 text-center text-xs font-semibold hover:bg-bordoEscuro"
           >
             Trabalhar a esteira →
           </Link>
@@ -143,10 +143,10 @@ export default async function Hoje() {
 
       <Cartao>
         <div className="flex flex-wrap items-baseline justify-between gap-2 mb-3">
-          <div className="font-display font-bold text-navy text-sm">Produtividade do mês</div>
+          <div className="font-display font-bold text-bordo text-sm">Produtividade do mês</div>
           {comparecimento != null && (
             <div className="text-[11px] text-gray-500">
-              Comparecimento: <strong className="text-navy">{comparecimento}%</strong> ({faltasMes}{" "}
+              Comparecimento: <strong className="text-bordo">{comparecimento}%</strong> ({faltasMes}{" "}
               falta{faltasMes === 1 ? "" : "s"} em {fechadosMes} atendimentos fechados)
             </div>
           )}
@@ -162,7 +162,7 @@ export default async function Hoje() {
                 realizadosMes._count > 0 ? Math.round((linha._count / realizadosMes._count) * 100) : 0;
               return (
                 <tr key={linha.profissionalId} className="border-b border-gray-100 last:border-0">
-                  <td className="py-2 pr-3 font-semibold text-navy">{profissional?.nome ?? "—"}</td>
+                  <td className="py-2 pr-3 font-semibold text-bordo">{profissional?.nome ?? "—"}</td>
                   <td className="py-2 pr-3">{linha._count}</td>
                   <td className="py-2 pr-3 text-gray-600">
                     {formatarReais(linha._sum.valorServicoCentavos ?? 0)}
@@ -170,7 +170,7 @@ export default async function Hoje() {
                   <td className="py-2 pr-3">
                     <div className="flex items-center gap-2">
                       <div className="h-1.5 w-24 bg-gray-100 rounded-full overflow-hidden">
-                        <div className="h-full bg-navy rounded-full" style={{ width: `${participacao}%` }} />
+                        <div className="h-full bg-bordo rounded-full" style={{ width: `${participacao}%` }} />
                       </div>
                       <span className="text-gray-500 text-[10px]">{participacao}%</span>
                     </div>

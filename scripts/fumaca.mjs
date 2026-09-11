@@ -16,6 +16,13 @@
  */
 
 import { chromium } from "playwright";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+
+// Sem argumento, grava em um diretório temporário — nunca na raiz do
+// projeto, que é o que fazia sobrar financeiro.png/painel.png soltos a
+// cada `npm run fumaca` sem parâmetro.
+const CAMINHO_CAPTURA = process.argv[2] ?? join(tmpdir(), "fumaca-financeiro.png");
 
 const BASE = process.env.BASE_URL ?? "http://localhost:3003";
 const EXECUTAVEL = process.env.CHROMIUM_PATH; // usado quando o Chromium não está no caminho padrão
@@ -126,12 +133,12 @@ try {
   await page.goto(`${BASE}/painel/financeiro`);
   const conteudo = await page.textContent("body");
   conteudo.includes("A pagar") ? ok("financeiro abriu com a pagar e a receber") : falha("financeiro não abriu");
-  await page.screenshot({ path: process.argv[2] ?? "financeiro.png", fullPage: true });
+  await page.screenshot({ path: CAMINHO_CAPTURA, fullPage: true });
 
   await page.goto(`${BASE}/painel`);
   const painel = await page.textContent("body");
   painel.includes("Produtividade do mês") ? ok("painel diário mostra produtividade") : falha("produtividade ausente");
-  await page.screenshot({ path: (process.argv[2] ?? "painel.png").replace("financeiro", "painel"), fullPage: true });
+  await page.screenshot({ path: CAMINHO_CAPTURA.replace("financeiro", "painel"), fullPage: true });
 } catch (erro) {
   falha(erro.message);
 } finally {

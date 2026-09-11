@@ -39,7 +39,7 @@ export default async function Acessos() {
             <Tabela cabecalho={["Nome", "E-mail", "Nível", "Vínculo", "Criado em"]}>
               {usuarios.map((usuario) => (
                 <tr key={usuario.id} className="border-b border-gray-100 last:border-0">
-                  <td className="py-2 pr-3 font-semibold text-navy">{usuario.nome}</td>
+                  <td className="py-2 pr-3 font-semibold text-bordo">{usuario.nome}</td>
                   <td className="py-2 pr-3 text-gray-500">{usuario.email}</td>
                   <td className="py-2 pr-3">{ROTULO_PAPEL[usuario.papel]}</td>
                   <td className="py-2 pr-3 text-gray-500">
@@ -53,7 +53,7 @@ export default async function Acessos() {
         </Cartao>
 
         <Cartao>
-          <div className="font-display font-bold text-navy text-sm mb-3">Novo acesso</div>
+          <div className="font-display font-bold text-bordo text-sm mb-3">Novo acesso</div>
           <FormularioAcao acao={criarAcesso} botao="Criar acesso">
             <div>
               <Rotulo>Nome</Rotulo>

@@ -12,7 +12,7 @@ export async function CartaoDivulgacao({ slug, nome }: { slug: string; nome: str
 
   return (
     <Cartao>
-      <div className="font-display font-bold text-navy text-sm mb-1">Divulgação</div>
+      <div className="font-display font-bold text-bordo text-sm mb-1">Divulgação</div>
       <div className="text-[11px] text-gray-500 mb-4">
         Link e QR Code de {nome} para agendar direto no portal.
       </div>
@@ -26,7 +26,7 @@ export async function CartaoDivulgacao({ slug, nome }: { slug: string; nome: str
         />
         <div className="min-w-0 flex-1">
           <div className="text-[11px] text-gray-500 mb-1">Link</div>
-          <code className="block text-xs text-navy break-all mb-3">{url}</code>
+          <code className="block text-xs text-bordo break-all mb-3">{url}</code>
           <CopiarLink url={url} />
           <div className="text-[10px] text-gray-400 mt-3">
             Quem abrir sem estar logado passa pelo login e cai direto na tela de agendamento.

@@ -40,7 +40,7 @@ export function BotaoAcao({
       >
         {children}
       </Botao>
-      {erro && <span className="text-[11px] text-hemo">{erro}</span>}
+      {erro && <span className="text-[11px] text-red-600">{erro}</span>}
     </span>
   );
 }

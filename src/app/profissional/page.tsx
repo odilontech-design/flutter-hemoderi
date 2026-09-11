@@ -40,8 +40,8 @@ export default async function MinhaAgenda() {
       <Titulo>Minha agenda</Titulo>
 
       {aRelatar.length > 0 && (
-        <Cartao className="mb-3 border-hemo/30">
-          <div className="font-display font-bold text-hemo text-sm mb-1">
+        <Cartao className="mb-3 border-red-200">
+          <div className="font-display font-bold text-red-600 text-sm mb-1">
             {aRelatar.length} atendimento(s) esperando relatório
           </div>
           <div className="text-[11px] text-gray-500 mb-3">
@@ -54,7 +54,7 @@ export default async function MinhaAgenda() {
                 className="flex flex-wrap items-center justify-between gap-2 border-b border-gray-100 pb-2 last:border-0 last:pb-0"
               >
                 <div className="text-xs">
-                  <div className="font-semibold text-navy">
+                  <div className="font-semibold text-bordo">
                     {formatarDataCurta(pedido.data)} · {pedido.horaInicio} · {pedido.clinica.nome}
                   </div>
                   <div className="text-gray-500">
@@ -63,7 +63,7 @@ export default async function MinhaAgenda() {
                 </div>
                 <Link
                   href={`/profissional/relatorio/${pedido.id}`}
-                  className="bg-navy text-white text-xs font-semibold px-3 py-2 rounded-lg hover:bg-navyDeep"
+                  className="bg-bordo text-white text-xs font-semibold px-3 py-2 rounded-lg hover:bg-bordoEscuro"
                 >
                   Preencher relatório
                 </Link>
@@ -74,7 +74,7 @@ export default async function MinhaAgenda() {
       )}
 
       <Cartao>
-        <div className="font-display font-bold text-navy text-sm mb-3">Próximos atendimentos</div>
+        <div className="font-display font-bold text-bordo text-sm mb-3">Próximos atendimentos</div>
         {proximos.length === 0 ? (
           <Vazio>Nada agendado. Declare sua disponibilidade para receber atendimentos.</Vazio>
         ) : (
@@ -82,7 +82,7 @@ export default async function MinhaAgenda() {
             {proximos.map((pedido) => (
               <div key={pedido.id} className="flex items-center justify-between gap-3 text-xs border-b border-gray-100 pb-2 last:border-0">
                 <div>
-                  <div className="font-semibold text-navy">
+                  <div className="font-semibold text-bordo">
                     {formatarDataCurta(pedido.data)} · {pedido.horaInicio}
                   </div>
                   <div className="text-gray-500">

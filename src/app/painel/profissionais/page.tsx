@@ -29,7 +29,7 @@ export default async function Profissionais() {
               {profissionais.map((profissional) => (
                 <tr key={profissional.id} className="border-b border-gray-100 last:border-0">
                   <td className="py-2 pr-3">
-                    <div className="font-semibold text-navy">{profissional.nome}</div>
+                    <div className="font-semibold text-bordo">{profissional.nome}</div>
                     <div className="text-[10px] text-gray-400">
                       {profissional.especialidade ?? profissional.telefone ?? "—"}
                     </div>
@@ -44,7 +44,7 @@ export default async function Profissionais() {
                   </td>
                   <td className="py-2 pr-3">
                     {profissional._count.disponibilidades === 0 ? (
-                      <span className="text-hemo font-semibold">não declarada</span>
+                      <span className="text-red-600 font-semibold">não declarada</span>
                     ) : (
                       `${profissional._count.disponibilidades} janela(s)`
                     )}
@@ -65,7 +65,7 @@ export default async function Profissionais() {
         </Cartao>
 
         <Cartao>
-          <div className="font-display font-bold text-navy text-sm mb-3">Novo profissional</div>
+          <div className="font-display font-bold text-bordo text-sm mb-3">Novo profissional</div>
           <FormularioAcao acao={salvarProfissional} botao="Cadastrar profissional">
             <div>
               <Rotulo>Nome</Rotulo>

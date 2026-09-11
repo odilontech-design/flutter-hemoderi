@@ -41,7 +41,7 @@ export default async function DetalheClinica({ params }: { params: { id: string 
       <div className="grid lg:grid-cols-2 gap-3">
         <div className="space-y-3">
           <Cartao>
-            <div className="font-display font-bold text-navy text-sm mb-3">Cadastro</div>
+            <div className="font-display font-bold text-bordo text-sm mb-3">Cadastro</div>
             <FormularioAcao acao={salvarClinica} botao="Salvar alterações" limparAoSalvar={false}>
               <input type="hidden" name="id" value={clinica.id} />
               <div>
@@ -91,7 +91,7 @@ export default async function DetalheClinica({ params }: { params: { id: string 
         </div>
 
         <Cartao>
-          <div className="font-display font-bold text-navy text-sm mb-1">Tabela de preço</div>
+          <div className="font-display font-bold text-bordo text-sm mb-1">Tabela de preço</div>
           <div className="text-[11px] text-gray-500 mb-4">
             Preço negociado desta clínica por serviço. Em branco, vale o valor de tabela — e é ele
             que o pedido congela no momento da criação.
