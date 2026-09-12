@@ -40,7 +40,10 @@ vazias até a Fase 4. Sem elas o sistema opera normalmente — as integrações
 registram a intenção em `SincronizacaoExterna` em vez de falhar.
 
 3. Faça o deploy. O `prebuild` roda `prisma generate && prisma migrate deploy`,
-   então o schema é aplicado sozinho no primeiro build.
+   então o schema é aplicado sozinho no primeiro build. O schema declara
+   `DATABASE_URL_UNPOOLED` como `directUrl`, e é essa a conexão que o Migrate
+   usa de verdade — sem a variável configurada, esse passo trava sozinho na
+   primeira migration.
 
 ## 3. Primeiro acesso
 

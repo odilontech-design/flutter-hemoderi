@@ -20,6 +20,12 @@ generator client {
 datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
+  // Migrate usa esta conexão em vez da de cima quando roda `migrate deploy`
+  // ou `migrate dev` — precisa ser a direta (sem "-pooler"). Pelo pooler, o
+  // advisory lock do Migrate fica preso numa conexão do PgBouncer e trava. O
+  // prebuild do package.json roda `migrate deploy` a cada build da Vercel,
+  // então sem isto o deploy trava sozinho na primeira migration em produção.
+  directUrl = env("DATABASE_URL_UNPOOLED")
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
