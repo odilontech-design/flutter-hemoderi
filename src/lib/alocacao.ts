@@ -13,8 +13,17 @@
  *
  * A aritmética pura está em lib/agenda.ts e é testada sozinha; aqui é só a
  * parte que precisa do banco.
+ *
+ * Com dezenas de profissionais e duas portas de entrada (portal da clínica e
+ * painel interno) marcando ao mesmo tempo, checar disponibilidade e só depois
+ * gravar deixa uma brecha: duas requisições podem ler "livre" antes de
+ * qualquer uma escrever, e as duas escreverem. `travarRecursos` fecha essa
+ * brecha — quem chama esta lib dentro de uma transação, tendo travado antes
+ * os recursos em jogo, tem a garantia de que o que `verificarAlocacao` leu
+ * continua verdade até o `commit`.
  */
 
+import { PrismaClient, Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import {
   cabeEmAlgumaJanela,
@@ -29,6 +38,32 @@ import {
 } from "@/lib/agenda";
 import { dataDeISO, instanteDoAtendimento, paraMinutos } from "@/lib/data";
 import { STATUS_ATIVOS } from "@/lib/pedido";
+
+/** Aceita tanto o cliente normal quanto o `tx` de dentro de uma transação. */
+export type ClientePrisma = PrismaClient | Prisma.TransactionClient;
+
+/**
+ * Trava, na ordem, os recursos que um agendamento disputa — só vale dentro de
+ * uma transação (`pg_advisory_xact_lock` libera sozinho no commit/rollback).
+ *
+ * A ordem é sempre a mesma (clínica, depois tipo de equipamento, depois
+ * profissional) para que duas transações concorrentes, mesmo disputando os
+ * mesmos dois recursos, nunca fiquem cada uma esperando a trava que a outra
+ * já está segurando — isso seria deadlock, não fila.
+ */
+export async function travarRecursos(
+  tx: Prisma.TransactionClient,
+  recursos: { clinicaId?: string | null; tipoEquipamento?: string | null; profissionalId?: string | null }
+): Promise<void> {
+  const chaves: { tipo: string; valor: string }[] = [];
+  if (recursos.clinicaId) chaves.push({ tipo: "clinica", valor: recursos.clinicaId });
+  if (recursos.tipoEquipamento) chaves.push({ tipo: "equipamento", valor: recursos.tipoEquipamento });
+  if (recursos.profissionalId) chaves.push({ tipo: "profissional", valor: recursos.profissionalId });
+
+  for (const { tipo, valor } of chaves.sort((a, b) => (a.tipo + a.valor).localeCompare(b.tipo + b.valor))) {
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${tipo}), hashtext(${valor}))`;
+  }
+}
 
 export type Impedimento = {
   tipo: "PROFISSIONAL" | "EQUIPAMENTO" | "SALA" | "BLOQUEIO" | "DISPONIBILIDADE" | "ANTECEDENCIA";
@@ -56,27 +91,30 @@ async function parametros() {
  * `ignorarPedidoId` existe para o reagendamento: um pedido não pode conflitar
  * consigo mesmo.
  */
-export async function verificarAlocacao({
-  clinicaId,
-  profissionalId,
-  equipamentoId,
-  data,
-  horaInicio,
-  duracaoMin,
-  ignorarPedidoId,
-}: {
-  clinicaId: string;
-  profissionalId?: string | null;
-  equipamentoId?: string | null;
-  data: Date;
-  horaInicio: string;
-  duracaoMin: number;
-  ignorarPedidoId?: string;
-}): Promise<Impedimento[]> {
+export async function verificarAlocacao(
+  {
+    clinicaId,
+    profissionalId,
+    equipamentoId,
+    data,
+    horaInicio,
+    duracaoMin,
+    ignorarPedidoId,
+  }: {
+    clinicaId: string;
+    profissionalId?: string | null;
+    equipamentoId?: string | null;
+    data: Date;
+    horaInicio: string;
+    duracaoMin: number;
+    ignorarPedidoId?: string;
+  },
+  bd: ClientePrisma = prisma
+): Promise<Impedimento[]> {
   const alvo = intervaloDe(horaInicio, duracaoMin);
   const impedimentos: Impedimento[] = [];
 
-  const pedidosDoDia = await prisma.pedido.findMany({
+  const pedidosDoDia = await bd.pedido.findMany({
     where: {
       data,
       status: { in: STATUS_ATIVOS },
@@ -124,7 +162,7 @@ export async function verificarAlocacao({
     }
   }
 
-  const clinica = await prisma.clinica.findUnique({
+  const clinica = await bd.clinica.findUnique({
     where: { id: clinicaId },
     select: { salas: true, nome: true },
   });
@@ -139,8 +177,8 @@ export async function verificarAlocacao({
 
   if (profissionalId) {
     const [disponibilidades, bloqueios] = await Promise.all([
-      prisma.disponibilidade.findMany({ where: { profissionalId } }),
-      prisma.bloqueio.findMany({ where: { profissionalId, data } }),
+      bd.disponibilidade.findMany({ where: { profissionalId } }),
+      bd.bloqueio.findMany({ where: { profissionalId, data } }),
     ]);
 
     const ausencias = intervalosDeBloqueio(bloqueios);
@@ -298,6 +336,56 @@ export async function horariosDisponiveis({
 }
 
 /**
+ * Quem, dentre os profissionais ativos, já não serve para este horário — está
+ * em outro atendimento que se sobrepõe, ou marcou ausência. Não olha
+ * disponibilidade declarada (isso é aviso, não bloqueio — ver `Impedimento`).
+ *
+ * Alimenta o seletor de "alocar profissional" na esteira. Com meia dúzia de
+ * profissionais, oferecer todo mundo e deixar a equipe descobrir por
+ * tentativa quem está livre é só um clique extra; com dezenas, é a esteira
+ * inteira travando em tentativa e erro. Uma consulta só, reaproveitada para
+ * todos os profissionais do dia — não uma por nome da lista.
+ */
+export async function profissionaisIndisponiveis(
+  data: Date,
+  horaInicio: string,
+  duracaoMin: number,
+  ignorarPedidoId?: string
+): Promise<Set<string>> {
+  const alvo = intervaloDe(horaInicio, duracaoMin);
+
+  const [pedidosDoDia, bloqueiosDoDia] = await Promise.all([
+    prisma.pedido.findMany({
+      where: {
+        data,
+        status: { in: STATUS_ATIVOS },
+        profissionalId: { not: null },
+        ...(ignorarPedidoId ? { id: { not: ignorarPedidoId } } : {}),
+      },
+      select: { profissionalId: true, horaInicio: true, duracaoMin: true },
+    }),
+    prisma.bloqueio.findMany({
+      where: { data },
+      select: { profissionalId: true, horaInicio: true, horaFim: true },
+    }),
+  ]);
+
+  const indisponiveis = new Set<string>();
+  for (const p of pedidosDoDia) {
+    if (p.profissionalId && haSobreposicao(alvo, intervaloDe(p.horaInicio, p.duracaoMin))) {
+      indisponiveis.add(p.profissionalId);
+    }
+  }
+  for (const b of bloqueiosDoDia) {
+    const ausencia =
+      b.horaInicio && b.horaFim ? { inicio: paraMinutos(b.horaInicio), fim: paraMinutos(b.horaFim) } : { inicio: 0, fim: 24 * 60 };
+    if (haSobreposicao(alvo, ausencia)) indisponiveis.add(b.profissionalId);
+  }
+
+  return indisponiveis;
+}
+
+/**
  * Primeiro equipamento livre no horário — usado ao alocar serviço que exige.
  *
  * `tipoEquipamento` restringe a busca ao tipo que o serviço pede (casa com
@@ -309,16 +397,17 @@ export async function equipamentoLivre(
   horaInicio: string,
   duracaoMin: number,
   tipoEquipamento?: string | null,
-  ignorarPedidoId?: string
+  ignorarPedidoId?: string,
+  bd: ClientePrisma = prisma
 ): Promise<string | null> {
   const alvo = intervaloDe(horaInicio, duracaoMin);
 
   const [equipamentos, pedidos] = await Promise.all([
-    prisma.equipamento.findMany({
+    bd.equipamento.findMany({
       where: { status: "DISPONIVEL", ...(tipoEquipamento ? { tipo: tipoEquipamento } : {}) },
       select: { id: true },
     }),
-    prisma.pedido.findMany({
+    bd.pedido.findMany({
       where: {
         data,
         status: { in: STATUS_ATIVOS },

@@ -6,6 +6,7 @@ import { Cartao, SeloStatus, Titulo, Vazio } from "@/components/ui";
 import { formatarDataCurta } from "@/lib/data";
 import { formatarReais } from "@/lib/dinheiro";
 import { STATUS_PENDENTES } from "@/lib/pedido";
+import { profissionaisIndisponiveis } from "@/lib/alocacao";
 import { AcoesPedido } from "./AcoesPedido";
 
 export const dynamic = "force-dynamic";
@@ -45,6 +46,21 @@ export default async function Esteira({ searchParams }: { searchParams: { filtro
       select: { id: true, nome: true },
     }),
   ]);
+
+  // Só quem está "Confirmado" mostra o seletor de alocar (ver AcoesPedido) —
+  // é só para esses que vale calcular quem está livre. Com dezenas de
+  // profissionais cadastrados, oferecer a lista toda e deixar a equipe
+  // descobrir por tentativa quem está ocupado não escala; o profissional que
+  // a clínica pediu continua na lista mesmo ocupado, para a equipe ver que o
+  // pedido dela esbarrou em alguma coisa, e não simplesmente sumir da tela.
+  const indisponiveisPorPedido = new Map<string, Set<string>>();
+  await Promise.all(
+    pedidos
+      .filter((p) => p.status === "CONFIRMADO")
+      .map(async (p) => {
+        indisponiveisPorPedido.set(p.id, await profissionaisIndisponiveis(p.data, p.horaInicio, p.duracaoMin, p.id));
+      })
+  );
 
   return (
     <>
@@ -125,7 +141,10 @@ export default async function Esteira({ searchParams }: { searchParams: { filtro
               <AcoesPedido
                 pedidoId={pedido.id}
                 status={pedido.status}
-                profissionais={profissionais}
+                profissionais={profissionais.filter((p) => {
+                  const indisponiveis = indisponiveisPorPedido.get(pedido.id);
+                  return !indisponiveis || p.id === pedido.profissionalId || !indisponiveis.has(p.id);
+                })}
                 profissionalSolicitadoId={pedido.profissionalId}
               />
             </Cartao>
