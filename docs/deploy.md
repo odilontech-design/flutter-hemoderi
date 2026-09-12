@@ -30,6 +30,7 @@ trava com timeout — por isso as migrations usam a conexão direta.
 | `NEXTAUTH_SECRET` | gere com `openssl rand -base64 32` |
 | `NEXTAUTH_URL` | a URL final, ex. `https://operacoes.hemoderi.com.br` |
 | `CRON_SECRET` | gere com `openssl rand -base64 32` |
+| `SETUP_SECRET` | gere com `openssl rand -hex 24` — só para o próximo passo, dá para remover depois |
 
 `NEXTAUTH_URL` precisa ser a URL **definitiva**: é dela que sai o link de
 divulgação impresso no QR Code de cada clínica. Trocar o domínio depois
@@ -45,19 +46,30 @@ registram a intenção em `SincronizacaoExterna` em vez de falhar.
    usa de verdade — sem a variável configurada, esse passo trava sozinho na
    primeira migration.
 
-## 3. Primeiro acesso
+## 3. Primeiro acesso e catálogo
 
 Não há tela pública de cadastro: quem cria um usuário interno enxerga a
-operação inteira, e essa porta não se abre pela internet. O primeiro acesso
-sai da linha de comando, com a conexão de produção:
+operação inteira, e essa porta não se abre pela internet sem controle. Em vez
+de exigir acesso direto ao banco de produção (nem sempre disponível de onde o
+deploy é conduzido), abra uma vez, no navegador:
 
-```bash
-DATABASE_URL="<a URL sem -pooler>" \
-  npm run db:usuario -- --email=voce@hemoderi.com.br --nome="Seu Nome" --senha='...' --papel=INTERNO
+```
+https://SEU-DOMINIO/api/setup?key=O-VALOR-DE-SETUP_SECRET
 ```
 
+A página carrega o catálogo real (18 serviços, equipamentos) e cria o
+primeiro acesso interno com o nome, e-mail e senha que você informar. A rota
+se tranca sozinha assim que existe qualquer usuário interno — não é uma porta
+que fica aberta esperando alguém achar a chave. Depois de usar, pode remover
+`SETUP_SECRET` do ambiente.
+
 Dali em diante, os demais acessos (equipe, clínicas e profissionais) são
-criados pela tela **Acessos** do painel.
+criados pela tela **Acessos** do painel — nunca mais por aqui.
+
+Com acesso direto à conexão de produção (de uma máquina que alcance o Neon),
+`npm run db:usuario` continua funcionando como sempre para criar ou resetar um
+acesso pontual — mas só `/api/setup` carrega o catálogo junto, então é o
+caminho preferido para a configuração inicial.
 
 ## 4. Conferir
 
