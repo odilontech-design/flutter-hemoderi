@@ -1,0 +1,10 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+body {
+  /* Fundo levemente quente, no tom do site da Hemoderi — não é branco puro
+     nem o cinza-azulado que a linha Dilon Tech usa nos outros produtos. */
+  background: #faf5f2;
+  color: #241412;
+}

@@ -1,0 +1,677 @@
+// ─────────────────────────────────────────────────────────────────────────────
+// Dilon Saúde | Operações — Hemoderi
+//
+// Vertical DEDICADA: este banco atende uma operação só, a da Hemoderi. Não há
+// coluna de tenant e não deve haver — o contrato (Cláusula 6.1) trata este
+// código como solução feita sob medida, e fingir multiempresa aqui só criaria
+// um filtro a mais para errar em toda query sem nunca ter um segundo cliente.
+//
+// O negócio: a Hemoderi coloca PROFISSIONAL e EQUIPAMENTO dentro da clínica do
+// cliente. Quem paga é a clínica contratante; quem executa é o profissional
+// autônomo. Por isso todo pedido tem dois valores diferentes e independentes —
+// o que a clínica deve (a receber) e o que o profissional tem a receber
+// (a pagar) — e é essa distância que dá o resultado da operação.
+// ─────────────────────────────────────────────────────────────────────────────
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Acesso
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// Os três níveis previstos na proposta. Cada um enxerga só o próprio escopo:
+/// o interno vê a operação inteira, a clínica vê os pedidos dela, o
+/// profissional vê a agenda e os ganhos dele.
+enum PapelUsuario {
+  INTERNO // equipe administrativa da Hemoderi
+  CLINICA // cliente contratante
+  PROFISSIONAL // prestador que executa o atendimento
+}
+
+model Usuario {
+  id        String       @id @default(cuid())
+  nome      String
+  email     String       @unique
+  senhaHash String
+  papel     PapelUsuario
+  telefone  String?
+
+  /// Preenchido quando papel = CLINICA. É daqui que sai o escopo do portal:
+  /// o cliente nunca informa qual clínica é, o vínculo vem da conta.
+  clinicaId String?
+  clinica   Clinica? @relation(fields: [clinicaId], references: [id], onDelete: Cascade)
+
+  /// Preenchido quando papel = PROFISSIONAL, pelo mesmo motivo.
+  profissionalId String?
+  profissional   Profissional? @relation(fields: [profissionalId], references: [id], onDelete: Cascade)
+
+  criadoEm     DateTime  @default(now())
+  /// Desligamento é desativação, nunca exclusão: o usuário está preso ao
+  /// histórico (pedidos que abriu, repasses que baixou). Apagar não apaga o
+  /// histórico — apaga a autoria dele.
+  desativadoEm DateTime?
+
+  pedidosCriados     Pedido[]            @relation("PedidoCriadoPor")
+  registrosAuditoria RegistroAuditoria[]
+
+  @@index([papel])
+  @@index([clinicaId])
+  @@index([profissionalId])
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Parâmetros da operação
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// Linha única (id fixo "hemoderi"). O que muda com a operação — janela de
+/// lembrete, antecedência mínima do portal, percentual de repasse padrão —
+/// mora aqui e não como constante no código, porque isso é ajuste de rotina
+/// da equipe e não deve exigir deploy.
+model Parametros {
+  id   String @id @default("hemoderi")
+  nome String @default("Hemoderi")
+  cnpj String @default("35.272.539/0001-89")
+
+  /// Número da central usado nos disparos de confirmação e lembrete.
+  whatsapp String?
+  email    String?
+
+  timezone String @default("America/Sao_Paulo")
+
+  /// Faixa de horário em que a operação aceita agendamento. Serve de limite
+  /// externo: a disponibilidade declarada pelo profissional pode ser menor,
+  /// nunca maior.
+  horaAbertura   String @default("07:00")
+  horaFechamento String @default("19:00")
+
+  /// Antecedência mínima, em horas, para a clínica agendar sozinha pelo
+  /// portal. Sem isso o portal aceita pedido para daqui a 20 minutos e a
+  /// operação descobre quando não tem mais como alocar ninguém.
+  antecedenciaMinimaHoras Int @default(24)
+
+  /// Quantas horas antes do atendimento o lembrete é disparado.
+  horasLembrete Int @default(24)
+
+  /// Repasse padrão do profissional, em % do valor do serviço. É o piso da
+  /// cadeia de regras (ver lib/repasse.ts) — vale quando nem o serviço nem o
+  /// profissional definem regra própria.
+  repassePercentPadrao Float @default(60)
+
+  /// Prazo padrão de vencimento da fatura da clínica, em dias após o
+  /// fechamento do mês.
+  prazoFaturamentoDias Int @default(10)
+
+  /// Numeração humana dos pedidos. A equipe fala "pedido 412" no WhatsApp;
+  /// ninguém dita um cuid por telefone.
+  proximoNumeroPedido Int @default(1)
+  proximoNumeroFatura Int @default(1)
+
+  atualizadoEm DateTime @updatedAt
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Cadastros
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// A clínica contratante — o cliente que paga. Não confundir com paciente:
+/// o paciente é de quem contrata, a Hemoderi atende a clínica.
+model Clinica {
+  id       String  @id @default(cuid())
+  nome     String
+  /// Usado no link público de agendamento e no QR Code de divulgação:
+  /// /portal/agendar/clinica-santa-rita
+  slug     String  @unique
+  cnpj     String?
+  telefone String?
+  email    String?
+
+  endereco String?
+  bairro   String?
+  cidade   String?
+  uf       String?
+  cep      String?
+
+  /// Quantos atendimentos a clínica comporta ao mesmo tempo. Não é detalhe
+  /// de cadastro: é o que permite alocar dois profissionais no mesmo horário
+  /// no mesmo endereço sem que isso seja conflito (a clínica do briefing tem
+  /// 10 salas). Sem esse número, ou o sistema bloqueia agendamento legítimo
+  /// ou aceita mais gente do que cabe na sala.
+  salas Int @default(1)
+
+  observacoes String?
+
+  ativa        Boolean   @default(true)
+  criadaEm     DateTime  @default(now())
+  atualizadaEm DateTime  @updatedAt
+  desativadaEm DateTime?
+
+  usuarios Usuario[]
+  precos   PrecoClinica[]
+  pedidos  Pedido[]
+  faturas  Fatura[]
+
+  @@index([ativa])
+}
+
+model Servico {
+  id        String           @id @default(cuid())
+  nome      String
+  descricao String?
+  categoria CategoriaServico
+
+  /// Duração cheia do atendimento, incluindo preparo. É ela que define o
+  /// bloco na agenda do profissional e o cálculo de conflito — não o horário
+  /// de início sozinho.
+  duracaoMin Int @default(60)
+
+  /// Preço de tabela cobrado da clínica. Uma clínica com preço negociado
+  /// sobrescreve este valor em PrecoClinica. Zero não é "grátis": é "tabela
+  /// ainda não precificada" — o catálogo comercial nasce sem preço público
+  /// porque o modelo é negociado por clínica.
+  valorPadraoCentavos Int @default(0)
+
+  /// Regra de repasse do serviço. Preenchida só quando o serviço foge do
+  /// padrão da operação — por exemplo, procedimento em que a Hemoderi banca
+  /// o insumo e por isso repassa menos.
+  repassePercent      Float?
+  repasseFixoCentavos Int?
+
+  /// Serviço que só acontece com equipamento da Hemoderi em campo. Quando
+  /// verdadeiro, alocar o pedido exige reservar um equipamento livre.
+  exigeEquipamento Boolean @default(false)
+
+  /// QUAL equipamento o serviço exige, pelo campo Equipamento.tipo — não
+  /// basta "algum equipamento livre": um AirFlow não substitui um laser
+  /// LiteTouch. Nulo com exigeEquipamento=true cai no comportamento antigo
+  /// (qualquer equipamento disponível), útil só enquanto o parque de
+  /// equipamentos ainda não tem o tipo cadastrado.
+  tipoEquipamento String?
+
+  ativo        Boolean   @default(true)
+  criadoEm     DateTime  @default(now())
+  atualizadoEm DateTime  @updatedAt
+  desativadoEm DateTime?
+
+  precos        PrecoClinica[]
+  regrasRepasse RegraRepasse[]
+  pedidos       Pedido[]
+
+  @@index([ativo])
+  @@index([categoria])
+}
+
+/// As três frentes do catálogo comercial da Hemoderi — a própria empresa
+/// organiza a divulgação assim (site e catálogo do WhatsApp), e é a divisão
+/// que faz sentido para relatório: cada área tem público, sazonalidade e
+/// margem diferentes.
+enum CategoriaServico {
+  ODONTOLOGIA
+  ESTETICA
+  SAUDE
+}
+
+/// Preço negociado de um serviço para uma clínica específica. A tabela de
+/// preço não é por cliente inteiro nem global: é por par clínica × serviço,
+/// que é como a negociação acontece de fato.
+model PrecoClinica {
+  id String @id @default(cuid())
+
+  clinicaId String
+  clinica   Clinica @relation(fields: [clinicaId], references: [id], onDelete: Cascade)
+
+  servicoId String
+  servico   Servico @relation(fields: [servicoId], references: [id], onDelete: Cascade)
+
+  valorCentavos Int
+
+  criadoEm     DateTime @default(now())
+  atualizadoEm DateTime @updatedAt
+
+  @@unique([clinicaId, servicoId])
+  @@index([clinicaId])
+}
+
+enum StatusEquipamento {
+  DISPONIVEL
+  EM_USO
+  MANUTENCAO
+  INATIVO
+}
+
+/// O equipamento que vai junto com o profissional. Ele é um recurso finito:
+/// dois atendimentos no mesmo horário precisam de dois aparelhos, e é isso
+/// que a alocação verifica antes de confirmar.
+model Equipamento {
+  id         String  @id @default(cuid())
+  nome       String
+  /// Casa com Servico.tipoEquipamento — é o que a alocação usa para reservar
+  /// o aparelho certo, não só "algum aparelho livre".
+  tipo       String?
+  /// Número de patrimônio/série. Único porque é assim que a equipe identifica
+  /// o aparelho quando ele volta com defeito.
+  patrimonio String? @unique
+
+  status      StatusEquipamento @default(DISPONIVEL)
+  observacoes String?
+
+  criadoEm     DateTime @default(now())
+  atualizadoEm DateTime @updatedAt
+
+  pedidos Pedido[]
+
+  @@index([status])
+  @@index([tipo])
+}
+
+/// O prestador. Trabalha em modelo de disponibilidade declarada (gig): não
+/// tem jornada fixa, informa quando pode atender e recebe por atendimento
+/// realizado.
+model Profissional {
+  id       String  @id @default(cuid())
+  nome     String
+  cpf      String? @unique
+  telefone String?
+  email    String? @unique
+
+  /// Conselho e registro profissional (ex.: "COREN-SP", "123456"). Fica no
+  /// cadastro porque a clínica contratante pode exigir a comprovação.
+  conselho      String?
+  registro      String?
+  especialidade String?
+
+  /// Chave PIX para o repasse. É o único dado bancário guardado — evita
+  /// manter agência e conta sem necessidade.
+  chavePix String?
+
+  /// Regra de repasse do profissional, em % do valor do serviço. Vence o
+  /// padrão da operação e perde para a regra do serviço e para uma
+  /// RegraRepasse específica — a cadeia inteira está em lib/repasse.ts.
+  repassePercentPadrao Float?
+
+  ativo        Boolean   @default(true)
+  criadoEm     DateTime  @default(now())
+  atualizadoEm DateTime  @updatedAt
+  desativadoEm DateTime?
+
+  usuarios         Usuario[]
+  disponibilidades Disponibilidade[]
+  bloqueios        Bloqueio[]
+  regrasRepasse    RegraRepasse[]
+  pedidos          Pedido[]
+  relatorios       RelatorioAtendimento[]
+  repasses         Repasse[]
+
+  @@index([ativo])
+}
+
+/// Repasse combinado para um profissional em um serviço específico. É a
+/// exceção negociada caso a caso; a resolução completa está em lib/repasse.ts.
+model RegraRepasse {
+  id String @id @default(cuid())
+
+  profissionalId String
+  profissional   Profissional @relation(fields: [profissionalId], references: [id], onDelete: Cascade)
+
+  servicoId String
+  servico   Servico @relation(fields: [servicoId], references: [id], onDelete: Cascade)
+
+  percent      Float?
+  fixoCentavos Int?
+
+  criadaEm     DateTime @default(now())
+  atualizadaEm DateTime @updatedAt
+
+  @@unique([profissionalId, servicoId])
+  @@index([profissionalId])
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Agenda do profissional
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// Janela semanal recorrente que o profissional declara no portal dele.
+/// A meta do briefing — "o profissional disponibiliza a própria agenda" —
+/// depende disto: sem declaração, a alocação vira telefonema.
+model Disponibilidade {
+  id String @id @default(cuid())
+
+  profissionalId String
+  profissional   Profissional @relation(fields: [profissionalId], references: [id], onDelete: Cascade)
+
+  /// 0 = domingo … 6 = sábado, igual a Date#getUTCDay.
+  diaSemana  Int
+  horaInicio String // "08:00"
+  horaFim    String // "12:00"
+
+  criadaEm DateTime @default(now())
+
+  @@index([profissionalId, diaSemana])
+}
+
+/// Ausência pontual, que vence a disponibilidade recorrente. Sem hora
+/// preenchida, bloqueia o dia inteiro.
+model Bloqueio {
+  id String @id @default(cuid())
+
+  profissionalId String
+  profissional   Profissional @relation(fields: [profissionalId], references: [id], onDelete: Cascade)
+
+  data       DateTime
+  horaInicio String?
+  horaFim    String?
+  motivo     String?
+
+  criadoEm DateTime @default(now())
+
+  @@index([profissionalId, data])
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Esteira do pedido
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// O ciclo de vida completo, ponta a ponta.
+///
+/// SOLICITADO nasce do portal da clínica e ainda não é compromisso: a equipe
+/// confirma. CONFIRMADO é compromisso assumido sem dono. ALOCADO tem
+/// profissional (e equipamento, quando o serviço exige) reservado. O
+/// resultado — REALIZADO ou FALTOU — vem do relatório pós-atendimento, e é
+/// só ele que gera repasse: falta não paga.
+enum StatusPedido {
+  SOLICITADO
+  CONFIRMADO
+  ALOCADO
+  REALIZADO
+  FALTOU
+  CANCELADO
+}
+
+/// De onde veio o pedido. O contrato prevê agendamento híbrido, e separar a
+/// origem é o que mostra se o autoatendimento está de fato tirando trabalho
+/// manual da equipe ou se virou mais um canal para conferir.
+enum OrigemPedido {
+  INTERNO
+  PORTAL_CLINICA
+}
+
+model Pedido {
+  id     String @id @default(cuid())
+  /// Referência humana, sequencial. A equipe fala "pedido 412"; ninguém dita
+  /// um cuid por telefone.
+  numero Int    @unique
+
+  clinicaId String
+  clinica   Clinica @relation(fields: [clinicaId], references: [id])
+
+  servicoId String
+  servico   Servico @relation(fields: [servicoId], references: [id])
+
+  /// Quem vai atender. Em SOLICITADO é o profissional que a clínica pediu no
+  /// portal — reserva provisória, que já segura o horário dele; em ALOCADO é
+  /// compromisso assumido pela equipe. O status é o que separa os dois.
+  /// Nulo enquanto ninguém foi indicado: é a fila de trabalho da equipe.
+  profissionalId String?
+  profissional   Profissional? @relation(fields: [profissionalId], references: [id])
+
+  equipamentoId String?
+  equipamento   Equipamento? @relation(fields: [equipamentoId], references: [id])
+
+  /// Meia-noite UTC do dia do atendimento. Hora fica separada, em texto, pelo
+  /// mesmo motivo de lib/data.ts: o dia do atendimento não pode escorregar
+  /// porque o servidor da Vercel roda em UTC e a operação é no Brasil.
+  data       DateTime
+  horaInicio String
+  /// Congelada do serviço no momento da criação: mudar a duração do serviço
+  /// depois não pode reescrever a agenda de quem já está marcado.
+  duracaoMin Int
+
+  status StatusPedido @default(SOLICITADO)
+  origem OrigemPedido @default(INTERNO)
+
+  /// Valor cobrado da clínica, congelado na criação — pelo mesmo motivo da
+  /// duração: reajuste de tabela não reescreve o que já foi combinado.
+  valorServicoCentavos Int @default(0)
+  /// Valor devido ao profissional, congelado na alocação. Fica no pedido
+  /// além de no repasse porque a alocação acontece antes do atendimento e a
+  /// equipe precisa saber o custo antes de fechar o mês.
+  valorRepasseCentavos Int @default(0)
+
+  /// Identificação mínima do paciente, só o necessário para a clínica
+  /// reconhecer o atendimento na agenda dela. Dado de saúde não entra aqui:
+  /// a Hemoderi é controladora (LGPD, Cláusula 8) e quanto menos dado
+  /// pessoal circular no sistema de logística, menor a superfície.
+  pacienteNome    String?
+  pacienteContato String?
+
+  observacoes String?
+
+  /// Ids do que foi criado fora daqui, guardados para não duplicar em uma
+  /// segunda sincronização e para permitir atualizar o evento existente.
+  googleEventoId     String?
+  pipedriveNegocioId String?
+
+  faturaId String?
+  fatura   Fatura? @relation(fields: [faturaId], references: [id])
+
+  criadoPorId String?
+  criadoPor   Usuario? @relation("PedidoCriadoPor", fields: [criadoPorId], references: [id])
+
+  criadoEm     DateTime @default(now())
+  atualizadoEm DateTime @updatedAt
+
+  canceladoEm        DateTime?
+  motivoCancelamento String?
+
+  relatorio RelatorioAtendimento?
+  repasse   Repasse?
+  mensagens MensagemWhatsapp[]
+
+  @@index([data, status])
+  @@index([clinicaId, data])
+  @@index([profissionalId, data])
+  @@index([status])
+  @@index([faturaId])
+}
+
+/// O relatório que o profissional preenche depois do atendimento. É o
+/// documento que fecha o pedido e a única origem do repasse — sem relatório
+/// não há valor a pagar, e é por isso que ele é a primeira tela do portal do
+/// profissional.
+model RelatorioAtendimento {
+  id String @id @default(cuid())
+
+  pedidoId String @unique
+  pedido   Pedido @relation(fields: [pedidoId], references: [id], onDelete: Cascade)
+
+  profissionalId String
+  profissional   Profissional @relation(fields: [profissionalId], references: [id])
+
+  /// Falso = paciente não compareceu. Segue registrado (o deslocamento
+  /// aconteceu) mas não gera repasse automático; se a operação decidir pagar
+  /// a falta, o valor é lançado à mão e fica visível como exceção.
+  compareceu Boolean @default(true)
+
+  inicioReal String?
+  fimReal    String?
+  /// Quantos procedimentos foram feitos, quando o serviço é cobrado por
+  /// volume e não por sessão.
+  quantidade Int     @default(1)
+
+  intercorrencia Boolean @default(false)
+  observacoes    String?
+
+  enviadoEm DateTime @default(now())
+
+  @@index([profissionalId])
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Financeiro
+// ─────────────────────────────────────────────────────────────────────────────
+
+enum StatusRepasse {
+  PENDENTE
+  PAGO
+  CANCELADO
+}
+
+/// O que a Hemoderi deve ao profissional por um atendimento realizado.
+/// Um repasse por pedido, e não um total por mês, porque a conferência que o
+/// profissional faz é atendimento a atendimento — o total só fecha a
+/// discussão se der para abrir linha a linha.
+model Repasse {
+  id String @id @default(cuid())
+
+  pedidoId String @unique
+  pedido   Pedido @relation(fields: [pedidoId], references: [id], onDelete: Cascade)
+
+  profissionalId String
+  profissional   Profissional @relation(fields: [profissionalId], references: [id])
+
+  /// Mês de referência "YYYY-MM". Nasce do dia do atendimento, não do dia em
+  /// que o relatório foi enviado: relatório atrasado não empurra o custo para
+  /// o mês seguinte.
+  competencia String
+
+  valorCentavos Int
+  status        StatusRepasse @default(PENDENTE)
+  pagoEm        DateTime?
+  comprovante   String?
+  observacoes   String?
+
+  criadoEm     DateTime @default(now())
+  atualizadoEm DateTime @updatedAt
+
+  @@index([profissionalId, competencia])
+  @@index([status, competencia])
+}
+
+enum StatusFatura {
+  ABERTA
+  PAGA
+  CANCELADA
+}
+
+/// O que a clínica deve à Hemoderi no mês. Fechada a partir dos pedidos
+/// REALIZADOS da competência — a falta não entra porque não houve serviço a
+/// cobrar, salvo negociação lançada à parte.
+model Fatura {
+  id     String @id @default(cuid())
+  numero Int    @unique
+
+  clinicaId String
+  clinica   Clinica @relation(fields: [clinicaId], references: [id])
+
+  competencia   String
+  valorCentavos Int    @default(0)
+
+  emitidaEm   DateTime     @default(now())
+  vencimento  DateTime
+  status      StatusFatura @default(ABERTA)
+  pagaEm      DateTime?
+  observacoes String?
+
+  atualizadaEm DateTime @updatedAt
+
+  pedidos Pedido[]
+
+  @@unique([clinicaId, competencia])
+  @@index([status, vencimento])
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Integrações e rastro
+// ─────────────────────────────────────────────────────────────────────────────
+
+enum TipoMensagem {
+  CONFIRMACAO // pedido confirmado com a clínica
+  ALOCACAO // profissional avisado de que assumiu o atendimento
+  LEMBRETE // véspera do atendimento
+  RESULTADO // realizado / faltou
+}
+
+enum StatusMensagem {
+  PENDENTE
+  ENVIADA
+  FALHA
+  CANCELADA
+}
+
+/// Fila de saída dos disparos de WhatsApp.
+///
+/// A mensagem é gravada ANTES de ser enviada, e não depois: assim um envio
+/// que falha fica visível para reenvio, e um lembrete já gravado não é
+/// duplicado se a rotina rodar duas vezes. É também o rastro que responde
+/// "avisamos essa clínica?" sem depender do histórico do aparelho.
+model MensagemWhatsapp {
+  id String @id @default(cuid())
+
+  pedidoId String?
+  pedido   Pedido? @relation(fields: [pedidoId], references: [id], onDelete: Cascade)
+
+  tipo         TipoMensagem
+  destinatario String // telefone em dígitos, com DDI
+  texto        String
+
+  status       StatusMensagem @default(PENDENTE)
+  agendadaPara DateTime?
+  enviadaEm    DateTime?
+  erro         String?
+
+  criadaEm DateTime @default(now())
+
+  @@unique([pedidoId, tipo])
+  @@index([status, agendadaPara])
+}
+
+enum SistemaExterno {
+  PIPEDRIVE
+  GOOGLE_AGENDA
+  WHATSAPP
+}
+
+/// Log das chamadas a sistemas de terceiros. Existe porque falha de
+/// integração é silenciosa por natureza: sem registro, ninguém descobre que
+/// o Google Agenda parou de sincronizar até alguém aparecer na clínica errada.
+model SincronizacaoExterna {
+  id String @id @default(cuid())
+
+  sistema    SistemaExterno
+  entidade   String // "Pedido"
+  entidadeId String
+  acao       String // "criar-evento", "marcar-ganho"
+
+  sucesso    Boolean
+  referencia String? // id devolvido pelo sistema externo
+  erro       String?
+  criadaEm   DateTime @default(now())
+
+  @@index([sistema, criadaEm])
+  @@index([entidade, entidadeId])
+}
+
+/// Rastro de quem mexeu no que mexe em dinheiro ou compromisso: mudança de
+/// status de pedido, alocação, baixa de repasse e de fatura.
+model RegistroAuditoria {
+  id String @id @default(cuid())
+
+  usuarioId String?
+  usuario   Usuario? @relation(fields: [usuarioId], references: [id])
+
+  entidade   String
+  entidadeId String
+  acao       String
+  detalhe    String?
+
+  criadoEm DateTime @default(now())
+
+  @@index([entidade, entidadeId])
+  @@index([criadoEm])
+}

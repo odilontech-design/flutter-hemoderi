@@ -1,0 +1,52 @@
+{
+  "name": "dilon-saude-hemoderi",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Dilon Saúde | Operações — esteira de agendamento, alocação de profissionais e equipamentos, portais de autoatendimento e controle de repasses da Hemoderi.",
+  "scripts": {
+    "dev": "next dev -p 3003",
+    "prebuild": "prisma generate && prisma migrate deploy",
+    "build": "next build",
+    "start": "next start -p 3003",
+    "lint": "next lint",
+    "typecheck": "tsc --noEmit",
+    "test": "tsx --test test/*.test.ts",
+    "db:generate": "prisma generate",
+    "db:migrate": "dotenv -e .env -- prisma migrate dev",
+    "db:deploy": "dotenv -e .env -- prisma migrate deploy",
+    "db:studio": "dotenv -e .env -- prisma studio",
+    "db:seed": "dotenv -e .env -- tsx prisma/seed.ts",
+    "db:usuario": "dotenv -e .env -- tsx prisma/criar-usuario.ts",
+    "fumaca": "node scripts/fumaca.mjs"
+  },
+  "prisma": {
+    "seed": "dotenv -e .env -- tsx prisma/seed.ts"
+  },
+  "dependencies": {
+    "@prisma/client": "^5.22.0",
+    "bcryptjs": "^2.4.3",
+    "next": "14.2.35",
+    "next-auth": "^4.24.8",
+    "qrcode": "^1.5.4",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "@types/bcryptjs": "^2.4.6",
+    "@types/node": "^20.16.10",
+    "@types/qrcode": "^1.5.6",
+    "@types/react": "^18.3.10",
+    "@types/react-dom": "^18.3.0",
+    "autoprefixer": "^10.4.20",
+    "dotenv-cli": "^7.4.2",
+    "eslint": "^8.57.1",
+    "eslint-config-next": "14.2.35",
+    "playwright": "^1.63.0",
+    "postcss": "^8.4.47",
+    "prisma": "^5.22.0",
+    "tailwindcss": "^3.4.13",
+    "tsx": "^4.19.1",
+    "typescript": "^5.6.2"
+  }
+}
