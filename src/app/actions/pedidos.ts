@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import type { Prisma, StatusPedido } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { exigirClinica, exigirInterno, registrarAuditoria } from "@/lib/sessao";
-import { equipamentoLivre, parametros, temBloqueio, verificarAlocacao } from "@/lib/alocacao";
+import { equipamentoLivre, parametros, temBloqueio, travarRecursos, verificarAlocacao } from "@/lib/alocacao";
 import { calcularRepasse } from "@/lib/repasse";
 import { podeTransicionar, STATUS_ATIVOS } from "@/lib/pedido";
 import { competenciaDe, dataDeISO, instanteDoAtendimento, isoDeData } from "@/lib/data";
@@ -106,35 +106,47 @@ export async function criarPedido(_anterior: Resultado, dados: FormData): Promis
   if (!servico) return { ok: false, erro: "Serviço indisponível." };
 
   const data = dataDeISO(dataISO);
-  const impedimentos = await verificarAlocacao({
-    clinicaId,
-    profissionalId,
-    data,
-    horaInicio,
-    duracaoMin: servico.duracaoMin,
-  });
-  if (temBloqueio(impedimentos)) {
-    return { ok: false, erro: impedimentos.filter((i) => i.bloqueante).map((i) => i.mensagem).join(" ") };
-  }
-
   const valorServicoCentavos = await valorDoServico(clinicaId, servicoId);
 
-  let valorRepasseCentavos = 0;
-  if (profissionalId) {
-    valorRepasseCentavos = (await repasseDoPedido(profissionalId, servicoId, valorServicoCentavos)).valorCentavos;
-  }
+  // Checar disponibilidade e só depois gravar, com uma transação comum, deixa
+  // uma corrida aberta: com dezenas de profissionais e a equipe + o portal da
+  // clínica marcando ao mesmo tempo, duas requisições podem ler "livre" antes
+  // de qualquer uma escrever. `travarRecursos` fecha isso — trava primeiro os
+  // recursos em disputa, e só então checa e grava, tudo dentro da mesma
+  // transação.
+  const resultado = await prisma.$transaction(async (tx) => {
+    await travarRecursos(tx, {
+      clinicaId,
+      profissionalId,
+      tipoEquipamento: servico.exigeEquipamento ? servico.tipoEquipamento : null,
+    });
 
-  const equipamentoId =
-    profissionalId && servico.exigeEquipamento
-      ? await equipamentoLivre(data, horaInicio, servico.duracaoMin, servico.tipoEquipamento)
-      : null;
-  if (profissionalId && servico.exigeEquipamento && !equipamentoId) {
-    return { ok: false, erro: "Nenhum equipamento livre nesse horário." };
-  }
+    const impedimentos = await verificarAlocacao(
+      { clinicaId, profissionalId, data, horaInicio, duracaoMin: servico.duracaoMin },
+      tx
+    );
+    if (temBloqueio(impedimentos)) {
+      return {
+        ok: false as const,
+        erro: impedimentos.filter((i) => i.bloqueante).map((i) => i.mensagem).join(" "),
+      };
+    }
 
-  const pedido = await prisma.$transaction(async (tx) => {
+    let valorRepasseCentavos = 0;
+    if (profissionalId) {
+      valorRepasseCentavos = (await repasseDoPedido(profissionalId, servicoId, valorServicoCentavos)).valorCentavos;
+    }
+
+    const equipamentoId =
+      profissionalId && servico.exigeEquipamento
+        ? await equipamentoLivre(data, horaInicio, servico.duracaoMin, servico.tipoEquipamento, undefined, tx)
+        : null;
+    if (profissionalId && servico.exigeEquipamento && !equipamentoId) {
+      return { ok: false as const, erro: "Nenhum equipamento livre nesse horário." };
+    }
+
     const numero = await proximoNumero(tx);
-    return tx.pedido.create({
+    const pedido = await tx.pedido.create({
       data: {
         numero,
         clinicaId,
@@ -154,15 +166,24 @@ export async function criarPedido(_anterior: Resultado, dados: FormData): Promis
         criadoPorId: sessao.usuarioId,
       },
     });
+
+    return {
+      ok: true as const,
+      pedido,
+      avisos: impedimentos.filter((i) => !i.bloqueante).map((i) => i.mensagem),
+    };
   });
 
+  if (!resultado.ok) return resultado;
+
+  const { pedido, avisos } = resultado;
   await registrarAuditoria(sessao.usuarioId, "Pedido", pedido.id, "criar", `nº ${pedido.numero}`);
   await enfileirarMensagem(pedido.id, "CONFIRMACAO");
-  if (profissionalId) await enfileirarMensagem(pedido.id, "ALOCACAO");
+  if (pedido.profissionalId) await enfileirarMensagem(pedido.id, "ALOCACAO");
   await sincronizarEvento(pedido.id);
 
   atualizarTelas();
-  return { ok: true, avisos: impedimentos.filter((i) => !i.bloqueante).map((i) => i.mensagem) };
+  return { ok: true, avisos };
 }
 
 /**
@@ -196,17 +217,6 @@ export async function solicitarPedido(_anterior: Resultado, dados: FormData): Pr
     };
   }
 
-  const impedimentos = await verificarAlocacao({
-    clinicaId: sessao.clinicaId,
-    profissionalId,
-    data,
-    horaInicio,
-    duracaoMin: servico.duracaoMin,
-  });
-  if (temBloqueio(impedimentos)) {
-    return { ok: false, erro: "Esse horário acabou de ficar indisponível. Escolha outro." };
-  }
-
   const valorServicoCentavos = await valorDoServico(sessao.clinicaId, servicoId);
 
   // O profissional escolhido fica GRAVADO no pedido, e não como frase em
@@ -217,14 +227,26 @@ export async function solicitarPedido(_anterior: Resultado, dados: FormData): Pr
   // SOLICITADO: é reserva provisória, não alocação. O que separa as duas é o
   // status, e é a equipe que faz a segunda. Segurar é de propósito — duas
   // clínicas pedindo o mesmo horário e as duas recebendo "ok" é pior do que
-  // a segunda ver o horário indisponível na hora.
-  const profissional = profissionalId
-    ? await prisma.profissional.findFirst({ where: { id: profissionalId, ativo: true }, select: { id: true } })
-    : null;
+  // a segunda ver o horário indisponível na hora. `travarRecursos` garante
+  // que essa checagem e essa gravação são atômicas mesmo com duas clínicas
+  // pedindo o mesmo profissional no mesmo instante.
+  const resultado = await prisma.$transaction(async (tx) => {
+    await travarRecursos(tx, { clinicaId: sessao.clinicaId, profissionalId });
 
-  const pedido = await prisma.$transaction(async (tx) => {
+    const impedimentos = await verificarAlocacao(
+      { clinicaId: sessao.clinicaId, profissionalId, data, horaInicio, duracaoMin: servico.duracaoMin },
+      tx
+    );
+    if (temBloqueio(impedimentos)) {
+      return { ok: false as const, erro: "Esse horário acabou de ficar indisponível. Escolha outro." };
+    }
+
+    const profissional = profissionalId
+      ? await tx.profissional.findFirst({ where: { id: profissionalId, ativo: true }, select: { id: true } })
+      : null;
+
     const numero = await proximoNumero(tx);
-    return tx.pedido.create({
+    const pedido = await tx.pedido.create({
       data: {
         numero,
         clinicaId: sessao.clinicaId,
@@ -242,9 +264,19 @@ export async function solicitarPedido(_anterior: Resultado, dados: FormData): Pr
         criadoPorId: sessao.usuarioId,
       },
     });
+
+    return { ok: true as const, pedido };
   });
 
-  await registrarAuditoria(sessao.usuarioId, "Pedido", pedido.id, "solicitar", `nº ${pedido.numero}`);
+  if (!resultado.ok) return resultado;
+
+  await registrarAuditoria(
+    sessao.usuarioId,
+    "Pedido",
+    resultado.pedido.id,
+    "solicitar",
+    `nº ${resultado.pedido.numero}`
+  );
   atualizarTelas();
   return { ok: true };
 }
@@ -287,55 +319,72 @@ export async function alocarPedido(pedidoId: string, profissionalId: string): Pr
     return { ok: false, erro: "Só é possível alocar um pedido confirmado." };
   }
 
-  const impedimentos = await verificarAlocacao({
-    clinicaId: pedido.clinicaId,
-    profissionalId,
-    data: pedido.data,
-    horaInicio: pedido.horaInicio,
-    duracaoMin: pedido.duracaoMin,
-    ignorarPedidoId: pedido.id,
-  });
-  if (temBloqueio(impedimentos)) {
-    return { ok: false, erro: impedimentos.filter((i) => i.bloqueante).map((i) => i.mensagem).join(" ") };
-  }
-
-  const equipamentoId = pedido.servico.exigeEquipamento
-    ? await equipamentoLivre(
-        pedido.data,
-        pedido.horaInicio,
-        pedido.duracaoMin,
-        pedido.servico.tipoEquipamento,
-        pedido.id
-      )
-    : null;
-  if (pedido.servico.exigeEquipamento && !equipamentoId) {
-    return { ok: false, erro: "Nenhum equipamento livre nesse horário." };
-  }
-
-  const repasse = await repasseDoPedido(profissionalId, pedido.servicoId, pedido.valorServicoCentavos);
-
-  await prisma.pedido.update({
-    where: { id: pedido.id },
-    data: {
+  const resultado = await prisma.$transaction(async (tx) => {
+    await travarRecursos(tx, {
+      clinicaId: pedido.clinicaId,
       profissionalId,
-      equipamentoId,
-      status: "ALOCADO",
-      valorRepasseCentavos: repasse.valorCentavos,
-    },
+      tipoEquipamento: pedido.servico.exigeEquipamento ? pedido.servico.tipoEquipamento : null,
+    });
+
+    const impedimentos = await verificarAlocacao(
+      {
+        clinicaId: pedido.clinicaId,
+        profissionalId,
+        data: pedido.data,
+        horaInicio: pedido.horaInicio,
+        duracaoMin: pedido.duracaoMin,
+        ignorarPedidoId: pedido.id,
+      },
+      tx
+    );
+    if (temBloqueio(impedimentos)) {
+      return {
+        ok: false as const,
+        erro: impedimentos.filter((i) => i.bloqueante).map((i) => i.mensagem).join(" "),
+      };
+    }
+
+    const equipamentoId = pedido.servico.exigeEquipamento
+      ? await equipamentoLivre(
+          pedido.data,
+          pedido.horaInicio,
+          pedido.duracaoMin,
+          pedido.servico.tipoEquipamento,
+          pedido.id,
+          tx
+        )
+      : null;
+    if (pedido.servico.exigeEquipamento && !equipamentoId) {
+      return { ok: false as const, erro: "Nenhum equipamento livre nesse horário." };
+    }
+
+    const repasse = await repasseDoPedido(profissionalId, pedido.servicoId, pedido.valorServicoCentavos);
+
+    await tx.pedido.update({
+      where: { id: pedido.id },
+      data: {
+        profissionalId,
+        equipamentoId,
+        status: "ALOCADO",
+        valorRepasseCentavos: repasse.valorCentavos,
+      },
+    });
+
+    return {
+      ok: true as const,
+      repasseOrigem: repasse.origem,
+      avisos: impedimentos.filter((i) => !i.bloqueante).map((i) => i.mensagem),
+    };
   });
 
-  await registrarAuditoria(
-    sessao.usuarioId,
-    "Pedido",
-    pedido.id,
-    "alocar",
-    `repasse por ${repasse.origem}`
-  );
+  if (!resultado.ok) return resultado;
+
+  await registrarAuditoria(sessao.usuarioId, "Pedido", pedido.id, "alocar", `repasse por ${resultado.repasseOrigem}`);
   await enfileirarMensagem(pedido.id, "ALOCACAO");
   await sincronizarEvento(pedido.id);
 
   atualizarTelas();
-  return { ok: true, avisos: impedimentos.filter((i) => !i.bloqueante).map((i) => i.mensagem) };
+  return { ok: true, avisos: resultado.avisos };
 }
 
 /** Devolve o pedido à fila quando o profissional desiste. */
@@ -449,7 +498,7 @@ async function pedidoDaClinica(pedidoId: string, clinicaId: string) {
   // trocando o id na URL.
   return prisma.pedido.findFirst({
     where: { id: pedidoId, clinicaId },
-    include: { servico: { select: { duracaoMin: true } } },
+    include: { servico: { select: { duracaoMin: true, exigeEquipamento: true, tipoEquipamento: true } } },
   });
 }
 
@@ -489,23 +538,42 @@ export async function reagendarPedido(_anterior: Resultado, dados: FormData): Pr
     return { ok: false, erro: `O novo horário precisa de ${config.antecedenciaMinimaHoras}h de antecedência.` };
   }
 
-  const impedimentos = await verificarAlocacao({
-    clinicaId: sessao.clinicaId,
-    profissionalId: pedido.profissionalId,
-    equipamentoId: pedido.equipamentoId,
-    data: novaData,
-    horaInicio,
-    duracaoMin: pedido.duracaoMin,
-    ignorarPedidoId: pedido.id,
-  });
-  if (temBloqueio(impedimentos)) {
-    return { ok: false, erro: impedimentos.filter((i) => i.bloqueante).map((i) => i.mensagem).join(" ") };
-  }
+  const resultado = await prisma.$transaction(async (tx) => {
+    await travarRecursos(tx, {
+      clinicaId: sessao.clinicaId,
+      profissionalId: pedido.profissionalId,
+      tipoEquipamento:
+        pedido.equipamentoId && pedido.servico.exigeEquipamento ? pedido.servico.tipoEquipamento : null,
+    });
 
-  await prisma.pedido.update({
-    where: { id: pedido.id },
-    data: { data: novaData, horaInicio },
+    const impedimentos = await verificarAlocacao(
+      {
+        clinicaId: sessao.clinicaId,
+        profissionalId: pedido.profissionalId,
+        equipamentoId: pedido.equipamentoId,
+        data: novaData,
+        horaInicio,
+        duracaoMin: pedido.duracaoMin,
+        ignorarPedidoId: pedido.id,
+      },
+      tx
+    );
+    if (temBloqueio(impedimentos)) {
+      return {
+        ok: false as const,
+        erro: impedimentos.filter((i) => i.bloqueante).map((i) => i.mensagem).join(" "),
+      };
+    }
+
+    await tx.pedido.update({
+      where: { id: pedido.id },
+      data: { data: novaData, horaInicio },
+    });
+
+    return { ok: true as const };
   });
+
+  if (!resultado.ok) return resultado;
 
   // Confirmação e lembrete antigos não valem mais: apagados, a fila remonta
   // com a data nova em vez de avisar a clínica do horário que não existe.
