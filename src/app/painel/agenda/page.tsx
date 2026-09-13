@@ -63,13 +63,13 @@ export default async function Agenda({ searchParams }: { searchParams: { data?: 
       <Titulo
         acao={
           <div className="flex items-center gap-2 text-xs">
-            <Link href={`/painel/agenda?data=${isoDeData(somarDias(data, -1))}`} className="px-2 py-1 text-gray-500">
+            <Link href={`/painel/agenda?data=${isoDeData(somarDias(data, -1))}`} className="px-3 py-2 min-h-[40px] sm:min-h-0 inline-flex items-center text-gray-500">
               ‹ anterior
             </Link>
-            <Link href="/painel/agenda" className="px-2 py-1 text-bordo font-semibold">
+            <Link href="/painel/agenda" className="px-3 py-2 min-h-[40px] sm:min-h-0 inline-flex items-center text-bordo font-semibold">
               hoje
             </Link>
-            <Link href={`/painel/agenda?data=${isoDeData(somarDias(data, 1))}`} className="px-2 py-1 text-gray-500">
+            <Link href={`/painel/agenda?data=${isoDeData(somarDias(data, 1))}`} className="px-3 py-2 min-h-[40px] sm:min-h-0 inline-flex items-center text-gray-500">
               seguinte ›
             </Link>
           </div>

@@ -65,7 +65,7 @@ export function AcoesPedido({
           <Selecao
             value={profissionalId}
             onChange={(e) => setProfissionalId(e.target.value)}
-            className="!w-auto !py-1.5 text-xs"
+            className="!w-auto !py-1.5 !min-h-[40px] sm:!min-h-0 text-xs"
           >
             <option value="">Alocar profissional…</option>
             {profissionais.map((p) => (

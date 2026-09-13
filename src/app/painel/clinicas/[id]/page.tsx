@@ -30,7 +30,7 @@ export default async function DetalheClinica({ params }: { params: { id: string 
     <>
       <Titulo
         acao={
-          <Link href="/painel/clinicas" className="text-xs text-gray-500 px-2 py-1">
+          <Link href="/painel/clinicas" className="text-xs text-gray-500 px-3 py-2 min-h-[40px] sm:min-h-0 inline-flex items-center">
             ‹ voltar
           </Link>
         }
@@ -38,7 +38,7 @@ export default async function DetalheClinica({ params }: { params: { id: string 
         {clinica.nome}
       </Titulo>
 
-      <div className="grid lg:grid-cols-2 gap-3">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
         <div className="space-y-3">
           <Cartao>
             <div className="font-display font-bold text-bordo text-sm mb-3">Cadastro</div>

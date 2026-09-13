@@ -93,7 +93,7 @@ export default async function Hoje() {
         />
       </div>
 
-      <div className="grid lg:grid-cols-3 gap-3 mb-6">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-3 mb-6">
         <Cartao className="lg:col-span-2">
           <div className="font-display font-bold text-bordo text-sm mb-3">Agenda do dia</div>
           {doDia.length === 0 ? (

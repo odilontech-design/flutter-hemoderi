@@ -163,8 +163,16 @@ export function MenuLateral({
 
       {aberto && <div className="md:hidden fixed inset-0 bg-black/40 z-40" onClick={() => setAberto(false)} />}
 
+      {/* Sem `relative` aqui, de propósito: `relative` e `fixed` disputam a
+          mesma propriedade e o Tailwind emite `relative` DEPOIS no CSS — a
+          barra virava `relative` no celular, continuava ocupando os 256px de
+          largura dela dentro do flex mesmo deslizada para fora da tela, e
+          sobrava um terço da tela para o conteúdo, com o resto cortado pelo
+          overflow-x-hidden do <main>. O botão de recolher (absolute) não
+          precisa do `relative`: ele só aparece a partir do md, onde a barra é
+          `sticky` — que também serve de âncora para filho posicionado. */}
       <div
-        className={`relative bg-bordoEscuro text-white flex flex-col shrink-0 h-screen fixed md:sticky top-0 z-50 w-64
+        className={`bg-bordoEscuro text-white flex flex-col shrink-0 h-screen fixed md:sticky top-0 z-50 w-64
           transition-[width,transform] duration-200 ${aberto ? "translate-x-0" : "-translate-x-full md:translate-x-0"}
           ${recolhido ? "md:w-[4.5rem]" : "md:w-56"}`}
       >
@@ -247,7 +255,7 @@ export function MenuLateral({
               onClick={() => signOut({ callbackUrl: "/login" })}
               title="Sair"
               aria-label="Sair"
-              className={`shrink-0 w-7 h-7 flex items-center justify-center rounded-full text-white/60
+              className={`shrink-0 w-10 h-10 md:w-7 md:h-7 flex items-center justify-center rounded-full text-white/60
                 hover:text-white hover:bg-white/10 active:scale-95 transition-all ${recolhido ? "md:hidden" : ""}`}
             >
               <IconeSair />

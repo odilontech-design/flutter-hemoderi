@@ -33,7 +33,7 @@ export default async function Disponibilidade() {
     <>
       <Titulo>Disponibilidade</Titulo>
 
-      <div className="grid lg:grid-cols-2 gap-3">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
         <Cartao>
           <div className="font-display font-bold text-bordo text-sm mb-1">Minha semana</div>
           <div className="text-[11px] text-gray-500 mb-3">
