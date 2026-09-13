@@ -30,6 +30,18 @@ export async function enviarRelatorio(_anterior: Resultado, dados: FormData): Pr
 
   const quantidade = Number(dados.get("quantidade") ?? 1);
 
+  // Vem do navegador, no momento do envio — pode faltar (permissão negada,
+  // sem GPS, formulário enviado de um jeito que não passou por lá). Nulo é
+  // um estado normal aqui, não um erro: confirma presença quando dá, nunca
+  // trava o relatório quando não dá.
+  const latitude = Number(dados.get("latitude"));
+  const longitude = Number(dados.get("longitude"));
+  const precisaoMetros = Number(dados.get("precisaoMetros"));
+  const localizacao =
+    Number.isFinite(latitude) && Number.isFinite(longitude)
+      ? { latitude, longitude, precisaoMetros: Number.isFinite(precisaoMetros) ? precisaoMetros : null }
+      : { latitude: null, longitude: null, precisaoMetros: null };
+
   await prisma.relatorioAtendimento.upsert({
     where: { pedidoId: pedido.id },
     update: {},
@@ -42,6 +54,7 @@ export async function enviarRelatorio(_anterior: Resultado, dados: FormData): Pr
       quantidade: Number.isFinite(quantidade) && quantidade > 0 ? Math.trunc(quantidade) : 1,
       intercorrencia: String(dados.get("intercorrencia") ?? "") === "sim",
       observacoes: String(dados.get("observacoes") ?? "") || null,
+      ...localizacao,
     },
   });
 

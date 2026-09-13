@@ -36,7 +36,16 @@ hora.
 
 **Módulo 03 — portal do profissional.** Agenda individual, declaração de
 disponibilidade e ausências, relatório pós-atendimento, ganhos realizados e a
-receber abertos linha a linha.
+receber abertos linha a linha. O relatório pede a localização do navegador no
+momento do envio (nunca antes, e nunca trava sem ela) — confirma presença no
+local; a equipe vê o selo "local confirmado" na esteira quando ela veio.
+
+**Acessos.** Ativação e desativação por login (`Usuario`), independente de
+desativar a clínica ou o profissional por trás — um funcionário que sai não
+precisa levar o cadastro inteiro junto. O corte vale na hora: as três guardas
+de acesso reconferem o banco a cada navegação, então uma sessão já aberta é
+cortada no próximo clique, não só no próximo login. Ninguém desativa a
+própria conta.
 
 **Módulo 04 — financeiro e relatórios.** Repasse calculado a partir do
 relatório; a receber e a pagar em visões separadas; painel diário com

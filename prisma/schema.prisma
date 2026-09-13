@@ -513,6 +513,14 @@ model RelatorioAtendimento {
   intercorrencia Boolean @default(false)
   observacoes    String?
 
+  /// Onde o navegador do profissional estava ao enviar o relatório — pedida
+  /// no momento do envio, nunca antes. Confirma presença no local sem
+  /// travar o relatório: sem permissão, sem GPS, sem sinal, o relatório
+  /// segue enviado do mesmo jeito e os três campos ficam nulos.
+  latitude       Float?
+  longitude      Float?
+  precisaoMetros Float?
+
   enviadoEm DateTime @default(now())
 
   @@index([profissionalId])

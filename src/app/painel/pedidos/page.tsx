@@ -38,6 +38,7 @@ export default async function Esteira({ searchParams }: { searchParams: { filtro
         clinica: { select: { nome: true } },
         servico: { select: { nome: true } },
         profissional: { select: { nome: true } },
+        relatorio: { select: { latitude: true, longitude: true } },
       },
     }),
     prisma.profissional.findMany({
@@ -123,6 +124,16 @@ export default async function Esteira({ searchParams }: { searchParams: { filtro
                   </div>
                   {pedido.observacoes && (
                     <div className="text-[11px] text-gray-400 mt-1">{pedido.observacoes}</div>
+                  )}
+                  {pedido.relatorio?.latitude != null && pedido.relatorio?.longitude != null && (
+                    <a
+                      href={`https://www.google.com/maps?q=${pedido.relatorio.latitude},${pedido.relatorio.longitude}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1 text-[10px] font-semibold text-green-700 mt-1 hover:underline"
+                    >
+                      📍 local confirmado no relatório
+                    </a>
                   )}
                 </div>
 

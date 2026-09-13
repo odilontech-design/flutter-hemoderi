@@ -2,14 +2,15 @@ import { prisma } from "@/lib/prisma";
 import { exigirInterno } from "@/lib/sessao";
 import { Campo, Cartao, Rotulo, Selecao, Tabela, Titulo, Vazio } from "@/components/ui";
 import { FormularioAcao } from "@/components/FormularioAcao";
-import { criarAcesso } from "@/app/actions/cadastros";
+import { BotaoAcao } from "@/components/BotaoAcao";
+import { alternarAcesso, criarAcesso } from "@/app/actions/cadastros";
 import { ROTULO_PAPEL } from "@/lib/papeis";
 import { formatarData } from "@/lib/data";
 
 export const dynamic = "force-dynamic";
 
 export default async function Acessos() {
-  await exigirInterno();
+  const sessao = await exigirInterno();
 
   const [usuarios, clinicas, profissionais] = await Promise.all([
     prisma.usuario.findMany({
@@ -36,18 +37,43 @@ export default async function Acessos() {
           {usuarios.length === 0 ? (
             <Vazio>Nenhum acesso criado.</Vazio>
           ) : (
-            <Tabela cabecalho={["Nome", "E-mail", "Nível", "Vínculo", "Criado em"]}>
-              {usuarios.map((usuario) => (
-                <tr key={usuario.id} className="border-b border-gray-100 last:border-0">
-                  <td className="py-2 pr-3 font-semibold text-bordo">{usuario.nome}</td>
-                  <td className="py-2 pr-3 text-gray-500">{usuario.email}</td>
-                  <td className="py-2 pr-3">{ROTULO_PAPEL[usuario.papel]}</td>
-                  <td className="py-2 pr-3 text-gray-500">
-                    {usuario.clinica?.nome ?? usuario.profissional?.nome ?? "—"}
-                  </td>
-                  <td className="py-2 pr-3 text-gray-400">{formatarData(usuario.criadoEm)}</td>
-                </tr>
-              ))}
+            <Tabela cabecalho={["Nome", "E-mail", "Nível", "Vínculo", "Status", "Criado em", ""]}>
+              {usuarios.map((usuario) => {
+                const ativo = !usuario.desativadoEm;
+                return (
+                  <tr key={usuario.id} className="border-b border-gray-100 last:border-0">
+                    <td className="py-2 pr-3 font-semibold text-bordo">{usuario.nome}</td>
+                    <td className="py-2 pr-3 text-gray-500">{usuario.email}</td>
+                    <td className="py-2 pr-3">{ROTULO_PAPEL[usuario.papel]}</td>
+                    <td className="py-2 pr-3 text-gray-500">
+                      {usuario.clinica?.nome ?? usuario.profissional?.nome ?? "—"}
+                    </td>
+                    <td className="py-2 pr-3">
+                      {ativo ? (
+                        <span className="text-[10px] font-semibold text-green-700">Ativo</span>
+                      ) : (
+                        <span className="text-[10px] font-semibold text-red-600">
+                          Inativo desde {formatarData(usuario.desativadoEm!)}
+                        </span>
+                      )}
+                    </td>
+                    <td className="py-2 pr-3 text-gray-400">{formatarData(usuario.criadoEm)}</td>
+                    <td className="py-2">
+                      {usuario.id === sessao.usuarioId ? (
+                        <span className="text-[10px] text-gray-400">é você</span>
+                      ) : (
+                        <BotaoAcao
+                          acao={alternarAcesso.bind(null, usuario.id, !ativo)}
+                          variante={ativo ? "perigo" : "secundario"}
+                          confirmar={ativo ? `Desativar o acesso de ${usuario.nome}? A pessoa é desconectada na hora.` : undefined}
+                        >
+                          {ativo ? "Desativar" : "Reativar"}
+                        </BotaoAcao>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
             </Tabela>
           )}
         </Cartao>

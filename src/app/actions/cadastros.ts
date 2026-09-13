@@ -243,3 +243,27 @@ export async function criarAcesso(_anterior: Resultado, dados: FormData): Promis
   revalidatePath("/painel/acessos");
   return { ok: true };
 }
+
+/**
+ * Ativa ou desativa um acesso (login). Some da lista de quem consegue
+ * entrar — a clínica ou o profissional por trás continuam cadastrados,
+ * intactos; só o login para. `exigirInterno` reconfere isso a cada request,
+ * então uma desativação vale imediatamente, mesmo pra quem já está com uma
+ * aba aberta.
+ */
+export async function alternarAcesso(id: string, ativo: boolean): Promise<Resultado> {
+  const sessao = await exigirInterno();
+
+  // Ninguém se tranca pra fora sozinho — se a conta precisa sair, é outra
+  // pessoa da equipe que desativa.
+  if (id === sessao.usuarioId && !ativo) {
+    return { ok: false, erro: "Você não pode desativar o seu próprio acesso." };
+  }
+
+  await prisma.usuario.update({
+    where: { id },
+    data: { desativadoEm: ativo ? null : new Date() },
+  });
+  revalidatePath("/painel/acessos");
+  return { ok: true };
+}
