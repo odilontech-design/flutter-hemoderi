@@ -64,6 +64,32 @@ O escopo **sempre** vem da conta autenticada, nunca de um id no formulário ou
 na URL. É o que impede uma clínica ler os pedidos de outra trocando um
 parâmetro.
 
+### Como um acesso nasce, é redefinido e é suspenso
+
+Não existe autocadastro nem senha escolhida pela equipe. O ciclo é:
+
+1. **Criar.** Em `/painel/acessos`, ou em um clique na própria lista de
+   clínicas e de profissionais (*Gerar acesso*, que aproveita nome e e-mail do
+   cadastro). O sistema sorteia uma senha em grupos ditáveis — `7KF3-QM9T-XR4P`,
+   sem I/O/0/1, que é o que evita a ligação de volta perguntando "é i ou um?".
+2. **Repassar.** A senha aparece **uma vez** na tela de quem a gerou, com um
+   botão que copia a mensagem pronta para o WhatsApp. Ela não aparece de novo:
+   o banco guarda só o hash.
+3. **Primeira entrada.** A senha nasce marcada como provisória. Enquanto for,
+   as três guardas de `src/lib/sessao.ts` param a pessoa em `/trocar-senha` —
+   não dá para chegar em nenhuma tela do sistema sem escolher a própria senha.
+   A partir daí ninguém da operação conhece a senha de ninguém, o que importa
+   num sistema que decide repasse.
+4. **Redefinir.** *Redefinir senha* sorteia outra e volta ao passo 2. A senha
+   anterior para de valer no mesmo instante.
+5. **Suspender.** *Suspender* desliga o login sem apagar nada: o cadastro, os
+   pedidos e o histórico continuam. Como as guardas reconferem o banco a cada
+   request, a suspensão vale na hora — inclusive para quem está com uma aba
+   aberta neste segundo, e não só quando o token expirar.
+
+Tudo isso vira registro em `RegistroAuditoria`: "quem devolveu o acesso do
+fulano em março" tem resposta.
+
 ## Decisões que valem explicar
 
 **Dinheiro em centavos inteiros.** O repasse é percentual sobre o valor do
@@ -123,13 +149,18 @@ pela internet:
 npm run db:usuario -- --email=voce@hemoderi.com.br --nome="Seu Nome" --senha='...' --papel=INTERNO
 ```
 
+Esta é a única via em que a senha é escolhida à mão, e de propósito: é a saída
+de emergência para destravar a equipe quando ninguém consegue entrar pelo
+painel. Do painel para dentro, toda senha nasce sorteada e provisória.
+
 ### Verificação
 
 ```bash
 npm test        # regras puras: agenda, repasse, dinheiro, esteira
 npm run typecheck
 npm run build
-npm run fumaca  # ciclo completo no navegador (precisa da app rodando + seed)
+npm run fumaca          # ciclo completo no navegador (precisa da app rodando + seed)
+npm run fumaca:acessos  # ciclo de uma credencial: criar, trocar, redefinir, suspender
 ```
 
 Os testes unitários cobrem o que é fácil de quebrar sem perceber: sobreposição
@@ -151,7 +182,10 @@ src/lib/alocacao.ts         as quatro travas juntas, consultando o banco
 src/lib/repasse.ts          a cadeia de regras de repasse
 src/lib/pedido.ts           a máquina de status da esteira
 src/lib/sessao.ts           as guardas dos três níveis de acesso
+src/lib/senha.ts            sorteio da senha provisória e regras da senha escolhida
+src/app/actions/acessos.ts  criar, redefinir, suspender e trocar a própria senha
 scripts/fumaca.mjs          teste de fumaça do ciclo completo, no navegador
+scripts/fumaca-acessos.mjs  teste de fumaça da gestão de acesso, no navegador
 src/app/painel/             equipe Hemoderi
 src/app/portal/             clínica contratante
 src/app/profissional/       prestador

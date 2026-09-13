@@ -64,6 +64,19 @@ model Usuario {
   /// histórico — apaga a autoria dele.
   desativadoEm DateTime?
 
+  /// A senha atual foi gerada pela equipe (criação do acesso ou redefinição)
+  /// e ainda não passou pelas mãos do dono. Enquanto for verdade, o sistema
+  /// só deixa a pessoa ir para a tela de trocar senha.
+  ///
+  /// Existe para que ninguém da equipe fique sabendo a senha de ninguém: a
+  /// senha gerada serve para a primeira entrada e morre ali. Num sistema que
+  /// decide repasse, "o atendente sabe a senha do profissional" não é
+  /// detalhe.
+  senhaProvisoria Boolean @default(false)
+  /// Quando a pessoa trocou a senha pela última vez — o rastro que responde
+  /// "faz quanto tempo que essa senha é a mesma".
+  senhaTrocadaEm  DateTime?
+
   pedidosCriados     Pedido[]            @relation("PedidoCriadoPor")
   registrosAuditoria RegistroAuditoria[]
 

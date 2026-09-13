@@ -1,7 +1,6 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import bcrypt from "bcryptjs";
 import { prisma } from "@/lib/prisma";
 import type { CategoriaServico } from "@prisma/client";
 import { exigirInterno } from "@/lib/sessao";
@@ -203,67 +202,5 @@ export async function salvarPreco(_anterior: Resultado, dados: FormData): Promis
   }
 
   revalidatePath("/painel/clinicas");
-  return { ok: true };
-}
-
-/**
- * Cria o acesso de uma clínica ou de um profissional.
- *
- * A senha é definida aqui e comunicada pela equipe; não há autocadastro. Com
- * 60 profissionais e uma carteira de clínicas conhecida, uma tela pública de
- * cadastro só abriria porta sem resolver problema nenhum.
- */
-export async function criarAcesso(_anterior: Resultado, dados: FormData): Promise<Resultado> {
-  await exigirInterno();
-
-  const email = String(dados.get("email") ?? "").toLowerCase().trim();
-  const senha = String(dados.get("senha") ?? "");
-  const papel = String(dados.get("papel") ?? "");
-  const vinculoId = String(dados.get("vinculoId") ?? "");
-  const nome = String(dados.get("nome") ?? "").trim();
-
-  if (!email || !senha || !nome) return { ok: false, erro: "Nome, e-mail e senha são obrigatórios." };
-  if (senha.length < 8) return { ok: false, erro: "A senha precisa ter ao menos 8 caracteres." };
-  if (papel !== "INTERNO" && !vinculoId) return { ok: false, erro: "Selecione a clínica ou o profissional." };
-
-  const jaExiste = await prisma.usuario.findUnique({ where: { email }, select: { id: true } });
-  if (jaExiste) return { ok: false, erro: "Já existe um acesso com esse e-mail." };
-
-  await prisma.usuario.create({
-    data: {
-      nome,
-      email,
-      senhaHash: await bcrypt.hash(senha, 10),
-      papel: papel as any,
-      clinicaId: papel === "CLINICA" ? vinculoId : null,
-      profissionalId: papel === "PROFISSIONAL" ? vinculoId : null,
-    },
-  });
-
-  revalidatePath("/painel/acessos");
-  return { ok: true };
-}
-
-/**
- * Ativa ou desativa um acesso (login). Some da lista de quem consegue
- * entrar — a clínica ou o profissional por trás continuam cadastrados,
- * intactos; só o login para. `exigirInterno` reconfere isso a cada request,
- * então uma desativação vale imediatamente, mesmo pra quem já está com uma
- * aba aberta.
- */
-export async function alternarAcesso(id: string, ativo: boolean): Promise<Resultado> {
-  const sessao = await exigirInterno();
-
-  // Ninguém se tranca pra fora sozinho — se a conta precisa sair, é outra
-  // pessoa da equipe que desativa.
-  if (id === sessao.usuarioId && !ativo) {
-    return { ok: false, erro: "Você não pode desativar o seu próprio acesso." };
-  }
-
-  await prisma.usuario.update({
-    where: { id },
-    data: { desativadoEm: ativo ? null : new Date() },
-  });
-  revalidatePath("/painel/acessos");
   return { ok: true };
 }

@@ -28,16 +28,27 @@ async function usuarioDaSessao() {
  * corte valha JÁ, não só da próxima vez que a pessoa tentar entrar — sem
  * isso, o token continua servindo por até 30 dias (padrão do NextAuth)
  * depois da desativação.
+ *
+ * A mesma consulta resolve a senha provisória: enquanto a senha em uso for a
+ * que a equipe sorteou, as três param a pessoa em /trocar-senha. É o que
+ * fecha o ciclo da senha gerada — ela serve para entrar uma vez e morre ali,
+ * em vez de virar a senha permanente que meia operação conhece.
+ *
+ * /trocar-senha NÃO pode usar estas guardas (seria um laço de redirect); ela
+ * lê a sessão direto, e é a única página assim no sistema.
  */
+export const ROTA_TROCAR_SENHA = "/trocar-senha";
+
 export async function exigirInterno(): Promise<SessaoInterno> {
   const u = await usuarioDaSessao();
   if (u.papel !== "INTERNO") redirect(inicioDe(u.papel));
 
   const usuario = await prisma.usuario.findUnique({
     where: { id: u.id },
-    select: { desativadoEm: true },
+    select: { desativadoEm: true, senhaProvisoria: true },
   });
   if (!usuario || usuario.desativadoEm) redirect("/login");
+  if (usuario.senhaProvisoria) redirect(ROTA_TROCAR_SENHA);
 
   return { usuarioId: u.id, nome: u.name ?? "" };
 }
@@ -52,9 +63,14 @@ export async function exigirClinica(): Promise<SessaoClinica> {
   // de contrato). As duas precisam valer na hora, não só no próximo login.
   const usuario = await prisma.usuario.findUnique({
     where: { id: u.id },
-    select: { desativadoEm: true, clinica: { select: { ativa: true, nome: true } } },
+    select: {
+      desativadoEm: true,
+      senhaProvisoria: true,
+      clinica: { select: { ativa: true, nome: true } },
+    },
   });
   if (!usuario || usuario.desativadoEm || !usuario.clinica?.ativa) redirect("/login");
+  if (usuario.senhaProvisoria) redirect(ROTA_TROCAR_SENHA);
 
   return {
     usuarioId: u.id,
@@ -72,9 +88,14 @@ export async function exigirProfissional(): Promise<SessaoProfissional> {
   // desativam por caminhos diferentes, e os dois precisam cortar na hora.
   const usuario = await prisma.usuario.findUnique({
     where: { id: u.id },
-    select: { desativadoEm: true, profissional: { select: { ativo: true, nome: true } } },
+    select: {
+      desativadoEm: true,
+      senhaProvisoria: true,
+      profissional: { select: { ativo: true, nome: true } },
+    },
   });
   if (!usuario || usuario.desativadoEm || !usuario.profissional?.ativo) redirect("/login");
+  if (usuario.senhaProvisoria) redirect(ROTA_TROCAR_SENHA);
 
   return {
     usuarioId: u.id,

@@ -249,6 +249,16 @@ export function MenuLateral({
             </div>
             <div className={`min-w-0 flex-1 ${recolhido ? "md:hidden" : ""}`}>
               <div className="text-xs font-semibold truncate">{nomeUsuario}</div>
+              {/* A troca de senha mora aqui porque vale para os três perfis:
+                  clínica e profissional não têm tela de configuração, e sem
+                  este link a única forma de trocar seria pedir à equipe — que
+                  é justamente o que a senha provisória existe para evitar. */}
+              <Link
+                href="/trocar-senha"
+                className="text-[10px] text-white/40 hover:text-white/80 transition-colors"
+              >
+                Trocar senha
+              </Link>
             </div>
             <button
               type="button"

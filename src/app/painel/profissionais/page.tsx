@@ -3,6 +3,7 @@ import { exigirInterno } from "@/lib/sessao";
 import { Campo, Cartao, Rotulo, Tabela, Titulo, Vazio } from "@/components/ui";
 import { FormularioAcao } from "@/components/FormularioAcao";
 import { BotaoAcao } from "@/components/BotaoAcao";
+import { AcoesDeAcesso, SituacaoAcesso } from "@/components/AcessoDoCadastro";
 import { alternarProfissional, salvarProfissional } from "@/app/actions/cadastros";
 import { formatarPercent } from "@/lib/dinheiro";
 
@@ -13,7 +14,16 @@ export default async function Profissionais() {
 
   const profissionais = await prisma.profissional.findMany({
     orderBy: [{ ativo: "desc" }, { nome: "asc" }],
-    include: { _count: { select: { pedidos: true, disponibilidades: true } } },
+    include: {
+      _count: { select: { pedidos: true, disponibilidades: true } },
+      // O acesso ao portal faz parte do cadastro, não de outra tela: a
+      // pergunta "esse profissional já consegue ver a agenda dele?" nasce
+      // aqui, olhando a lista.
+      usuarios: {
+        select: { id: true, desativadoEm: true, senhaProvisoria: true },
+        orderBy: { criadoEm: "asc" },
+      },
+    },
   });
 
   return (
@@ -25,9 +35,11 @@ export default async function Profissionais() {
           {profissionais.length === 0 ? (
             <Vazio>Nenhum profissional cadastrado.</Vazio>
           ) : (
-            <Tabela cabecalho={["Profissional", "Conselho", "Repasse", "Disponibilidade", "Atendimentos", ""]}>
+            <Tabela
+              cabecalho={["Profissional", "Conselho", "Repasse", "Disponibilidade", "Acesso ao portal", "Ações"]}
+            >
               {profissionais.map((profissional) => (
-                <tr key={profissional.id} className="border-b border-gray-100 last:border-0">
+                <tr key={profissional.id} className="border-b border-gray-100 last:border-0 align-top">
                   <td className="py-2 pr-3">
                     <div className="font-semibold text-bordo">{profissional.nome}</div>
                     <div className="text-[10px] text-gray-400">
@@ -49,14 +61,30 @@ export default async function Profissionais() {
                       `${profissional._count.disponibilidades} janela(s)`
                     )}
                   </td>
-                  <td className="py-2 pr-3 text-gray-500">{profissional._count.pedidos}</td>
+                  <td className="py-2 pr-3 whitespace-nowrap">
+                    <SituacaoAcesso acessos={profissional.usuarios} />
+                    <div className="text-[10px] text-gray-400">{profissional._count.pedidos} atendimento(s)</div>
+                  </td>
                   <td className="py-2">
-                    <BotaoAcao
-                      acao={alternarProfissional.bind(null, profissional.id, !profissional.ativo)}
-                      variante={profissional.ativo ? "perigo" : "secundario"}
-                    >
-                      {profissional.ativo ? "Desativar" : "Reativar"}
-                    </BotaoAcao>
+                    <div className="flex flex-wrap gap-1.5 whitespace-nowrap">
+                      <AcoesDeAcesso
+                        tipo="profissional"
+                        cadastroId={profissional.id}
+                        nome={profissional.nome}
+                        acessos={profissional.usuarios}
+                      />
+                      <BotaoAcao
+                        acao={alternarProfissional.bind(null, profissional.id, !profissional.ativo)}
+                        variante={profissional.ativo ? "perigo" : "secundario"}
+                        confirmar={
+                          profissional.ativo
+                            ? `Desativar ${profissional.nome}? O portal dele para na hora e ele sai das telas de alocação; a agenda e o histórico continuam.`
+                            : undefined
+                        }
+                      >
+                        {profissional.ativo ? "Desativar" : "Reativar"}
+                      </BotaoAcao>
+                    </div>
                   </td>
                 </tr>
               ))}
@@ -109,9 +137,13 @@ export default async function Profissionais() {
                 <Campo name="repassePercentPadrao" placeholder="60" />
               </div>
             </div>
-            <div className="text-[10px] text-gray-400">
+            <div className="text-[10px] text-gray-400 leading-relaxed">
               Repasse vazio usa o percentual padrão da operação. Serviço com regra própria vence
               este percentual.
+              <br />
+              Com o e-mail preenchido, o acesso ao portal sai em um clique na própria lista
+              (<strong>Gerar acesso</strong>) — a senha é sorteada pelo sistema e aparece na tela
+              para você repassar.
             </div>
           </FormularioAcao>
         </Cartao>

@@ -40,14 +40,22 @@ async function main() {
 
   const senhaHash = await bcrypt.hash(senha, 10);
 
+  // senhaProvisoria fica em false de propósito: esta rotina é a saída de
+  // emergência (recuperar o acesso da equipe quando ninguém consegue entrar
+  // pelo painel), e quem a roda já está no terminal escolhendo a senha. Forçar
+  // troca aqui seria travar justamente o caminho de destravar. Pelo painel,
+  // que é como a operação cria acesso no dia a dia, a senha sempre nasce
+  // sorteada e provisória.
   await prisma.usuario.upsert({
     where: { email },
-    update: { senhaHash, nome, papel, desativadoEm: null },
+    update: { senhaHash, nome, papel, desativadoEm: null, senhaProvisoria: false, senhaTrocadaEm: new Date() },
     create: {
       email,
       nome,
       senhaHash,
       papel,
+      senhaProvisoria: false,
+      senhaTrocadaEm: new Date(),
       clinicaId: papel === "CLINICA" ? vinculoId : null,
       profissionalId: papel === "PROFISSIONAL" ? vinculoId : null,
     },
