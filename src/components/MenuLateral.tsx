@@ -86,9 +86,7 @@ function Logo({ titulo, recolhido }: { titulo: string; recolhido: boolean }) {
       <img
         src="/logo-hemoderi.svg"
         alt="Hemoderi"
-        className={`hidden w-8 h-8 rounded-lg object-cover object-left bg-white/15 shrink-0 ${
-          recolhido ? "md:block" : ""
-        }`}
+        className={`hidden w-8 h-8 object-cover object-left shrink-0 ${recolhido ? "md:block" : ""}`}
         onError={() => setFalhou(true)}
       />
     </>
