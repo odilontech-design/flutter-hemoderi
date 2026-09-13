@@ -10,6 +10,7 @@ import {
   mesclarIntervalos,
   subtrairIntervalos,
 } from "../src/lib/agenda";
+import { dataDaURL, hojeISO } from "../src/lib/data";
 
 test("atendimentos que se encostam não conflitam", () => {
   const anterior = intervaloDe("14:00", 60); // 14:00–15:00
@@ -89,4 +90,16 @@ test("a grade começa em múltiplo do passo, não no minuto quebrado da janela",
     passoMin: 30,
   });
   assert.equal(livres[0], "08:30");
+});
+
+// ─── Data vinda da URL ───────────────────────────────────────────────────────
+
+test("data válida da URL passa intacta", () => {
+  assert.equal(dataDaURL("2026-10-05"), "2026-10-05");
+});
+
+test("data inválida da URL cai para hoje em vez de derrubar a página", () => {
+  for (const lixo of ["lixo", "", "2026-10", "05/10/2026", "2026-13-01", "2026-02-31", undefined, null]) {
+    assert.equal(dataDaURL(lixo), hojeISO(), `deveria cair para hoje: ${String(lixo)}`);
+  }
 });
