@@ -40,18 +40,23 @@ function IconeSair() {
 }
 
 /**
- * Logo da Hemoderi, com um monograma como reserva. O arquivo real ainda não
- * chegou (`public/logo-hemoderi.svg` — ou .png) — assim que existir, esta
- * troca acontece sozinha, sem mexer em mais nada: a imagem carrega por cima
- * do monograma, e só cai de volta para ele se o arquivo faltar (aba anônima
- * com cache limpo, arquivo removido, etc.).
+ * Logo da Hemoderi, com um monograma como reserva caso o arquivo suma (aba
+ * anônima com cache limpo, arquivo removido do /public, etc.).
+ *
+ * O arquivo (`public/logo-hemoderi.svg`) é a marca inteira — gota + nome por
+ * extenso, larga e baixa (proporção ~4:1), pensada para um cabeçalho, não
+ * para um selo quadrado. Aqui ela cabe num selo quadrado de um jeito
+ * diferente: `object-cover` + `object-left` amplia a imagem até a ALTURA do
+ * selo preencher (já que a imagem é mais larga que alta) e mostra só a fatia
+ * esquerda — que é exatamente onde fica a gota, sem precisar de um segundo
+ * arquivo só com o ícone.
  */
 function Logo({ titulo }: { titulo: string }) {
   const [falhou, setFalhou] = useState(false);
 
   if (falhou) {
     return (
-      <div className="w-7 h-7 rounded-lg bg-white/15 flex items-center justify-center font-display font-bold text-xs shrink-0">
+      <div className="w-8 h-8 rounded-lg bg-white/15 flex items-center justify-center font-display font-bold text-xs shrink-0">
         {titulo.charAt(0)}
       </div>
     );
@@ -61,8 +66,8 @@ function Logo({ titulo }: { titulo: string }) {
     // eslint-disable-next-line @next/next/no-img-element -- svg estático pequeno, sem otimização de imagem a ganhar aqui.
     <img
       src="/logo-hemoderi.svg"
-      alt={titulo}
-      className="w-7 h-7 rounded-lg object-contain shrink-0 bg-white/15"
+      alt="Hemoderi"
+      className="w-8 h-8 rounded-lg object-cover object-left shrink-0 bg-white/15"
       onError={() => setFalhou(true)}
     />
   );
