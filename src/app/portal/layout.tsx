@@ -15,7 +15,12 @@ export default async function LayoutPortal({ children }: { children: React.React
   return (
     <Provedores>
       <div className="flex">
-        <MenuLateral titulo={sessao.clinicaNome} subtitulo="Portal da clínica" itens={ITENS} />
+        <MenuLateral
+          titulo={sessao.clinicaNome}
+          subtitulo="Portal da clínica"
+          nomeUsuario={sessao.nome}
+          itens={ITENS}
+        />
         <main className="flex-1 min-h-screen overflow-x-hidden p-4 pt-20 md:p-8">{children}</main>
       </div>
     </Provedores>

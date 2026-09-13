@@ -22,7 +22,7 @@ export default async function LayoutPainel({ children }: { children: React.React
   return (
     <Provedores>
       <div className="flex">
-        <MenuLateral titulo="Hemoderi" subtitulo={sessao.nome} itens={ITENS} />
+        <MenuLateral titulo="Hemoderi" nomeUsuario={sessao.nome} itens={ITENS} />
         <main className="flex-1 min-h-screen overflow-x-hidden p-4 pt-20 md:p-8">{children}</main>
       </div>
     </Provedores>

@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { signOut } from "next-auth/react";
+import { version as versaoDoSistema } from "../../package.json";
 
 export type ItemMenu = { href: string; icone: string; rotulo: string };
 
@@ -28,13 +29,63 @@ function IconeSeta({ apontaParaDireita }: { apontaParaDireita: boolean }) {
   );
 }
 
+function IconeSair() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+      <path d="M16 17l5-5-5-5" />
+      <path d="M21 12H9" />
+    </svg>
+  );
+}
+
+/**
+ * Logo da Hemoderi, com um monograma como reserva. O arquivo real ainda não
+ * chegou (`public/logo-hemoderi.svg` — ou .png) — assim que existir, esta
+ * troca acontece sozinha, sem mexer em mais nada: a imagem carrega por cima
+ * do monograma, e só cai de volta para ele se o arquivo faltar (aba anônima
+ * com cache limpo, arquivo removido, etc.).
+ */
+function Logo({ titulo }: { titulo: string }) {
+  const [falhou, setFalhou] = useState(false);
+
+  if (falhou) {
+    return (
+      <div className="w-7 h-7 rounded-lg bg-white/15 flex items-center justify-center font-display font-bold text-xs shrink-0">
+        {titulo.charAt(0)}
+      </div>
+    );
+  }
+
+  return (
+    // eslint-disable-next-line @next/next/no-img-element -- svg estático pequeno, sem otimização de imagem a ganhar aqui.
+    <img
+      src="/logo-hemoderi.svg"
+      alt={titulo}
+      className="w-7 h-7 rounded-lg object-contain shrink-0 bg-white/15"
+      onError={() => setFalhou(true)}
+    />
+  );
+}
+
+function iniciais(nome: string): string {
+  const partes = nome.trim().split(/\s+/).filter(Boolean);
+  if (partes.length === 0) return "?";
+  if (partes.length === 1) return partes[0].charAt(0).toUpperCase();
+  return (partes[0].charAt(0) + partes[partes.length - 1].charAt(0)).toUpperCase();
+}
+
 export function MenuLateral({
   titulo,
   subtitulo,
+  nomeUsuario,
   itens,
 }: {
   titulo: string;
-  subtitulo: string;
+  /** Rótulo curto sob o título — "Portal da clínica", por exemplo. Opcional. */
+  subtitulo?: string;
+  /** Quem está logado agora, mostrado no rodapé junto do botão de sair. */
+  nomeUsuario: string;
   itens: ItemMenu[];
 }) {
   const caminho = usePathname();
@@ -108,16 +159,11 @@ export function MenuLateral({
 
         <div className={`p-4 border-b border-white/10 ${recolhido ? "md:px-2" : ""}`}>
           <div className={`flex items-center gap-2 ${recolhido ? "md:justify-center" : ""}`}>
-            <div className="w-7 h-7 rounded-lg bg-white/15 flex items-center justify-center font-display font-bold text-xs shrink-0">
-              {titulo.charAt(0)}
-            </div>
+            <Logo titulo={titulo} />
             <div className={`min-w-0 ${recolhido ? "md:hidden" : ""}`}>
               <div className="font-display font-bold text-sm truncate">{titulo}</div>
-              <div className="text-[10px] text-white/50 mt-0.5 truncate">{subtitulo}</div>
+              {subtitulo && <div className="text-[10px] text-white/50 mt-0.5 truncate">{subtitulo}</div>}
             </div>
-          </div>
-          <div className={`text-[9px] uppercase tracking-wide mt-2 text-white/70 ${recolhido ? "md:hidden" : ""}`}>
-            Dilon Saúde · Operações
           </div>
           <button
             type="button"
@@ -158,17 +204,41 @@ export function MenuLateral({
           })}
         </nav>
 
-        <div className="p-3 border-t border-white/10">
-          <button
-            onClick={() => signOut({ callbackUrl: "/login" })}
-            title={recolhido ? "Sair" : undefined}
-            className={`w-full text-xs text-white/60 hover:text-white/90 px-3 py-3 flex items-center gap-2.5 ${
-              recolhido ? "md:justify-center" : "text-left"
-            }`}
-          >
-            <span className="shrink-0">↩</span>
-            <span className={recolhido ? "md:hidden" : ""}>Sair</span>
-          </button>
+        <div className="border-t border-white/10">
+          <div className={`flex items-center gap-2 p-3 ${recolhido ? "md:justify-center" : ""}`}>
+            <div className="w-7 h-7 rounded-full bg-white/15 flex items-center justify-center text-[10px] font-bold shrink-0">
+              {iniciais(nomeUsuario)}
+            </div>
+            <div className={`min-w-0 flex-1 ${recolhido ? "md:hidden" : ""}`}>
+              <div className="text-xs font-semibold truncate">{nomeUsuario}</div>
+            </div>
+            <button
+              type="button"
+              onClick={() => signOut({ callbackUrl: "/login" })}
+              title="Sair"
+              aria-label="Sair"
+              className={`shrink-0 w-7 h-7 flex items-center justify-center rounded-full text-white/60
+                hover:text-white hover:bg-white/10 active:scale-95 transition-all ${recolhido ? "md:hidden" : ""}`}
+            >
+              <IconeSair />
+            </button>
+          </div>
+          {/* Colapsado, o botão de sair some da linha acima (não cabe ao lado
+              do avatar) e reaparece aqui sozinho, centralizado. */}
+          {recolhido && (
+            <button
+              type="button"
+              onClick={() => signOut({ callbackUrl: "/login" })}
+              title="Sair"
+              aria-label="Sair"
+              className="hidden md:flex w-full justify-center pb-3 text-white/60 hover:text-white transition-colors"
+            >
+              <IconeSair />
+            </button>
+          )}
+          <div className={`px-3 pb-3 text-center text-[9px] text-white/35 ${recolhido ? "md:hidden" : ""}`}>
+            v{versaoDoSistema} · Feito com ❤️ por Dilon Tech
+          </div>
         </div>
       </div>
     </>

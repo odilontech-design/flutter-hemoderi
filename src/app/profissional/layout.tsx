@@ -16,7 +16,12 @@ export default async function LayoutProfissional({ children }: { children: React
   return (
     <Provedores>
       <div className="flex">
-        <MenuLateral titulo={sessao.profissionalNome} subtitulo="Portal do profissional" itens={ITENS} />
+        <MenuLateral
+          titulo={sessao.profissionalNome}
+          subtitulo="Portal do profissional"
+          nomeUsuario={sessao.nome}
+          itens={ITENS}
+        />
         <main className="flex-1 min-h-screen overflow-x-hidden p-4 pt-20 md:p-8">{children}</main>
       </div>
     </Provedores>
