@@ -1,11 +1,12 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useFormState } from "react-dom";
 import { useRouter } from "next/navigation";
 import { Area, Aviso, Botao, Campo, Rotulo, Selecao } from "@/components/ui";
 import { enviarRelatorio } from "@/app/actions/relatorio";
 import type { Resultado } from "@/app/actions/pedidos";
+import { obterLocalizacao } from "@/lib/geolocalizacao";
 
 const INICIAL: Resultado = { ok: false };
 
@@ -13,13 +14,41 @@ export function FormularioRelatorio({ pedidoId, horaPrevista }: { pedidoId: stri
   const router = useRouter();
   const [estado, enviar] = useFormState(enviarRelatorio, INICIAL);
   const [compareceu, setCompareceu] = useState("sim");
+  const formRef = useRef<HTMLFormElement>(null);
+  const [buscandoLocal, setBuscandoLocal] = useState(false);
 
   useEffect(() => {
     if (estado.ok) router.push("/profissional");
   }, [estado.ok, router]);
 
+  // Sem action={} no <form>: a submissão inteira passa por aqui, de propósito
+  // — é o que permite esperar a localização (assíncrono) ANTES de montar o
+  // FormData que vai pro servidor, sem as corridas de tentar reenviar o
+  // formulário nativo duas vezes. A localização é pedida só agora, no clique
+  // de enviar, nunca antes: pedir permissão sem o profissional ter feito
+  // nada ainda é o tipo de coisa que faz gente desconfiar do app. E nunca
+  // trava o envio — no máximo alguns segundos de espera, e o relatório sai
+  // com ou sem coordenada.
+  async function aoSubmeter(evento: React.FormEvent<HTMLFormElement>) {
+    evento.preventDefault();
+    setBuscandoLocal(true);
+    const posicao = await obterLocalizacao();
+    setBuscandoLocal(false);
+
+    // `evento.currentTarget` some depois do `await` (o React zera o evento
+    // sintético assim que o handler original termina) — por isso o form vem
+    // do ref, que continua válido.
+    const dados = new FormData(formRef.current!);
+    if (posicao) {
+      dados.set("latitude", String(posicao.latitude));
+      dados.set("longitude", String(posicao.longitude));
+      dados.set("precisaoMetros", String(posicao.precisaoMetros));
+    }
+    enviar(dados);
+  }
+
   return (
-    <form action={enviar} className="space-y-4">
+    <form ref={formRef} onSubmit={aoSubmeter} className="space-y-4">
       <input type="hidden" name="pedidoId" value={pedidoId} />
 
       <div>
@@ -70,9 +99,13 @@ export function FormularioRelatorio({ pedidoId, horaPrevista }: { pedidoId: stri
 
       {estado.erro && <Aviso tom="erro">{estado.erro}</Aviso>}
 
-      <Botao type="submit">Enviar relatório</Botao>
+      <Botao type="submit" disabled={buscandoLocal}>
+        {buscandoLocal ? "Confirmando localização…" : "Enviar relatório"}
+      </Botao>
       <div className="text-[10px] text-gray-400">
-        O relatório não pode ser editado depois de enviado. Correção é feita pela central.
+        Pedimos sua localização só para confirmar que você está no local do atendimento. Se você não
+        permitir ou o sinal falhar, o relatório é enviado do mesmo jeito. Depois de enviado, não pode
+        ser editado — correção é feita pela central.
       </div>
     </form>
   );

@@ -22,15 +22,23 @@ async function usuarioDaSessao() {
 /**
  * Guardas de acesso. TODA página e TODA server action começa por uma delas.
  *
- * A sessão é um JWT e não consulta o banco a cada request — de propósito, para
- * não pagar uma ida ao banco por navegação. O preço é que uma desativação
- * feita no meio da sessão de alguém só valeria no próximo login; por isso as
- * guardas de clínica e de profissional reconferem o vínculo. Quem desativa um
- * cliente inadimplente precisa que o corte valha agora, não amanhã.
+ * A sessão é um JWT — por padrão não precisaria consultar o banco a cada
+ * navegação. Mas as três reconferem o vínculo mesmo assim: quem desativa um
+ * acesso (um funcionário desligado, uma clínica inadimplente) precisa que o
+ * corte valha JÁ, não só da próxima vez que a pessoa tentar entrar — sem
+ * isso, o token continua servindo por até 30 dias (padrão do NextAuth)
+ * depois da desativação.
  */
 export async function exigirInterno(): Promise<SessaoInterno> {
   const u = await usuarioDaSessao();
   if (u.papel !== "INTERNO") redirect(inicioDe(u.papel));
+
+  const usuario = await prisma.usuario.findUnique({
+    where: { id: u.id },
+    select: { desativadoEm: true },
+  });
+  if (!usuario || usuario.desativadoEm) redirect("/login");
+
   return { usuarioId: u.id, nome: u.name ?? "" };
 }
 
@@ -38,17 +46,21 @@ export async function exigirClinica(): Promise<SessaoClinica> {
   const u = await usuarioDaSessao();
   if (u.papel !== "CLINICA" || !u.clinicaId) redirect(inicioDe(u.papel));
 
-  const clinica = await prisma.clinica.findUnique({
-    where: { id: u.clinicaId },
-    select: { ativa: true, nome: true },
+  // Duas contas podem cortar o acesso por caminhos diferentes: desativar
+  // ESTE login (Usuario.desativadoEm — a pessoa saiu, a clínica continua) ou
+  // desativar a clínica inteira (Clinica.ativa — inadimplência, encerramento
+  // de contrato). As duas precisam valer na hora, não só no próximo login.
+  const usuario = await prisma.usuario.findUnique({
+    where: { id: u.id },
+    select: { desativadoEm: true, clinica: { select: { ativa: true, nome: true } } },
   });
-  if (!clinica?.ativa) redirect("/login");
+  if (!usuario || usuario.desativadoEm || !usuario.clinica?.ativa) redirect("/login");
 
   return {
     usuarioId: u.id,
     nome: u.name ?? "",
     clinicaId: u.clinicaId,
-    clinicaNome: clinica.nome,
+    clinicaNome: usuario.clinica.nome,
   };
 }
 
@@ -56,17 +68,19 @@ export async function exigirProfissional(): Promise<SessaoProfissional> {
   const u = await usuarioDaSessao();
   if (u.papel !== "PROFISSIONAL" || !u.profissionalId) redirect(inicioDe(u.papel));
 
-  const profissional = await prisma.profissional.findUnique({
-    where: { id: u.profissionalId },
-    select: { ativo: true, nome: true },
+  // Mesma lógica de exigirClinica: o login e o cadastro do profissional se
+  // desativam por caminhos diferentes, e os dois precisam cortar na hora.
+  const usuario = await prisma.usuario.findUnique({
+    where: { id: u.id },
+    select: { desativadoEm: true, profissional: { select: { ativo: true, nome: true } } },
   });
-  if (!profissional?.ativo) redirect("/login");
+  if (!usuario || usuario.desativadoEm || !usuario.profissional?.ativo) redirect("/login");
 
   return {
     usuarioId: u.id,
     nome: u.name ?? "",
     profissionalId: u.profissionalId,
-    profissionalNome: profissional.nome,
+    profissionalNome: usuario.profissional.nome,
   };
 }
 
