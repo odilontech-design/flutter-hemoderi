@@ -40,36 +40,58 @@ function IconeSair() {
 }
 
 /**
- * Logo da Hemoderi, com um monograma como reserva caso o arquivo suma (aba
- * anônima com cache limpo, arquivo removido do /public, etc.).
+ * Logo da Hemoderi, com um texto/monograma como reserva caso o arquivo suma
+ * (aba anônima com cache limpo, arquivo removido do /public, etc.).
  *
  * O arquivo (`public/logo-hemoderi.svg`) é a marca inteira — gota + nome por
- * extenso, larga e baixa (proporção ~4:1), pensada para um cabeçalho, não
- * para um selo quadrado. Aqui ela cabe num selo quadrado de um jeito
- * diferente: `object-cover` + `object-left` amplia a imagem até a ALTURA do
- * selo preencher (já que a imagem é mais larga que alta) e mostra só a fatia
- * esquerda — que é exatamente onde fica a gota, sem precisar de um segundo
- * arquivo só com o ícone.
+ * extenso, larga e baixa (proporção ~4:1). Expandido, cabe o menu inteiro
+ * (`object-contain`, sem cortar nada). Recolhido, vira só a gota: mesmo
+ * arquivo, mas `object-cover` + `object-left` amplia a imagem até a ALTURA
+ * do selo quadrado preencher e mostra só a fatia esquerda — sem precisar de
+ * um segundo arquivo só com o ícone.
+ *
+ * As duas versões ficam sempre as duas no DOM; quem decide qual aparece é
+ * `recolhido` via classe (igual o resto do menu) — nunca um `if` de
+ * JavaScript, porque aqui "recolhido" só existe a partir do breakpoint `md`.
+ * No celular a barra é sempre larga e a logo é sempre a inteira.
  */
-function Logo({ titulo }: { titulo: string }) {
+function Logo({ titulo, recolhido }: { titulo: string; recolhido: boolean }) {
   const [falhou, setFalhou] = useState(false);
 
   if (falhou) {
     return (
-      <div className="w-8 h-8 rounded-lg bg-white/15 flex items-center justify-center font-display font-bold text-xs shrink-0">
-        {titulo.charAt(0)}
-      </div>
+      <>
+        <div className={`font-display font-bold text-base ${recolhido ? "md:hidden" : ""}`}>{titulo}</div>
+        <div
+          className={`hidden w-8 h-8 rounded-lg bg-white/15 items-center justify-center font-display font-bold text-xs shrink-0 ${
+            recolhido ? "md:flex" : ""
+          }`}
+        >
+          {titulo.charAt(0)}
+        </div>
+      </>
     );
   }
 
   return (
-    // eslint-disable-next-line @next/next/no-img-element -- svg estático pequeno, sem otimização de imagem a ganhar aqui.
-    <img
-      src="/logo-hemoderi.svg"
-      alt="Hemoderi"
-      className="w-8 h-8 rounded-lg object-cover object-left shrink-0 bg-white/15"
-      onError={() => setFalhou(true)}
-    />
+    <>
+      {/* eslint-disable-next-line @next/next/no-img-element -- svg estático pequeno, sem otimização de imagem a ganhar aqui. */}
+      <img
+        src="/logo-hemoderi.svg"
+        alt="Hemoderi"
+        className={`h-8 w-auto max-w-full object-contain object-left ${recolhido ? "md:hidden" : ""}`}
+        onError={() => setFalhou(true)}
+      />
+      {/* eslint-disable-next-line @next/next/no-img-element -- idem. */}
+      <img
+        src="/logo-hemoderi.svg"
+        alt="Hemoderi"
+        className={`hidden w-8 h-8 rounded-lg object-cover object-left bg-white/15 shrink-0 ${
+          recolhido ? "md:block" : ""
+        }`}
+        onError={() => setFalhou(true)}
+      />
+    </>
   );
 }
 
@@ -163,13 +185,18 @@ export function MenuLateral({
         </button>
 
         <div className={`p-4 border-b border-white/10 ${recolhido ? "md:px-2" : ""}`}>
-          <div className={`flex items-center gap-2 ${recolhido ? "md:justify-center" : ""}`}>
-            <Logo titulo={titulo} />
-            <div className={`min-w-0 ${recolhido ? "md:hidden" : ""}`}>
-              <div className="font-display font-bold text-sm truncate">{titulo}</div>
-              {subtitulo && <div className="text-[10px] text-white/50 mt-0.5 truncate">{subtitulo}</div>}
-            </div>
+          <div className={`flex ${recolhido ? "md:justify-center" : ""}`}>
+            <Logo titulo={titulo} recolhido={recolhido} />
           </div>
+          {/* Só existe o que dizer aqui quando titulo é outra identidade além
+              da Hemoderi (a clínica, o profissional) — a logo já diz
+              "Hemoderi" sozinha, repetir por baixo seria redundante. */}
+          {subtitulo && (
+            <div className={`min-w-0 mt-3 ${recolhido ? "md:hidden" : ""}`}>
+              <div className="font-display font-bold text-sm truncate">{titulo}</div>
+              <div className="text-[10px] text-white/50 mt-0.5 truncate">{subtitulo}</div>
+            </div>
+          )}
           <button
             type="button"
             onClick={() => setAberto(false)}
