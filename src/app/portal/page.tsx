@@ -40,7 +40,7 @@ export default async function MeusAgendamentos() {
         acao={
           <Link
             href="/portal/agendar"
-            className="bg-bordo text-white text-xs font-semibold px-3 py-2 rounded-lg hover:bg-bordoEscuro"
+            className="bg-bordo text-white text-xs font-semibold px-3 py-2 min-h-[40px] sm:min-h-0 inline-flex items-center rounded-lg hover:bg-bordoEscuro"
           >
             + Agendar atendimento
           </Link>

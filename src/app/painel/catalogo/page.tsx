@@ -39,7 +39,7 @@ export default async function Catalogo() {
     <>
       <Titulo>Serviços e equipamentos</Titulo>
 
-      <div className="grid lg:grid-cols-3 gap-3 mb-6">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-3 mb-6">
         <Cartao className="lg:col-span-2">
           <div className="font-display font-bold text-bordo text-sm mb-3">Serviços</div>
           {servicos.length === 0 ? (
@@ -151,7 +151,7 @@ export default async function Catalogo() {
         </Cartao>
       </div>
 
-      <div className="grid lg:grid-cols-3 gap-3">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
         <Cartao className="lg:col-span-2">
           <div className="font-display font-bold text-bordo text-sm mb-3">Equipamentos</div>
           {equipamentos.length === 0 ? (

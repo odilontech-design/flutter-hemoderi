@@ -13,8 +13,12 @@ export function Cartao({
 
 export function Titulo({ children, acao }: { children: React.ReactNode; acao?: React.ReactNode }) {
   return (
-    <div className="flex items-center justify-between gap-3 mb-5">
-      <h1 className="font-display font-extrabold text-bordo text-xl">{children}</h1>
+    // flex-wrap: no celular a ação (botão "+ Novo pedido", navegação de mês)
+    // não cabe ao lado do título e desce para a linha de baixo, em vez de ser
+    // empurrada para fora da tela. min-w-0 no h1 deixa o título quebrar linha
+    // em vez de esticar a linha inteira.
+    <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2 mb-5">
+      <h1 className="font-display font-extrabold text-bordo text-xl min-w-0">{children}</h1>
       {acao}
     </div>
   );
@@ -72,9 +76,12 @@ export function Botao({
     perigo: "bg-white text-red-600 border border-red-300 hover:bg-red-50",
   }[variante];
   return (
+    // min-h-[40px] no celular: com py-2 o botão dava 32px de altura, abaixo do
+    // alvo de toque confortável. No desktop (sm:) volta ao compacto, que é o
+    // que mantém a esteira densa para quem trabalha nela o dia inteiro.
     <button
       {...props}
-      className={`text-xs font-semibold px-3 py-2 rounded-lg transition-colors disabled:opacity-50 ${estilos} ${className}`}
+      className={`text-xs font-semibold px-3 py-2 min-h-[40px] sm:min-h-0 rounded-lg transition-colors disabled:opacity-50 ${estilos} ${className}`}
     />
   );
 }

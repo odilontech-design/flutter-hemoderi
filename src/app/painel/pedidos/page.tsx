@@ -69,7 +69,7 @@ export default async function Esteira({ searchParams }: { searchParams: { filtro
         acao={
           <Link
             href="/painel/pedidos/novo"
-            className="bg-bordo text-white text-xs font-semibold px-3 py-2 rounded-lg hover:bg-bordoEscuro"
+            className="bg-bordo text-white text-xs font-semibold px-3 py-2 min-h-[40px] sm:min-h-0 inline-flex items-center rounded-lg hover:bg-bordoEscuro"
           >
             + Novo pedido
           </Link>
@@ -83,7 +83,7 @@ export default async function Esteira({ searchParams }: { searchParams: { filtro
           <Link
             key={f.chave}
             href={`/painel/pedidos?filtro=${f.chave}`}
-            className={`text-[11px] font-semibold px-3 py-1.5 rounded-full border ${
+            className={`text-[11px] font-semibold px-3 py-2.5 sm:py-1.5 rounded-full border ${
               f.chave === filtro.chave
                 ? "bg-bordo text-white border-bordo"
                 : "bg-white text-gray-600 border-gray-300 hover:bg-gray-50"

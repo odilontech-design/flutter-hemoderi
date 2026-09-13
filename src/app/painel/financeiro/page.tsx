@@ -87,20 +87,20 @@ export default async function Financeiro({ searchParams }: { searchParams: { com
           <div className="flex items-center gap-2 text-xs">
             <Link
               href={`/painel/financeiro?competencia=${competenciaVizinha(competencia, -1)}`}
-              className="px-2 py-1 text-gray-500"
+              className="px-3 py-2 min-h-[40px] sm:min-h-0 inline-flex items-center text-gray-500"
             >
               ‹
             </Link>
             <span className="font-semibold text-bordo">{competenciaPorExtenso(competencia)}</span>
             <Link
               href={`/painel/financeiro?competencia=${competenciaVizinha(competencia, 1)}`}
-              className="px-2 py-1 text-gray-500"
+              className="px-3 py-2 min-h-[40px] sm:min-h-0 inline-flex items-center text-gray-500"
             >
               ›
             </Link>
             <a
               href={`/painel/financeiro/exportar?competencia=${competencia}`}
-              className="ml-2 border border-gray-300 rounded-lg px-3 py-1.5 font-semibold text-bordo hover:bg-gray-50"
+              className="ml-2 border border-gray-300 rounded-lg px-3 py-1.5 min-h-[40px] sm:min-h-0 inline-flex items-center font-semibold text-bordo hover:bg-gray-50"
             >
               Exportar CSV
             </a>
@@ -121,7 +121,7 @@ export default async function Financeiro({ searchParams }: { searchParams: { com
         />
       </div>
 
-      <div className="grid lg:grid-cols-2 gap-3">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
         <Cartao>
           <div className="font-display font-bold text-bordo text-sm mb-3">A receber · clínicas</div>
 

@@ -50,14 +50,14 @@ export default async function Ganhos({ searchParams }: { searchParams: { compete
           <div className="flex items-center gap-2 text-xs">
             <Link
               href={`/profissional/ganhos?competencia=${competenciaVizinha(competencia, -1)}`}
-              className="px-2 py-1 text-gray-500"
+              className="px-3 py-2 min-h-[40px] sm:min-h-0 inline-flex items-center text-gray-500"
             >
               ‹
             </Link>
             <span className="font-semibold text-bordo">{competenciaPorExtenso(competencia)}</span>
             <Link
               href={`/profissional/ganhos?competencia=${competenciaVizinha(competencia, 1)}`}
-              className="px-2 py-1 text-gray-500"
+              className="px-3 py-2 min-h-[40px] sm:min-h-0 inline-flex items-center text-gray-500"
             >
               ›
             </Link>

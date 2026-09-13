@@ -29,7 +29,7 @@ export function FormularioPedido({
 
   return (
     <form action={enviar} className="space-y-4">
-      <div className="grid sm:grid-cols-2 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <div>
           <Rotulo>Clínica contratante</Rotulo>
           <Selecao name="clinicaId" required>
@@ -59,7 +59,7 @@ export function FormularioPedido({
         </div>
       </div>
 
-      <div className="grid sm:grid-cols-3 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
         <div>
           <Rotulo>Data</Rotulo>
           <Campo name="data" type="date" required />
@@ -81,7 +81,7 @@ export function FormularioPedido({
         </div>
       </div>
 
-      <div className="grid sm:grid-cols-2 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <div>
           <Rotulo>Paciente (opcional)</Rotulo>
           <Campo name="pacienteNome" placeholder="Como a clínica identifica o atendimento" />

@@ -32,7 +32,7 @@ export default async function Acessos() {
     <>
       <Titulo>Acessos</Titulo>
 
-      <div className="grid lg:grid-cols-3 gap-3">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
         <Cartao className="lg:col-span-2">
           {usuarios.length === 0 ? (
             <Vazio>Nenhum acesso criado.</Vazio>
