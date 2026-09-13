@@ -58,6 +58,23 @@ export function isoDeData(data: Date): string {
   return data.toISOString().slice(0, 10);
 }
 
+/**
+ * Lê uma data que veio da URL, caindo para hoje quando não dá para confiar
+ * nela. Filtro de tela vira link colado no WhatsApp e link colado chega
+ * truncado, com o dia cortado, com lixo no meio — e uma data inválida
+ * chegando ao banco derruba a página inteira com erro 500. Errar para "hoje"
+ * é sempre melhor do que não abrir.
+ *
+ * Pega também a data que não existe (31 de fevereiro): o JavaScript aceita e
+ * empurra para março, então a ida e volta é que denuncia.
+ */
+export function dataDaURL(iso: string | undefined | null): string {
+  if (!iso || !/^\d{4}-\d{2}-\d{2}$/.test(iso)) return hojeISO();
+  const data = dataDeISO(iso);
+  if (Number.isNaN(data.getTime())) return hojeISO();
+  return isoDeData(data) === iso ? iso : hojeISO();
+}
+
 export function somarDias(data: Date, dias: number): Date {
   const d = new Date(data);
   d.setUTCDate(d.getUTCDate() + dias);
