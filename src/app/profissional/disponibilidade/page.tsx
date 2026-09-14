@@ -8,6 +8,7 @@ import {
   marcarAusencia,
   removerAusencia,
   removerDisponibilidade,
+  salvarAgendaDoGoogle,
 } from "@/app/actions/disponibilidade";
 import { formatarData } from "@/lib/data";
 
@@ -18,7 +19,7 @@ const DIAS = ["Domingo", "Segunda", "Terça", "Quarta", "Quinta", "Sexta", "Sáb
 export default async function Disponibilidade() {
   const sessao = await exigirProfissional();
 
-  const [janelas, ausencias] = await Promise.all([
+  const [janelas, ausencias, eu] = await Promise.all([
     prisma.disponibilidade.findMany({
       where: { profissionalId: sessao.profissionalId },
       orderBy: [{ diaSemana: "asc" }, { horaInicio: "asc" }],
@@ -27,7 +28,13 @@ export default async function Disponibilidade() {
       where: { profissionalId: sessao.profissionalId, data: { gte: new Date(Date.now() - 86400000) } },
       orderBy: { data: "asc" },
     }),
+    prisma.profissional.findUnique({
+      where: { id: sessao.profissionalId },
+      select: { googleAgendaId: true },
+    }),
   ]);
+
+  const contaDeServico = process.env.GOOGLE_CLIENT_EMAIL ?? null;
 
   return (
     <>
@@ -128,6 +135,61 @@ export default async function Disponibilidade() {
               <Campo name="motivo" />
             </div>
             <div className="text-[10px] text-gray-400">Sem horário, o dia inteiro fica bloqueado.</div>
+          </FormularioAcao>
+        </Cartao>
+
+        <Cartao className="lg:col-span-2">
+          <div className="font-display font-bold text-bordo text-sm mb-1">Minha agenda do Google</div>
+          <div className="text-[11px] text-gray-500 mb-3 leading-relaxed">
+            Conectada, cada atendimento seu vira compromisso na sua agenda — no seu celular, com o
+            seu lembrete. Remarcação muda o evento; cancelamento e troca de profissional tiram ele
+            de lá. Você continua vendo tudo aqui no portal; a agenda do Google é a cópia que anda
+            junto com você.
+          </div>
+
+          <div className="bg-gray-50 border border-gray-200 rounded-xl p-3 mb-4 text-[11px] text-gray-600 leading-relaxed">
+            <strong className="text-bordo">Como conectar, uma vez só:</strong>
+            <ol className="list-decimal pl-4 mt-1 space-y-0.5">
+              <li>Abra o Google Agenda no computador.</li>
+              <li>
+                Nas três bolinhas ao lado da sua agenda, vá em{" "}
+                <em>Configurações e compartilhamento</em>.
+              </li>
+              <li>
+                Em <em>Compartilhar com pessoas específicas</em>, adicione{" "}
+                {contaDeServico ? (
+                  <code className="bg-white px-1 rounded break-all">{contaDeServico}</code>
+                ) : (
+                  <span className="text-amber-700">
+                    o endereço da conta de serviço (peça à central — a integração ainda não foi
+                    configurada neste ambiente)
+                  </span>
+                )}{" "}
+                com a permissão <strong>Fazer alterações nos eventos</strong>.
+              </li>
+              <li>Volte aqui e informe o e-mail da sua conta Google abaixo.</li>
+            </ol>
+          </div>
+
+          <FormularioAcao
+            acao={salvarAgendaDoGoogle}
+            botao={eu?.googleAgendaId ? "Atualizar agenda" : "Conectar agenda"}
+            limparAoSalvar={false}
+          >
+            <div>
+              <Rotulo>E-mail da sua conta Google</Rotulo>
+              <Campo
+                name="googleAgendaId"
+                type="email"
+                defaultValue={eu?.googleAgendaId ?? ""}
+                placeholder="voce@gmail.com"
+              />
+              <div className="text-[10px] text-gray-400 mt-1">
+                {eu?.googleAgendaId
+                  ? "Para desconectar, apague o campo e salve — os atendimentos somem da sua agenda do Google e continuam aqui."
+                  : "Sem conectar, seus atendimentos aparecem só aqui no portal."}
+              </div>
+            </div>
           </FormularioAcao>
         </Cartao>
       </div>

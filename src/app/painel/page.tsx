@@ -7,6 +7,8 @@ import { formatarReais, formatarReaisCurto } from "@/lib/dinheiro";
 import { STATUS_PENDENTES } from "@/lib/pedido";
 import { estrelas, formatarMedia, mediaDeNotas } from "@/lib/avaliacao";
 import { MostrarEstrelas } from "@/components/Estrelas";
+import { falhasRecentes } from "@/lib/integracoes/google-agenda";
+import { Aviso } from "@/components/ui";
 
 export const dynamic = "force-dynamic";
 
@@ -91,6 +93,11 @@ export default async function Hoje() {
     prisma.avaliacao.findMany({ select: { nota: true } }),
   ]);
 
+  // Uma integração que falha calada é pior que integração nenhuma: a equipe
+  // continua confiando na agenda do celular do profissional, que parou de
+  // receber há duas semanas.
+  const falhasNaAgenda = await falhasRecentes();
+
   const mediaGeral = mediaDeNotas(todasAsNotas.map((a) => a.nota));
 
   // Taxa de comparecimento: dos atendimentos que chegaram ao fim no mês,
@@ -105,6 +112,17 @@ export default async function Hoje() {
   return (
     <>
       <Titulo>Hoje · {formatarData(hoje)}</Titulo>
+
+      {falhasNaAgenda > 0 && (
+        <div className="mb-4">
+          <Aviso tom="alerta">
+            <strong>Google Agenda:</strong> {falhasNaAgenda} sincronização
+            {falhasNaAgenda === 1 ? "" : "ões"} falhou nas últimas 24h. Os atendimentos estão no
+            sistema normalmente, mas podem não ter chegado à agenda do profissional. Causa mais
+            comum: a agenda dele deixou de estar compartilhada com a conta de serviço.
+          </Aviso>
+        </div>
+      )}
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
         <Kpi rotulo="Atendimentos hoje" valor={String(doDia.length)} />

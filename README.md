@@ -52,6 +52,7 @@ em "a pagar" passou por um relatório que alguém assinou.
 | **Fechamento** | Fatura por clínica e competência, baixa de repasses em lote e exportação mensal em CSV para a contabilidade |
 | **Automações** | Fila de WhatsApp para confirmação, alocação, lembrete e resultado, com rastro de envio |
 | **Avaliação** | A clínica dá de 1 a 5 estrelas e um comentário depois do atendimento; a equipe vê a média por profissional |
+| **Google Agenda** | Cada atendimento vira evento na agenda do Google do profissional — remarcar atualiza, cancelar apaga, trocar de profissional move |
 
 ### Os três níveis de acesso
 
@@ -90,6 +91,36 @@ Não existe autocadastro nem senha escolhida pela equipe. O ciclo é:
 
 Tudo isso vira registro em `RegistroAuditoria`: "quem devolveu o acesso do
 fulano em março" tem resposta.
+
+### O atendimento na agenda do Google do profissional
+
+O destino do evento é a agenda **do profissional**, não uma agenda da
+operação: o ponto é ele abrir o celular e o compromisso estar lá, com o
+lembrete dele. Cada um conecta a sua em *Disponibilidade → Minha agenda do
+Google*, depois de compartilhar a agenda com a conta de serviço da Hemoderi
+dando "Fazer alterações nos eventos". Quem não conectou cai em
+`GOOGLE_AGENDA_ID`, a agenda da operação, se houver uma — e sem nenhuma das
+duas a integração apenas não publica; nada quebra.
+
+O ciclo é completo, e é por isso que o pedido guarda **duas** referências
+(`googleEventoId` e `googleAgendaId`):
+
+| No sistema | Na agenda do Google |
+| --- | --- |
+| Confirmado / alocado | evento criado |
+| Remarcado | o **mesmo** evento muda de horário |
+| Trocou de profissional | apaga da agenda de quem saiu, cria na de quem entrou |
+| Cancelado, ou profissional removido | evento apagado |
+
+Um id de evento só é endereçável junto com o id da agenda que o contém: sem
+guardar as duas coisas, trocar o profissional deixaria o compromisso na agenda
+do antigo para sempre.
+
+A sincronização **nunca derruba a operação**. O atendimento existe no banco; o
+evento é uma projeção dele. Se o Google recusar (causa mais comum: a agenda
+deixou de estar compartilhada), a falha vira registro em `SincronizacaoExterna`
+e o painel do dia avisa — uma integração que falha calada é pior que integração
+nenhuma, porque a equipe continua confiando na agenda do celular.
 
 ### A avaliação do atendimento
 
@@ -182,6 +213,7 @@ npm run build
 npm run fumaca          # ciclo completo no navegador (precisa da app rodando + seed)
 npm run fumaca:acessos  # ciclo de uma credencial: criar, trocar, redefinir, suspender
 npm run fumaca:avaliacao # a clínica avalia, corrige, e a equipe enxerga
+npm run fumaca:agenda   # ciclo do evento no Google, com o Google substituído por um duplo
 ```
 
 Os testes unitários cobrem o que é fácil de quebrar sem perceber: sobreposição
@@ -209,6 +241,8 @@ scripts/fumaca.mjs          teste de fumaça do ciclo completo, no navegador
 scripts/fumaca-acessos.mjs  teste de fumaça da gestão de acesso, no navegador
 scripts/fumaca-avaliacao.mjs teste de fumaça da avaliação pela clínica
 src/lib/avaliacao.ts        escala de 1 a 5, média e formatação
+src/lib/integracoes/google-evento.ts  a decisão da sincronização, sem banco nem rede
+src/lib/integracoes/google-api.ts     o único ponto que fala com o Google
 src/app/painel/             equipe Hemoderi
 src/app/portal/             clínica contratante
 src/app/profissional/       prestador

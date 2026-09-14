@@ -97,6 +97,15 @@ export default async function Profissionais() {
                   <td className="py-2 pr-3 whitespace-nowrap">
                     <SituacaoAcesso acessos={profissional.usuarios} />
                     <div className="text-[10px] text-gray-400">{profissional._count.pedidos} atendimento(s)</div>
+                    <div className="text-[10px]">
+                      {profissional.googleAgendaId ? (
+                        <span className="text-green-700" title={profissional.googleAgendaId}>
+                          Google Agenda ✓
+                        </span>
+                      ) : (
+                        <span className="text-gray-400">sem Google Agenda</span>
+                      )}
+                    </div>
                   </td>
                   <td className="py-2">
                     <div className="flex flex-wrap gap-1.5 whitespace-nowrap">
@@ -160,6 +169,14 @@ export default async function Profissionais() {
             <div>
               <Rotulo>Especialidade</Rotulo>
               <Campo name="especialidade" />
+            </div>
+            <div>
+              <Rotulo>Agenda do Google (opcional)</Rotulo>
+              <Campo name="googleAgendaId" type="email" placeholder="profissional@gmail.com" />
+              <div className="text-[10px] text-gray-400 mt-1">
+                E-mail da conta Google dele. Só funciona depois que ele compartilhar a própria agenda
+                com a conta de serviço da Hemoderi — o passo a passo está no portal do profissional.
+              </div>
             </div>
             <div className="grid grid-cols-2 gap-2">
               <div>

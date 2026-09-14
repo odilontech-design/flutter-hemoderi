@@ -311,6 +311,16 @@ model Profissional {
   /// manter agência e conta sem necessidade.
   chavePix String?
 
+  /// Agenda do Google onde os atendimentos dele são publicados — normalmente
+  /// o e-mail da conta Google, depois que ele compartilha a própria agenda
+  /// com a conta de serviço da Hemoderi dando permissão de alterar eventos.
+  ///
+  /// É o que faz o compromisso aparecer no celular DELE, com o lembrete dele,
+  /// em vez de numa agenda da operação que ele teria que ir consultar. Vazio
+  /// cai na agenda da operação (GOOGLE_AGENDA_ID): ninguém fica sem evento
+  /// por não ter conectado a agenda.
+  googleAgendaId String?
+
   /// Regra de repasse do profissional, em % do valor do serviço. Vence o
   /// padrão da operação e perde para a regra do serviço e para uma
   /// RegraRepasse específica — a cadeia inteira está em lib/repasse.ts.
@@ -477,6 +487,12 @@ model Pedido {
   /// Ids do que foi criado fora daqui, guardados para não duplicar em uma
   /// segunda sincronização e para permitir atualizar o evento existente.
   googleEventoId     String?
+  /// EM QUAL agenda o evento acima foi criado. Sem isto, trocar o
+  /// profissional de um atendimento deixaria o evento na agenda do
+  /// profissional antigo para sempre: o id do evento só é endereçável junto
+  /// com o id da agenda que o contém, e "some da minha agenda quando me
+  /// tiram do caso" é o mínimo para alguém confiar no que vê ali.
+  googleAgendaId     String?
   pipedriveNegocioId String?
 
   faturaId String?

@@ -88,3 +88,35 @@ export async function removerAusencia(id: string): Promise<Resultado> {
   revalidatePath("/profissional/disponibilidade");
   return { ok: true };
 }
+
+/**
+ * Conecta (ou desconecta) a agenda do Google do profissional.
+ *
+ * Quem informa é o próprio profissional, no portal dele — não a equipe. Quem
+ * compartilha a agenda com a conta de serviço é ele, dentro da conta Google
+ * dele; digitar o endereço aqui é só dizer ao sistema onde escrever, e é ele
+ * quem sabe qual conta usou.
+ *
+ * Só guarda o endereço; não valida contra o Google. Uma agenda não
+ * compartilhada devolve 403 na primeira publicação, e isso aparece no rastro
+ * de sincronização — validar aqui exigiria uma ida ao Google no meio de um
+ * formulário, para dar a mesma resposta mais tarde.
+ */
+export async function salvarAgendaDoGoogle(_anterior: Resultado, dados: FormData): Promise<Resultado> {
+  const sessao = await exigirProfissional();
+
+  const agenda = String(dados.get("googleAgendaId") ?? "").trim();
+  // Um id de agenda do Google é um endereço de e-mail (a conta, ou o id longo
+  // de uma agenda secundária, que também termina em @group.calendar.google.com).
+  if (agenda && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(agenda)) {
+    return { ok: false, erro: "O endereço da agenda deve ser um e-mail (o da sua conta Google)." };
+  }
+
+  await prisma.profissional.update({
+    where: { id: sessao.profissionalId },
+    data: { googleAgendaId: agenda || null },
+  });
+
+  revalidatePath("/profissional/disponibilidade");
+  return { ok: true };
+}

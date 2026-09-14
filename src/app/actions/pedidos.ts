@@ -401,6 +401,10 @@ export async function desalocarPedido(pedidoId: string): Promise<Resultado> {
     await prisma.mensagemWhatsapp
       .delete({ where: { pedidoId_tipo: { pedidoId, tipo: "ALOCACAO" } } })
       .catch(() => undefined);
+    // Sem profissional, o evento sai da agenda dele: "some da minha agenda
+    // quando me tiram do caso" é o mínimo para alguém confiar no que vê ali.
+    // Cai na agenda da operação se houver uma, que é onde a equipe acompanha.
+    await sincronizarEvento(pedidoId);
     atualizarTelas();
   }
   return resultado;
@@ -418,6 +422,11 @@ export async function cancelarPedido(pedidoId: string, motivo: string): Promise<
       where: { pedidoId, status: "PENDENTE" },
       data: { status: "CANCELADA" },
     });
+    // Tira o evento da agenda de quem ia atender. Sem isto o profissional
+    // continua com o compromisso no celular e aparece numa clínica que
+    // cancelou — o jeito mais rápido de a agenda do Google deixar de ser
+    // confiável.
+    await sincronizarEvento(pedidoId);
     atualizarTelas();
   }
   return resultado;
@@ -626,6 +635,7 @@ export async function cancelarPeloPortal(pedidoId: string, motivo: string): Prom
     where: { pedidoId: pedido.id, status: "PENDENTE" },
     data: { status: "CANCELADA" },
   });
+  await sincronizarEvento(pedido.id);
 
   await registrarAuditoria(sessao.usuarioId, "Pedido", pedido.id, "cancelar-portal", motivo || undefined);
 

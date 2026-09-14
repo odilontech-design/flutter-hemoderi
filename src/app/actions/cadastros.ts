@@ -83,6 +83,10 @@ export async function salvarProfissional(_anterior: Resultado, dados: FormData):
     especialidade: String(dados.get("especialidade") ?? "") || null,
     chavePix: String(dados.get("chavePix") ?? "") || null,
     repassePercentPadrao: percent ? Number(percent) : null,
+    // A equipe pode preencher pelo profissional (é comum ele passar o e-mail
+    // por WhatsApp), mas quem conecta de verdade é ele: compartilhar a agenda
+    // com a conta de serviço só acontece dentro da conta Google dele.
+    googleAgendaId: String(dados.get("googleAgendaId") ?? "").toLowerCase().trim() || null,
   };
 
   if (id) {
