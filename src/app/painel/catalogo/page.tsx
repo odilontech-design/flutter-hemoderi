@@ -66,7 +66,16 @@ export default async function Catalogo() {
                         : <span className="text-gray-400">padrão</span>}
                   </td>
                   <td className="py-2 pr-3 text-gray-500">
-                    {servico.exigeEquipamento ? servico.tipoEquipamento ?? "exige (tipo livre)" : "—"}
+                    {!servico.exigeEquipamento ? (
+                      "—"
+                    ) : (
+                      <>
+                        {servico.tipoEquipamento ?? "exige (tipo livre)"}
+                        {servico.equipamentoIlimitado && (
+                          <div className="text-[10px] text-gray-400">sem limite de quantidade</div>
+                        )}
+                      </>
+                    )}
                   </td>
                   <td className="py-2">
                     <BotaoAcao
@@ -131,7 +140,13 @@ export default async function Catalogo() {
               <Selecao name="exigeEquipamento" defaultValue="nao">
                 <option value="nao">Não</option>
                 <option value="sim">Sim — reserva um aparelho na alocação</option>
+                <option value="ilimitado">Sim, mas sem limite de quantidade</option>
               </Selecao>
+              <div className="text-[10px] text-gray-400 mt-1">
+                &ldquo;Sem limite&rdquo; para aparelho que a operação tem de sobra, ou que o
+                profissional leva o próprio: o serviço continua exigindo equipamento, mas não
+                disputa o estoque — senão um item abundante limita a agenda como se fosse escasso.
+              </div>
             </div>
             <div>
               <Rotulo>Tipo de equipamento exigido</Rotulo>

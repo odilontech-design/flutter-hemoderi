@@ -4,6 +4,7 @@ import { exigirClinica } from "@/lib/sessao";
 import { parametros } from "@/lib/alocacao";
 import { Aviso, Cartao, Titulo } from "@/components/ui";
 import { formatarData } from "@/lib/data";
+import { codigoDoPedido } from "@/lib/numeracao";
 import { STATUS_ATIVOS } from "@/lib/pedido";
 import { FormularioReagendamento } from "./FormularioReagendamento";
 
@@ -17,6 +18,7 @@ export default async function Reagendar({ params }: { params: { pedidoId: string
     include: {
       servico: { select: { id: true, nome: true, duracaoMin: true } },
       profissional: { select: { id: true, nome: true } },
+      clinica: { select: { nome: true } },
     },
   });
   if (!pedido) notFound();
@@ -30,7 +32,7 @@ export default async function Reagendar({ params }: { params: { pedidoId: string
       <Cartao className="max-w-2xl">
         <div className="mb-4 pb-4 border-b border-gray-100">
           <div className="font-display font-bold text-bordo text-sm">
-            #{pedido.numero} · {pedido.servico.nome}
+            {codigoDoPedido(pedido.numero, pedido.clinica.nome, pedido.data)} · {pedido.servico.nome}
           </div>
           <div className="text-xs text-gray-500 mt-1">
             Hoje marcado para {formatarData(pedido.data)} às {pedido.horaInicio}

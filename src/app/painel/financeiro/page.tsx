@@ -72,11 +72,14 @@ export default async function Financeiro({ searchParams }: { searchParams: { com
     const linhas = repasses.filter((r) => r.profissionalId === profissional.id);
     const pendente = linhas.find((l) => l.status === "PENDENTE");
     const pago = linhas.find((l) => l.status === "PAGO");
+    const aguardando = linhas.find((l) => l.status === "AGUARDANDO_APROVACAO");
     return {
       ...profissional,
       pendenteCentavos: pendente?._sum.valorCentavos ?? 0,
       pendenteQtd: pendente?._count ?? 0,
       pagoCentavos: pago?._sum.valorCentavos ?? 0,
+      aguardandoCentavos: aguardando?._sum.valorCentavos ?? 0,
+      aguardandoQtd: aguardando?._count ?? 0,
     };
   });
 
@@ -182,12 +185,26 @@ export default async function Financeiro({ searchParams }: { searchParams: { com
           {porProfissional.length === 0 ? (
             <Vazio>Nenhum repasse nesta competência.</Vazio>
           ) : (
-            <Tabela cabecalho={["Profissional", "Pendente", "Já pago", ""]}>
+            <Tabela cabecalho={["Profissional", "Aguardando conferência", "Liberado", "Já pago", ""]}>
               {porProfissional.map((profissional) => (
                 <tr key={profissional.id} className="border-b border-gray-100 last:border-0">
                   <td className="py-2 pr-3">
                     <div className="font-semibold text-bordo">{profissional.nome}</div>
                     <div className="text-[10px] text-gray-400">{profissional.chavePix ?? "sem chave PIX"}</div>
+                  </td>
+                  <td className="py-2 pr-3 whitespace-nowrap">
+                    {profissional.aguardandoCentavos > 0 ? (
+                      <>
+                        <span className="text-amber-700 font-semibold">
+                          {formatarReais(profissional.aguardandoCentavos)}
+                        </span>
+                        <div className="text-[10px] text-gray-400">
+                          {profissional.aguardandoQtd} relatório(s) a conferir
+                        </div>
+                      </>
+                    ) : (
+                      <span className="text-gray-300">—</span>
+                    )}
                   </td>
                   <td className="py-2 pr-3">
                     {formatarReais(profissional.pendenteCentavos)}

@@ -6,6 +6,7 @@ import type { CategoriaServico } from "@prisma/client";
 import { exigirInterno } from "@/lib/sessao";
 import { gerarSlug } from "@/lib/slug";
 import { lerCentavos } from "@/lib/dinheiro";
+import { cepValido, cnpjValido, cpfValido } from "@/lib/documento";
 import type { Resultado } from "./pedidos";
 
 /**
@@ -32,13 +33,29 @@ export async function salvarClinica(_anterior: Resultado, dados: FormData): Prom
   const nome = String(dados.get("nome") ?? "").trim();
   if (!nome) return { ok: false, erro: "Informe o nome da clínica." };
 
+  // O documento é conferido no servidor mesmo já sendo conferido na tela: a
+  // server action é chamável sem passar por formulário nenhum.
+  const cnpj = String(dados.get("cnpj") ?? "").trim();
+  if (cnpj && !cnpjValido(cnpj) && !cpfValido(cnpj)) {
+    return { ok: false, erro: "CNPJ (ou CPF) inválido — confira se algum dígito ficou trocado." };
+  }
+
+  const cep = String(dados.get("cep") ?? "").trim();
+  if (!cepValido(cep)) {
+    return { ok: false, erro: "Informe um CEP válido: é dele que sai o endereço do atendimento." };
+  }
+
   const salas = Number(dados.get("salas") ?? 1);
   const comum = {
     nome,
-    cnpj: String(dados.get("cnpj") ?? "") || null,
+    cnpj: cnpj || null,
     telefone: String(dados.get("telefone") ?? "") || null,
     email: String(dados.get("email") ?? "") || null,
+    cep,
     endereco: String(dados.get("endereco") ?? "") || null,
+    numero: String(dados.get("numero") ?? "").trim() || null,
+    complemento: String(dados.get("complemento") ?? "").trim() || null,
+    bairro: String(dados.get("bairro") ?? "") || null,
     cidade: String(dados.get("cidade") ?? "") || null,
     uf: String(dados.get("uf") ?? "") || null,
     salas: Number.isFinite(salas) && salas > 0 ? Math.trunc(salas) : 1,
@@ -72,10 +89,16 @@ export async function salvarProfissional(_anterior: Resultado, dados: FormData):
   const nome = String(dados.get("nome") ?? "").trim();
   if (!nome) return { ok: false, erro: "Informe o nome do profissional." };
 
+  const cpf = String(dados.get("cpf") ?? "").trim();
+  if (cpf && !cpfValido(cpf)) {
+    return { ok: false, erro: "CPF inválido — confira se algum dígito ficou trocado." };
+  }
+
   const percent = String(dados.get("repassePercentPadrao") ?? "").replace(",", ".");
+  const fixo = String(dados.get("repasseFixoCentavos") ?? "").trim();
   const comum = {
     nome,
-    cpf: String(dados.get("cpf") ?? "") || null,
+    cpf: cpf || null,
     telefone: String(dados.get("telefone") ?? "") || null,
     email: String(dados.get("email") ?? "").toLowerCase().trim() || null,
     conselho: String(dados.get("conselho") ?? "") || null,
@@ -83,6 +106,9 @@ export async function salvarProfissional(_anterior: Resultado, dados: FormData):
     especialidade: String(dados.get("especialidade") ?? "") || null,
     chavePix: String(dados.get("chavePix") ?? "") || null,
     repassePercentPadrao: percent ? Number(percent) : null,
+    // O valor fixo é o combinado atual da operação (ata de 14/09); o
+    // percentual fica ao lado como histórico de acertos anteriores.
+    repasseFixoCentavos: fixo ? lerCentavos(fixo) : null,
     // A equipe pode preencher pelo profissional (é comum ele passar o e-mail
     // por WhatsApp), mas quem conecta de verdade é ele: compartilhar a agenda
     // com a conta de serviço só acontece dentro da conta Google dele.
@@ -124,7 +150,11 @@ export async function salvarServico(_anterior: Resultado, dados: FormData): Prom
   const duracao = Number(dados.get("duracaoMin") ?? 60);
   const percent = String(dados.get("repassePercent") ?? "").replace(",", ".");
   const fixo = String(dados.get("repasseFixo") ?? "");
-  const exigeEquipamento = String(dados.get("exigeEquipamento") ?? "") === "sim";
+  // Três estados num seletor só: não exige, exige e reserva, exige sem
+  // disputar estoque.
+  const escolhaEquipamento = String(dados.get("exigeEquipamento") ?? "");
+  const exigeEquipamento = escolhaEquipamento === "sim" || escolhaEquipamento === "ilimitado";
+  const equipamentoIlimitado = escolhaEquipamento === "ilimitado";
 
   const comum = {
     nome,
@@ -135,6 +165,7 @@ export async function salvarServico(_anterior: Resultado, dados: FormData): Prom
     repassePercent: percent ? Number(percent) : null,
     repasseFixoCentavos: fixo ? lerCentavos(fixo) : null,
     exigeEquipamento,
+    equipamentoIlimitado,
     // Sem "exige equipamento", tipo não faz sentido — mantém o dado limpo em
     // vez de deixar um tipo órfão de um serviço que não usa mais equipamento.
     tipoEquipamento: exigeEquipamento ? String(dados.get("tipoEquipamento") ?? "").trim() || null : null,

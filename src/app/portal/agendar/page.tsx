@@ -7,7 +7,7 @@ import { FormularioAgendamento } from "./FormularioAgendamento";
 export const dynamic = "force-dynamic";
 
 export default async function Agendar() {
-  await exigirClinica();
+  const sessao = await exigirClinica();
 
   const [servicos, profissionais, config] = await Promise.all([
     prisma.servico.findMany({
@@ -31,6 +31,8 @@ export default async function Agendar() {
           servicos={servicos}
           profissionais={profissionais}
           antecedenciaHoras={config.antecedenciaMinimaHoras}
+          clinicaNome={sessao.clinicaNome}
+          whatsappCentral={config.whatsapp}
         />
       </Cartao>
     </>

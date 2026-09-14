@@ -11,6 +11,7 @@ import { competenciaDe, dataDeISO, instanteDoAtendimento, isoDeData } from "@/li
 import { enfileirarMensagem } from "@/lib/integracoes/whatsapp";
 import { sincronizarEvento } from "@/lib/integracoes/google-agenda";
 import { marcarNegocioGanho } from "@/lib/integracoes/pipedrive";
+import { condicaoValida } from "@/lib/pagamento";
 
 export type Resultado = { ok: boolean; erro?: string; avisos?: string[] };
 
@@ -137,11 +138,15 @@ export async function criarPedido(_anterior: Resultado, dados: FormData): Promis
       valorRepasseCentavos = (await repasseDoPedido(profissionalId, servicoId, valorServicoCentavos)).valorCentavos;
     }
 
+    // Serviço com equipamento ilimitado não reserva unidade: o aparelho
+    // existe de sobra (ou é do próprio profissional) e prender uma unidade
+    // dele tiraria horário de quem realmente disputa o estoque.
+    const reservaEquipamento = servico.exigeEquipamento && !servico.equipamentoIlimitado;
     const equipamentoId =
-      profissionalId && servico.exigeEquipamento
+      profissionalId && reservaEquipamento
         ? await equipamentoLivre(data, horaInicio, servico.duracaoMin, servico.tipoEquipamento, undefined, tx)
         : null;
-    if (profissionalId && servico.exigeEquipamento && !equipamentoId) {
+    if (profissionalId && reservaEquipamento && !equipamentoId) {
       return { ok: false as const, erro: "Nenhum equipamento livre nesse horário." };
     }
 
@@ -162,6 +167,8 @@ export async function criarPedido(_anterior: Resultado, dados: FormData): Promis
         valorRepasseCentavos,
         pacienteNome: String(dados.get("pacienteNome") ?? "") || null,
         pacienteContato: String(dados.get("pacienteContato") ?? "") || null,
+        doutorNome: String(dados.get("doutorNome") ?? "").trim() || null,
+        condicaoPagamento: String(dados.get("condicaoPagamento") ?? "").trim() || null,
         observacoes: String(dados.get("observacoes") ?? "") || null,
         criadoPorId: sessao.usuarioId,
       },
@@ -261,6 +268,7 @@ export async function solicitarPedido(_anterior: Resultado, dados: FormData): Pr
         valorServicoCentavos,
         pacienteNome: String(dados.get("pacienteNome") ?? "") || null,
         pacienteContato: String(dados.get("pacienteContato") ?? "") || null,
+        doutorNome: String(dados.get("doutorNome") ?? "").trim() || null,
         criadoPorId: sessao.usuarioId,
       },
     });
@@ -311,7 +319,15 @@ export async function alocarPedido(pedidoId: string, profissionalId: string): Pr
   const pedido = await prisma.pedido.findUnique({
     where: { id: pedidoId },
     include: {
-      servico: { select: { id: true, duracaoMin: true, exigeEquipamento: true, tipoEquipamento: true } },
+      servico: {
+        select: {
+          id: true,
+          duracaoMin: true,
+          exigeEquipamento: true,
+          equipamentoIlimitado: true,
+          tipoEquipamento: true,
+        },
+      },
     },
   });
   if (!pedido) return { ok: false, erro: "Pedido não encontrado." };
@@ -344,7 +360,9 @@ export async function alocarPedido(pedidoId: string, profissionalId: string): Pr
       };
     }
 
-    const equipamentoId = pedido.servico.exigeEquipamento
+    const reservaEquipamento =
+      pedido.servico.exigeEquipamento && !pedido.servico.equipamentoIlimitado;
+    const equipamentoId = reservaEquipamento
       ? await equipamentoLivre(
           pedido.data,
           pedido.horaInicio,
@@ -354,7 +372,7 @@ export async function alocarPedido(pedidoId: string, profissionalId: string): Pr
           tx
         )
       : null;
-    if (pedido.servico.exigeEquipamento && !equipamentoId) {
+    if (reservaEquipamento && !equipamentoId) {
       return { ok: false as const, erro: "Nenhum equipamento livre nesse horário." };
     }
 
@@ -464,6 +482,9 @@ export async function registrarResultado(
   await prisma.pedido.update({ where: { id: pedido.id }, data: { status: destino } });
 
   if (compareceu && pedido.profissionalId) {
+    // Nasce AGUARDANDO_APROVACAO: o valor já é conhecido e aparece para o
+    // profissional como "a receber", mas só entra no "a pagar" da operação
+    // depois que a equipe confere o relatório (ata de 14/09).
     await prisma.repasse.upsert({
       where: { pedidoId: pedido.id },
       update: { valorCentavos: pedido.valorRepasseCentavos },
@@ -474,6 +495,7 @@ export async function registrarResultado(
         // relatório atrasado não empurra o custo para o mês seguinte.
         competencia: competenciaDe(pedido.data),
         valorCentavos: pedido.valorRepasseCentavos,
+        status: "AGUARDANDO_APROVACAO",
       },
     });
     await marcarNegocioGanho(pedido.id);
@@ -507,7 +529,16 @@ async function pedidoDaClinica(pedidoId: string, clinicaId: string) {
   // trocando o id na URL.
   return prisma.pedido.findFirst({
     where: { id: pedidoId, clinicaId },
-    include: { servico: { select: { duracaoMin: true, exigeEquipamento: true, tipoEquipamento: true } } },
+    include: {
+      servico: {
+        select: {
+          duracaoMin: true,
+          exigeEquipamento: true,
+          equipamentoIlimitado: true,
+          tipoEquipamento: true,
+        },
+      },
+    },
   });
 }
 
@@ -647,4 +678,39 @@ export async function cancelarPeloPortal(pedidoId: string, motivo: string): Prom
 export async function marcarResultadoInterno(pedidoId: string, compareceu: boolean): Promise<Resultado> {
   const sessao = await exigirInterno();
   return registrarResultado(pedidoId, compareceu, sessao.usuarioId);
+}
+
+/**
+ * Como esta clínica paga ESTE atendimento.
+ *
+ * Preenchido à mão pela equipe (ata de 14/09): depende do histórico e do
+ * comportamento de cada clínica, que é coisa que o atendente sabe e o sistema
+ * não tem como inferir.
+ */
+export async function definirCondicaoPagamento(pedidoId: string, condicao: string): Promise<Resultado> {
+  const sessao = await exigirInterno();
+
+  const valor = condicao.trim();
+  if (valor && !condicaoValida(valor)) {
+    return { ok: false, erro: "Condição de pagamento desconhecida." };
+  }
+
+  const pedido = await prisma.pedido.findUnique({ where: { id: pedidoId }, select: { numero: true } });
+  if (!pedido) return { ok: false, erro: "Agendamento não encontrado." };
+
+  await prisma.pedido.update({
+    where: { id: pedidoId },
+    data: { condicaoPagamento: valor || null },
+  });
+
+  await registrarAuditoria(
+    sessao.usuarioId,
+    "Pedido",
+    pedidoId,
+    "condicao-pagamento",
+    valor || "(em branco)"
+  );
+
+  atualizarTelas();
+  return { ok: true };
 }

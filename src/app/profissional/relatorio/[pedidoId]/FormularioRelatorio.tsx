@@ -10,7 +10,17 @@ import { obterLocalizacao } from "@/lib/geolocalizacao";
 
 const INICIAL: Resultado = { ok: false };
 
-export function FormularioRelatorio({ pedidoId, horaPrevista }: { pedidoId: string; horaPrevista: string }) {
+export function FormularioRelatorio({
+  pedidoId,
+  horaPrevista,
+  chavePixCadastro,
+  jaEnviado,
+}: {
+  pedidoId: string;
+  horaPrevista: string;
+  chavePixCadastro: string | null;
+  jaEnviado: boolean;
+}) {
   const router = useRouter();
   const [estado, enviar] = useFormState(enviarRelatorio, INICIAL);
   const [compareceu, setCompareceu] = useState("sim");
@@ -97,15 +107,27 @@ export function FormularioRelatorio({ pedidoId, horaPrevista }: { pedidoId: stri
         <Area name="observacoes" rows={3} />
       </div>
 
+      <div>
+        <Rotulo>Chave PIX para este repasse</Rotulo>
+        <Campo name="chavePixConfirmada" defaultValue={chavePixCadastro ?? ""} placeholder="CPF, e-mail ou telefone" />
+        <div className="text-[10px] text-gray-400 mt-1">
+          Vem do seu cadastro. Se mudou de conta, corrija aqui — vale para este pagamento.
+        </div>
+      </div>
+
       {estado.erro && <Aviso tom="erro">{estado.erro}</Aviso>}
 
       <Botao type="submit" disabled={buscandoLocal}>
-        {buscandoLocal ? "Confirmando localização…" : "Enviar relatório"}
+        {buscandoLocal
+          ? "Confirmando localização…"
+          : jaEnviado
+            ? "Salvar correção"
+            : "Enviar relatório"}
       </Botao>
       <div className="text-[10px] text-gray-400">
         Pedimos sua localização só para confirmar que você está no local do atendimento. Se você não
-        permitir ou o sinal falhar, o relatório é enviado do mesmo jeito. Depois de enviado, não pode
-        ser editado — correção é feita pela central.
+        permitir ou o sinal falhar, o relatório é enviado do mesmo jeito. Dá para corrigir o que
+        você mandou até a central conferir — depois disso, a correção é feita por lá.
       </div>
     </form>
   );

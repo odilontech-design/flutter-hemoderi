@@ -5,8 +5,10 @@ import { FormularioAcao } from "@/components/FormularioAcao";
 import { BotaoAcao } from "@/components/BotaoAcao";
 import { AcoesDeAcesso, SituacaoAcesso } from "@/components/AcessoDoCadastro";
 import { alternarProfissional, salvarProfissional } from "@/app/actions/cadastros";
-import { formatarPercent } from "@/lib/dinheiro";
+import { formatarPercent, formatarReais } from "@/lib/dinheiro";
 import { estrelas, formatarMedia } from "@/lib/avaliacao";
+import { CampoDocumento } from "@/components/CampoDocumento";
+import { ImportarProfissionais } from "./ImportarProfissionais";
 
 export const dynamic = "force-dynamic";
 
@@ -70,10 +72,14 @@ export default async function Profissionais() {
                   <td className="py-2 pr-3 text-gray-500">
                     {profissional.conselho ? `${profissional.conselho} ${profissional.registro ?? ""}` : "—"}
                   </td>
-                  <td className="py-2 pr-3">
-                    {profissional.repassePercentPadrao != null
-                      ? formatarPercent(profissional.repassePercentPadrao)
-                      : <span className="text-gray-400">padrão</span>}
+                  <td className="py-2 pr-3 whitespace-nowrap">
+                    {profissional.repasseFixoCentavos != null ? (
+                      formatarReais(profissional.repasseFixoCentavos)
+                    ) : profissional.repassePercentPadrao != null ? (
+                      formatarPercent(profissional.repassePercentPadrao)
+                    ) : (
+                      <span className="text-gray-400">padrão</span>
+                    )}
                   </td>
                   <td className="py-2 pr-3 whitespace-nowrap">
                     {media === null ? (
@@ -136,6 +142,10 @@ export default async function Profissionais() {
         </Cartao>
 
         <Cartao>
+          <div className="mb-4 pb-4 border-b border-gray-100">
+            <ImportarProfissionais />
+          </div>
+
           <div className="font-display font-bold text-bordo text-sm mb-3">Novo profissional</div>
           <FormularioAcao acao={salvarProfissional} botao="Cadastrar profissional">
             <div>
@@ -143,10 +153,7 @@ export default async function Profissionais() {
               <Campo name="nome" required />
             </div>
             <div className="grid grid-cols-2 gap-2">
-              <div>
-                <Rotulo>CPF</Rotulo>
-                <Campo name="cpf" />
-              </div>
+              <CampoDocumento tipo="cpf" name="cpf" rotulo="CPF" />
               <div>
                 <Rotulo>Telefone</Rotulo>
                 <Campo name="telefone" />
@@ -184,13 +191,13 @@ export default async function Profissionais() {
                 <Campo name="chavePix" />
               </div>
               <div>
-                <Rotulo>Repasse (%)</Rotulo>
-                <Campo name="repassePercentPadrao" placeholder="60" />
+                <Rotulo>Repasse por atendimento (R$)</Rotulo>
+                <Campo name="repasseFixoCentavos" placeholder="150,00" inputMode="decimal" />
               </div>
             </div>
             <div className="text-[10px] text-gray-400 leading-relaxed">
-              Repasse vazio usa o percentual padrão da operação. Serviço com regra própria vence
-              este percentual.
+              O repasse é valor fechado por atendimento. Vazio, cai no percentual padrão da
+              operação; serviço com regra própria vence os dois.
               <br />
               Com o e-mail preenchido, o acesso ao portal sai em um clique na própria lista
               (<strong>Gerar acesso</strong>) — a senha é sorteada pelo sistema e aparece na tela

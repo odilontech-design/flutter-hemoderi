@@ -3,8 +3,8 @@ import { prisma } from "@/lib/prisma";
 import { exigirInterno } from "@/lib/sessao";
 import { Cartao, Kpi, SeloStatus, Tabela, Titulo, Vazio } from "@/components/ui";
 import { competenciaAtual, formatarData, hojeUTC } from "@/lib/data";
-import { formatarReais, formatarReaisCurto } from "@/lib/dinheiro";
-import { STATUS_PENDENTES } from "@/lib/pedido";
+import { formatarReaisCurto } from "@/lib/dinheiro";
+import { STATUS_ATIVOS, STATUS_PENDENTES } from "@/lib/pedido";
 import { estrelas, formatarMedia, mediaDeNotas } from "@/lib/avaliacao";
 import { MostrarEstrelas } from "@/components/Estrelas";
 import { falhasRecentes } from "@/lib/integracoes/google-agenda";
@@ -25,8 +25,16 @@ export default async function Hoje() {
   const competencia = competenciaAtual();
   const inicioMes = new Date(`${competencia}-01T00:00:00.000Z`);
 
-  const [doDia, pendentes, semProfissional, realizadosMes, repassesMes, aReceber, porProfissional, faltasMes] =
-    await Promise.all([
+  const [
+    doDia,
+    pendentes,
+    agendados,
+    semProfissional,
+    realizadosMes,
+    aReceber,
+    porProfissional,
+    faltasMes,
+  ] = await Promise.all([
     prisma.pedido.findMany({
       where: { data: hoje, status: { notIn: ["CANCELADO"] } },
       orderBy: { horaInicio: "asc" },
@@ -37,23 +45,24 @@ export default async function Hoje() {
       },
     }),
     prisma.pedido.count({ where: { status: { in: STATUS_PENDENTES } } }),
+    // "Agendados" é o que está de pé daqui para a frente — o compromisso que
+    // a operação ainda tem que cumprir, não o histórico.
+    prisma.pedido.count({ where: { data: { gte: hoje }, status: { in: STATUS_ATIVOS } } }),
     prisma.pedido.count({ where: { status: "CONFIRMADO", profissionalId: null } }),
     prisma.pedido.aggregate({
       where: { status: "REALIZADO", data: { gte: inicioMes } },
       _count: true,
       _sum: { valorServicoCentavos: true, valorRepasseCentavos: true },
     }),
-    prisma.repasse.aggregate({
-      where: { competencia, status: "PENDENTE" },
-      _sum: { valorCentavos: true },
-    }),
     prisma.fatura.aggregate({ where: { status: "ABERTA" }, _sum: { valorCentavos: true } }),
-    // Produtividade da competência: quem atendeu quanto, e quanto isso gerou.
+    // Produtividade da competência: quem atendeu quanto. O valor gerado e a
+    // participação percentual saíram na ata de 14/09 — a operação lê esta
+    // tabela para saber QUEM fez O QUÊ, e o dinheiro por profissional é
+    // conversa do financeiro, não do painel do dia.
     prisma.pedido.groupBy({
       by: ["profissionalId"],
       where: { status: "REALIZADO", data: { gte: inicioMes }, profissionalId: { not: null } },
       _count: true,
-      _sum: { valorServicoCentavos: true },
       orderBy: { _count: { profissionalId: "desc" } },
       take: 8,
     }),
@@ -64,6 +73,24 @@ export default async function Hoje() {
     where: { id: { in: porProfissional.map((p) => p.profissionalId as string) } },
     select: { id: true, nome: true },
   });
+
+  // O que cada um executou, por serviço: é a leitura que substitui o valor
+  // gerado. "A Ana fez 12 PRF e 3 clareamentos" diz mais sobre a operação do
+  // que "a Ana gerou R$ 4.200".
+  const servicosPorProfissional = await prisma.pedido.groupBy({
+    by: ["profissionalId", "servicoId"],
+    where: { status: "REALIZADO", data: { gte: inicioMes }, profissionalId: { not: null } },
+    _count: true,
+  });
+
+  const nomesDeServico = new Map(
+    (
+      await prisma.servico.findMany({
+        where: { id: { in: [...new Set(servicosPorProfissional.map((l) => l.servicoId))] } },
+        select: { id: true, nome: true },
+      })
+    ).map((s) => [s.id, s.nome])
+  );
 
   const [notasPorProfissional, comentariosRecentes, todasAsNotas] = await Promise.all([
     // Média de TODAS as avaliações do profissional, não só as do mês: a tabela
@@ -107,7 +134,6 @@ export default async function Hoje() {
   const comparecimento = fechadosMes > 0 ? Math.round((realizadosMes._count / fechadosMes) * 100) : null;
 
   const faturado = realizadosMes._sum.valorServicoCentavos ?? 0;
-  const custo = realizadosMes._sum.valorRepasseCentavos ?? 0;
 
   return (
     <>
@@ -124,22 +150,31 @@ export default async function Hoje() {
         </div>
       )}
 
+      {/* Os quatro números que a operação pediu na reunião de 14/09. O que a
+          Hemoderi paga aos profissionais saiu daqui de propósito: o painel
+          fica aberto o dia inteiro, às vezes com a clínica olhando junto, e
+          custo de prestador não é informação de tela compartilhada. Continua
+          em Financeiro → A pagar, que é onde ele é trabalhado. */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
-        <Kpi rotulo="Atendimentos hoje" valor={String(doDia.length)} />
         <Kpi
-          rotulo="Aguardando ação"
-          valor={String(pendentes)}
+          rotulo="Atendimentos hoje"
+          valor={String(doDia.length)}
           sub={semProfissional ? `${semProfissional} sem profissional` : "nada parado"}
         />
         <Kpi
-          rotulo="Realizados no mês"
-          valor={String(realizadosMes._count)}
-          sub={`${formatarReaisCurto(faturado)} em serviços`}
+          rotulo="Agendados"
+          valor={String(agendados)}
+          sub={pendentes ? `${pendentes} aguardando ação` : "nada na fila"}
         />
         <Kpi
-          rotulo="Margem do mês"
-          valor={formatarReaisCurto(faturado - custo)}
-          sub={`repasse de ${formatarReaisCurto(custo)}`}
+          rotulo="Faturamento do mês"
+          valor={formatarReaisCurto(faturado)}
+          sub={`${realizadosMes._count} atendimento(s) realizado(s)`}
+        />
+        <Kpi
+          rotulo="A receber"
+          valor={formatarReaisCurto(aReceber._sum.valorCentavos ?? 0)}
+          sub="faturas em aberto"
         />
       </div>
 
@@ -169,18 +204,15 @@ export default async function Hoje() {
 
         <div className="space-y-3">
           <Cartao>
-            <div className="text-[11px] text-gray-500 mb-1">A receber de clínicas</div>
+            <div className="text-[11px] text-gray-500 mb-1">Comparecimento do mês</div>
             <div className="text-lg font-display font-extrabold text-bordo">
-              {formatarReais(aReceber._sum.valorCentavos ?? 0)}
+              {comparecimento != null ? `${comparecimento}%` : "—"}
             </div>
-            <div className="text-[10px] text-gray-400 mt-1">faturas em aberto</div>
-          </Cartao>
-          <Cartao>
-            <div className="text-[11px] text-gray-500 mb-1">A pagar a profissionais</div>
-            <div className="text-lg font-display font-extrabold text-bordo">
-              {formatarReais(repassesMes._sum.valorCentavos ?? 0)}
+            <div className="text-[10px] text-gray-400 mt-1">
+              {fechadosMes > 0
+                ? `${faltasMes} falta${faltasMes === 1 ? "" : "s"} em ${fechadosMes} fechados`
+                : "nenhum atendimento fechado ainda"}
             </div>
-            <div className="text-[10px] text-gray-400 mt-1">repasses pendentes da competência</div>
           </Cartao>
           <Link
             href="/painel/pedidos"
@@ -188,36 +220,46 @@ export default async function Hoje() {
           >
             Trabalhar a esteira →
           </Link>
+          <Link
+            href="/painel/financeiro"
+            className="block bg-white border border-gray-200 rounded-2xl p-5 text-center text-xs font-semibold text-bordo hover:bg-gray-50"
+          >
+            Financeiro e repasses →
+          </Link>
         </div>
       </div>
 
       <Cartao>
-        <div className="flex flex-wrap items-baseline justify-between gap-2 mb-3">
-          <div className="font-display font-bold text-bordo text-sm">Produtividade do mês</div>
-          {comparecimento != null && (
-            <div className="text-[11px] text-gray-500">
-              Comparecimento: <strong className="text-bordo">{comparecimento}%</strong> ({faltasMes}{" "}
-              falta{faltasMes === 1 ? "" : "s"} em {fechadosMes} atendimentos fechados)
-            </div>
-          )}
-        </div>
+        <div className="font-display font-bold text-bordo text-sm mb-3">Produtividade do mês</div>
 
         {porProfissional.length === 0 ? (
           <Vazio>Nenhum atendimento realizado neste mês ainda.</Vazio>
         ) : (
-          <Tabela cabecalho={["Profissional", "Atendimentos", "Serviços gerados", "Avaliação", "Participação"]}>
+          <Tabela cabecalho={["Profissional", "Atendimentos", "O que executou", "Avaliação"]}>
             {porProfissional.map((linha) => {
               const profissional = profissionais.find((p) => p.id === linha.profissionalId);
               const nota = notasPorProfissional.find((n) => n.profissionalId === linha.profissionalId);
               const media = nota?._avg.nota != null ? Math.round(nota._avg.nota * 10) / 10 : null;
-              const participacao =
-                realizadosMes._count > 0 ? Math.round((linha._count / realizadosMes._count) * 100) : 0;
+              const executados = servicosPorProfissional
+                .filter((l) => l.profissionalId === linha.profissionalId)
+                .sort((a, b) => b._count - a._count);
               return (
-                <tr key={linha.profissionalId} className="border-b border-gray-100 last:border-0">
+                <tr key={linha.profissionalId} className="border-b border-gray-100 last:border-0 align-top">
                   <td className="py-2 pr-3 font-semibold text-bordo">{profissional?.nome ?? "—"}</td>
                   <td className="py-2 pr-3">{linha._count}</td>
                   <td className="py-2 pr-3 text-gray-600">
-                    {formatarReais(linha._sum.valorServicoCentavos ?? 0)}
+                    {executados.length === 0 ? (
+                      <span className="text-gray-300">—</span>
+                    ) : (
+                      <div className="space-y-0.5">
+                        {executados.map((item) => (
+                          <div key={item.servicoId}>
+                            <span className="font-semibold text-gray-700">{item._count}×</span>{" "}
+                            {nomesDeServico.get(item.servicoId) ?? "serviço removido"}
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </td>
                   <td className="py-2 pr-3 whitespace-nowrap">
                     {media === null ? (
@@ -230,14 +272,6 @@ export default async function Hoje() {
                         </span>
                       </>
                     )}
-                  </td>
-                  <td className="py-2 pr-3">
-                    <div className="flex items-center gap-2">
-                      <div className="h-1.5 w-24 bg-gray-100 rounded-full overflow-hidden">
-                        <div className="h-full bg-bordo rounded-full" style={{ width: `${participacao}%` }} />
-                      </div>
-                      <span className="text-gray-500 text-[10px]">{participacao}%</span>
-                    </div>
                   </td>
                 </tr>
               );

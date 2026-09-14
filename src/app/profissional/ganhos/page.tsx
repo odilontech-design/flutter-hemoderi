@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { exigirProfissional } from "@/lib/sessao";
 import { Cartao, Kpi, Tabela, Titulo, Vazio } from "@/components/ui";
 import { competenciaAtual, competenciaPorExtenso, formatarData, formatarDataCurta } from "@/lib/data";
+import { codigoDoPedido } from "@/lib/numeracao";
 import { formatarReais } from "@/lib/dinheiro";
 
 export const dynamic = "force-dynamic";
@@ -80,7 +81,9 @@ export default async function Ganhos({ searchParams }: { searchParams: { compete
           <Tabela cabecalho={["Pedido", "Data", "Clínica", "Serviço", "Valor", "Situação"]}>
             {repasses.map((repasse) => (
               <tr key={repasse.id} className="border-b border-gray-100 last:border-0">
-                <td className="py-2 pr-3 font-semibold">#{repasse.pedido.numero}</td>
+                <td className="py-2 pr-3 font-semibold whitespace-nowrap">
+                  {codigoDoPedido(repasse.pedido.numero, repasse.pedido.clinica.nome, repasse.pedido.data)}
+                </td>
                 <td className="py-2 pr-3">
                   {formatarDataCurta(repasse.pedido.data)} {repasse.pedido.horaInicio}
                 </td>

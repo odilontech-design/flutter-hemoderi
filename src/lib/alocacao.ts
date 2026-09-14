@@ -295,7 +295,13 @@ export async function horariosDisponiveis({
   // substitui um laser LiteTouch. Sem tipo definido, cai no comportamento de
   // antes (qualquer equipamento disponível), só para não travar cadastro
   // incompleto.
-  const poolEquipamentos = servico.exigeEquipamento
+  // Serviço marcado como ilimitado usa aparelho que a operação tem de sobra
+  // (ou que o profissional leva o próprio): ele continua exigindo equipamento
+  // no relatório, mas não disputa uma unidade do estoque. Sem essa exceção,
+  // um item abundante limita a agenda como se fosse escasso.
+  const contaEstoque = servico.exigeEquipamento && !servico.equipamentoIlimitado;
+
+  const poolEquipamentos = contaEstoque
     ? await prisma.equipamento.findMany({
         where: {
           status: "DISPONIVEL",
@@ -320,7 +326,7 @@ export async function horariosDisponiveis({
     ).length;
     if (naClinica >= clinica.salas) return false;
 
-    if (servico.exigeEquipamento) {
+    if (contaEstoque) {
       if (poolEquipamentos.length === 0) return false;
       const emUso = pedidosDoDia.filter(
         (p) =>

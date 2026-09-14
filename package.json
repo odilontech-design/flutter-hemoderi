@@ -20,7 +20,8 @@
     "fumaca": "node scripts/fumaca.mjs",
     "fumaca:acessos": "node scripts/fumaca-acessos.mjs",
     "fumaca:avaliacao": "node scripts/fumaca-avaliacao.mjs",
-    "fumaca:agenda": "dotenv -e .env -- tsx scripts/fumaca-agenda.ts"
+    "fumaca:agenda": "dotenv -e .env -- tsx scripts/fumaca-agenda.ts",
+    "fumaca:ata": "node scripts/fumaca-ata.mjs"
   },
   "prisma": {
     "seed": "dotenv -e .env -- tsx prisma/seed.ts"

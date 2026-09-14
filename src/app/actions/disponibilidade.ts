@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { exigirProfissional } from "@/lib/sessao";
 import { dataDeISO, paraMinutos } from "@/lib/data";
+import { turnoPorChave } from "@/lib/turnos";
 import type { Resultado } from "./pedidos";
 
 /**
@@ -15,15 +16,26 @@ export async function adicionarDisponibilidade(_anterior: Resultado, dados: Form
   const sessao = await exigirProfissional();
 
   const diaSemana = Number(dados.get("diaSemana"));
-  const horaInicio = String(dados.get("horaInicio") ?? "");
-  const horaFim = String(dados.get("horaFim") ?? "");
+  const turno = turnoPorChave(String(dados.get("turno") ?? ""));
 
   if (!Number.isInteger(diaSemana) || diaSemana < 0 || diaSemana > 6) {
     return { ok: false, erro: "Dia da semana inválido." };
   }
-  if (!horaInicio || !horaFim || paraMinutos(horaFim) <= paraMinutos(horaInicio)) {
+  if (!turno) return { ok: false, erro: "Escolha o turno." };
+
+  const { horaInicio, horaFim } = turno;
+  if (paraMinutos(horaFim) <= paraMinutos(horaInicio)) {
     return { ok: false, erro: "O fim precisa ser depois do início." };
   }
+
+  // Declarar o mesmo turno duas vezes não é erro do usuário — é o clique
+  // repetido de quem não tem certeza se salvou. Guardar duplicado só suja a
+  // lista e não muda a agenda.
+  const jaTem = await prisma.disponibilidade.findFirst({
+    where: { profissionalId: sessao.profissionalId, diaSemana, horaInicio, horaFim },
+    select: { id: true },
+  });
+  if (jaTem) return { ok: true };
 
   await prisma.disponibilidade.create({
     data: { profissionalId: sessao.profissionalId, diaSemana, horaInicio, horaFim },

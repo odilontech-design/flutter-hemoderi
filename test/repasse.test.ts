@@ -65,3 +65,27 @@ test("arredonda meio centavo para cima, sem sobra de ponto flutuante", () => {
 test("a margem é o que sobra do valor da clínica", () => {
   assert.equal(margemCentavos(VALOR, 12_000), 8_000);
 });
+
+test("valor fixo do profissional vence o percentual dele", () => {
+  // Decisão da ata de 14/09: repasse é valor fechado, não fatia do que a
+  // clínica paga. Quando os dois campos existem, o fixo é o acerto atual.
+  const r = calcularRepasse({
+    valorServicoCentavos: VALOR,
+    profissional: { repassePercentPadrao: 70, repasseFixoCentavos: 9_000 },
+    percentPadrao: 60,
+  });
+  assert.equal(r.valorCentavos, 9_000);
+  assert.equal(r.origem, "PROFISSIONAL");
+  assert.equal(r.percent, null, "valor fixo não tem percentual para explicar");
+});
+
+test("a regra do serviço ainda vence o valor fixo do profissional", () => {
+  const r = calcularRepasse({
+    valorServicoCentavos: VALOR,
+    servico: { repassePercent: null, repasseFixoCentavos: 5_000 },
+    profissional: { repassePercentPadrao: null, repasseFixoCentavos: 9_000 },
+    percentPadrao: 60,
+  });
+  assert.equal(r.valorCentavos, 5_000);
+  assert.equal(r.origem, "SERVICO");
+});

@@ -1,13 +1,14 @@
 import { MenuLateral } from "@/components/MenuLateral";
 import { Provedores } from "@/components/Provedores";
 import { exigirInterno } from "@/lib/sessao";
+import { BotaoWhatsapp } from "@/components/BotaoWhatsapp";
 
 // Tudo aqui depende da sessão e do banco: nada pode ser pré-renderizado.
 export const dynamic = "force-dynamic";
 
 const ITENS = [
   { href: "/painel", icone: "◈", rotulo: "Hoje" },
-  { href: "/painel/pedidos", icone: "◉", rotulo: "Esteira" },
+  { href: "/painel/pedidos", icone: "◉", rotulo: "Agendamentos" },
   { href: "/painel/agenda", icone: "📅", rotulo: "Agenda" },
   { href: "/painel/clinicas", icone: "🏥", rotulo: "Clínicas" },
   { href: "/painel/profissionais", icone: "👤", rotulo: "Profissionais" },
@@ -24,6 +25,7 @@ export default async function LayoutPainel({ children }: { children: React.React
       <div className="flex">
         <MenuLateral titulo="Hemoderi" nomeUsuario={sessao.nome} itens={ITENS} />
         <main className="flex-1 min-h-screen overflow-x-hidden p-4 pt-20 md:p-8">{children}</main>
+      <BotaoWhatsapp contexto="painel da equipe" />
       </div>
     </Provedores>
   );

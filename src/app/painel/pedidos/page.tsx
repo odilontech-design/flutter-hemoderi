@@ -3,11 +3,15 @@ import type { StatusPedido } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { exigirInterno } from "@/lib/sessao";
 import { Cartao, SeloStatus, Titulo, Vazio } from "@/components/ui";
+import { codigoDoPedido } from "@/lib/numeracao";
 import { formatarDataCurta } from "@/lib/data";
 import { formatarReais } from "@/lib/dinheiro";
 import { STATUS_PENDENTES } from "@/lib/pedido";
 import { profissionaisIndisponiveis } from "@/lib/alocacao";
 import { AcoesPedido } from "./AcoesPedido";
+import { CondicaoPagamento } from "./CondicaoPagamento";
+import { BotaoAcao } from "@/components/BotaoAcao";
+import { aprovarRelatorio } from "@/app/actions/financeiro";
 
 export const dynamic = "force-dynamic";
 
@@ -38,7 +42,7 @@ export default async function Esteira({ searchParams }: { searchParams: { filtro
         clinica: { select: { nome: true } },
         servico: { select: { nome: true } },
         profissional: { select: { nome: true } },
-        relatorio: { select: { latitude: true, longitude: true } },
+        relatorio: { select: { latitude: true, longitude: true, aprovadoEm: true } },
       },
     }),
     prisma.profissional.findMany({
@@ -71,11 +75,11 @@ export default async function Esteira({ searchParams }: { searchParams: { filtro
             href="/painel/pedidos/novo"
             className="bg-bordo text-white text-xs font-semibold px-3 py-2 min-h-[40px] sm:min-h-0 inline-flex items-center rounded-lg hover:bg-bordoEscuro"
           >
-            + Novo pedido
+            + Novo agendamento
           </Link>
         }
       >
-        Esteira de pedidos
+        Esteira de agendamentos
       </Titulo>
 
       <div className="flex flex-wrap gap-2 mb-4">
@@ -105,7 +109,9 @@ export default async function Esteira({ searchParams }: { searchParams: { filtro
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div className="min-w-0">
                   <div className="flex items-center gap-2 mb-1">
-                    <span className="font-display font-bold text-bordo text-sm">#{pedido.numero}</span>
+                    <span className="font-display font-bold text-bordo text-sm">
+                      {codigoDoPedido(pedido.numero, pedido.clinica.nome, pedido.data)}
+                    </span>
                     <SeloStatus status={pedido.status} />
                     {pedido.origem === "PORTAL_CLINICA" && (
                       <span className="text-[9px] uppercase tracking-wide text-gray-400">portal</span>
@@ -121,9 +127,30 @@ export default async function Esteira({ searchParams }: { searchParams: { filtro
                     ) : (
                       <span className="text-red-600 font-semibold">sem profissional</span>
                     )}
+                    {pedido.doutorNome && <> · Dr(a). {pedido.doutorNome}</>}
+                    {pedido.pacienteNome && <> · paciente {pedido.pacienteNome}</>}
+                  </div>
+                  <div className="mt-1.5">
+                    <CondicaoPagamento pedidoId={pedido.id} atual={pedido.condicaoPagamento} />
                   </div>
                   {pedido.observacoes && (
                     <div className="text-[11px] text-gray-400 mt-1">{pedido.observacoes}</div>
+                  )}
+                  {pedido.relatorio && !pedido.relatorio.aprovadoEm && (
+                    <div className="mt-1.5">
+                      <BotaoAcao
+                        acao={aprovarRelatorio.bind(null, pedido.id)}
+                        variante="primario"
+                        confirmar="Conferiu o relatório? Aprovar libera o repasse deste atendimento para pagamento."
+                      >
+                        Aprovar relatório e liberar repasse
+                      </BotaoAcao>
+                    </div>
+                  )}
+                  {pedido.relatorio?.aprovadoEm && (
+                    <div className="text-[10px] font-semibold text-green-700 mt-1">
+                      relatório conferido · repasse liberado
+                    </div>
                   )}
                   {pedido.relatorio?.latitude != null && pedido.relatorio?.longitude != null && (
                     <a

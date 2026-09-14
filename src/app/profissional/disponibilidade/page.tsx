@@ -11,6 +11,7 @@ import {
   salvarAgendaDoGoogle,
 } from "@/app/actions/disponibilidade";
 import { formatarData } from "@/lib/data";
+import { rotuloDaJanela, TURNOS } from "@/lib/turnos";
 
 export const dynamic = "force-dynamic";
 
@@ -54,8 +55,8 @@ export default async function Disponibilidade() {
               {janelas.map((janela) => (
                 <div key={janela.id} className="flex items-center justify-between gap-2 text-xs border-b border-gray-100 pb-1.5 last:border-0">
                   <span>
-                    <strong className="text-bordo">{DIAS[janela.diaSemana]}</strong> · {janela.horaInicio} às{" "}
-                    {janela.horaFim}
+                    <strong className="text-bordo">{DIAS[janela.diaSemana]}</strong> ·{" "}
+                    {rotuloDaJanela(janela.horaInicio, janela.horaFim)}
                   </span>
                   <BotaoAcao acao={removerDisponibilidade.bind(null, janela.id)} variante="perigo">
                     Remover
@@ -65,8 +66,8 @@ export default async function Disponibilidade() {
             </div>
           )}
 
-          <FormularioAcao acao={adicionarDisponibilidade} botao="Adicionar janela">
-            <div className="grid grid-cols-3 gap-2">
+          <FormularioAcao acao={adicionarDisponibilidade} botao="Adicionar disponibilidade">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
               <div>
                 <Rotulo>Dia</Rotulo>
                 <Selecao name="diaSemana" defaultValue="1">
@@ -78,13 +79,19 @@ export default async function Disponibilidade() {
                 </Selecao>
               </div>
               <div>
-                <Rotulo>Das</Rotulo>
-                <Campo name="horaInicio" type="time" required defaultValue="08:00" />
+                <Rotulo>Turno</Rotulo>
+                <Selecao name="turno" defaultValue="MANHA">
+                  {TURNOS.map((turno) => (
+                    <option key={turno.chave} value={turno.chave}>
+                      {turno.rotulo} ({turno.horaInicio}–{turno.horaFim})
+                    </option>
+                  ))}
+                </Selecao>
               </div>
-              <div>
-                <Rotulo>Às</Rotulo>
-                <Campo name="horaFim" type="time" required defaultValue="12:00" />
-              </div>
+            </div>
+            <div className="text-[10px] text-gray-400">
+              O dia inteiro vale o horário de funcionamento da operação. A manhã é onde a central
+              mais precisa de gente.
             </div>
           </FormularioAcao>
         </Cartao>

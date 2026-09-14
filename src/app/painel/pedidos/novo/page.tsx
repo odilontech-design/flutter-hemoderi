@@ -24,7 +24,7 @@ export default async function NovoPedido() {
 
   return (
     <>
-      <Titulo>Novo pedido</Titulo>
+      <Titulo>Novo agendamento</Titulo>
       <Cartao className="max-w-2xl">
         <FormularioPedido clinicas={clinicas} servicos={servicos} profissionais={profissionais} />
       </Cartao>

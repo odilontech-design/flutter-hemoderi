@@ -1,0 +1,2 @@
+-- AlterEnum
+ALTER TYPE "StatusRepasse" ADD VALUE 'AGUARDANDO_APROVACAO';

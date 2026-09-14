@@ -119,6 +119,16 @@ model Parametros {
   /// Quantas horas antes do atendimento o lembrete é disparado.
   horasLembrete Int @default(24)
 
+  /// Quantas horas antes do atendimento o profissional passa a ver a clínica
+  /// e o doutor.
+  ///
+  /// Antes disso ele vê só data, horário, serviço e quanto recebe. É uma
+  /// decisão de imparcialidade da operação (ata de 14/09): sabendo o endereço
+  /// com antecedência, atendimento longe é recusado e sobra sempre para os
+  /// mesmos. Como ele precisa saber onde ir, a informação não some — ela
+  /// aparece junto com o lembrete, com tempo de se organizar.
+  horasRevelarLocal Int @default(24)
+
   /// Repasse padrão do profissional, em % do valor do serviço. É o piso da
   /// cadeia de regras (ver lib/repasse.ts) — vale quando nem o serviço nem o
   /// profissional definem regra própria.
@@ -152,11 +162,17 @@ model Clinica {
   telefone String?
   email    String?
 
-  endereco String?
-  bairro   String?
-  cidade   String?
-  uf       String?
-  cep      String?
+  /// Logradouro, bairro, cidade e UF vêm da consulta por CEP e não são
+  /// digitados: endereço escrito à mão é o que faz o profissional rodar
+  /// quarteirão atrás de uma clínica cadastrada com o nome da rua errado.
+  /// Número e complemento a consulta não tem como saber — esses ficam livres.
+  endereco    String?
+  numero      String?
+  complemento String?
+  bairro      String?
+  cidade      String?
+  uf          String?
+  cep         String?
 
   /// Quantos atendimentos a clínica comporta ao mesmo tempo. Não é detalhe
   /// de cadastro: é o que permite alocar dois profissionais no mesmo horário
@@ -207,6 +223,12 @@ model Servico {
   /// Serviço que só acontece com equipamento da Hemoderi em campo. Quando
   /// verdadeiro, alocar o pedido exige reservar um equipamento livre.
   exigeEquipamento Boolean @default(false)
+
+  /// Exceção ao de cima: o aparelho existe de sobra (ou é o próprio
+  /// profissional que leva o dele). O serviço continua exigindo equipamento,
+  /// mas NÃO consome uma unidade do estoque ao alocar — sem isso, um item
+  /// abundante limita a agenda como se fosse escasso.
+  equipamentoIlimitado Boolean @default(false)
 
   /// QUAL equipamento o serviço exige, pelo campo Equipamento.tipo — não
   /// basta "algum equipamento livre": um AirFlow não substitui um laser
@@ -325,6 +347,12 @@ model Profissional {
   /// padrão da operação e perde para a regra do serviço e para uma
   /// RegraRepasse específica — a cadeia inteira está em lib/repasse.ts.
   repassePercentPadrao Float?
+
+  /// Valor fixo por atendimento, em centavos. Vence o percentual acima: a
+  /// operação decidiu pagar valor fechado, não fatia do que a clínica paga.
+  /// Fica ao lado do percentual (em vez de substituí-lo) para que um acerto
+  /// antigo continue legível quando alguém for conferir um mês fechado.
+  repasseFixoCentavos Int?
 
   ativo        Boolean   @default(true)
   criadoEm     DateTime  @default(now())
@@ -482,6 +510,16 @@ model Pedido {
   pacienteNome    String?
   pacienteContato String?
 
+  /// Quem pediu o procedimento dentro da clínica. A clínica é a contratante;
+  /// o doutor é a pessoa que responde pelo caso, e é por ele que a equipe
+  /// pergunta ao telefone — "o pedido da doutora Marina", não "o pedido 412".
+  doutorNome String?
+
+  /// Como esta clínica paga ESTE atendimento: antecipado, na hora, faturado.
+  /// Preenchido à mão pela equipe, porque depende do histórico de cada
+  /// clínica e não de uma regra que o sistema consiga inferir.
+  condicaoPagamento String?
+
   observacoes String?
 
   /// Ids do que foi criado fora daqui, guardados para não duplicar em uma
@@ -554,9 +592,23 @@ model RelatorioAtendimento {
   longitude      Float?
   precisaoMetros Float?
 
+  /// A chave PIX que o profissional confirma NO relatório, que pode ser
+  /// diferente da do cadastro (conta nova, chave trocada). É a que vale para
+  /// este repasse: conferir no ato evita o pagamento devolvido três dias
+  /// depois.
+  chavePixConfirmada String?
+
   enviadoEm DateTime @default(now())
 
+  /// O relatório é do profissional, mas o repasse é dinheiro da operação:
+  /// alguém da equipe confere e aprova. Enquanto não houver aprovação, o
+  /// repasse não nasce — é o que impede pagar por um atendimento que a
+  /// clínica ainda vai contestar.
+  aprovadoEm   DateTime?
+  aprovadoPorId String?
+
   @@index([profissionalId])
+  @@index([aprovadoEm])
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -564,6 +616,10 @@ model RelatorioAtendimento {
 // ─────────────────────────────────────────────────────────────────────────────
 
 enum StatusRepasse {
+  /// Atendimento realizado, relatório entregue, mas ainda não conferido pela
+  /// equipe. Não entra no "a pagar" — em campo o procedimento muda, e pagar
+  /// antes de alguém olhar é pagar o que a clínica ainda vai contestar.
+  AGUARDANDO_APROVACAO
   PENDENTE
   PAGO
   CANCELADO

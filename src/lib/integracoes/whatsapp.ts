@@ -12,6 +12,7 @@
 
 import { prisma } from "@/lib/prisma";
 import { formatarData } from "@/lib/data";
+import { codigoDoPedido } from "@/lib/numeracao";
 import { normalizarTelefone } from "@/lib/slug";
 import type { TipoMensagem } from "@prisma/client";
 
@@ -33,16 +34,21 @@ type DadosPedido = {
  */
 function montarTexto(tipo: TipoMensagem, pedido: DadosPedido): string {
   const quando = `${formatarData(pedido.data)} às ${pedido.horaInicio}`;
+  const codigo = codigoDoPedido(pedido.numero, pedido.clinica.nome, pedido.data);
 
   switch (tipo) {
     case "CONFIRMACAO":
-      return `Olá, ${pedido.clinica.nome}! Confirmamos o atendimento de ${pedido.servico.nome} em ${quando}. Pedido ${pedido.numero}.`;
+      return `Olá, ${pedido.clinica.nome}! Confirmamos o atendimento de ${pedido.servico.nome} em ${quando}. Agendamento ${codigo}.`;
     case "ALOCACAO":
-      return `Olá, ${pedido.profissional?.nome ?? ""}! Você foi alocado para ${pedido.servico.nome} na ${pedido.clinica.nome} em ${quando}. Pedido ${pedido.numero}.`;
+      // A notificação de alocação NÃO diz a clínica (ata de 14/09): sabendo o
+      // endereço na hora do convite, atendimento longe é recusado e sobra
+      // sempre para os mesmos. O local vem no lembrete, com tempo de se
+      // organizar.
+      return `Olá, ${pedido.profissional?.nome ?? ""}! Você foi alocado para ${pedido.servico.nome} em ${quando}. A clínica é informada na véspera. Agendamento ${codigo}.`;
     case "LEMBRETE":
-      return `Lembrete: ${pedido.servico.nome} na ${pedido.clinica.nome} amanhã, ${quando}. Pedido ${pedido.numero}.`;
+      return `Lembrete: ${pedido.servico.nome} na ${pedido.clinica.nome} amanhã, ${quando}. Agendamento ${codigo}.`;
     case "RESULTADO":
-      return `Atendimento do pedido ${pedido.numero} (${pedido.servico.nome}, ${quando}) finalizado. Obrigado!`;
+      return `Atendimento ${codigo} (${pedido.servico.nome}, ${quando}) finalizado. Obrigado!`;
   }
 }
 

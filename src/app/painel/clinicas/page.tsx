@@ -5,6 +5,8 @@ import { Campo, Cartao, Rotulo, Tabela, Titulo, Vazio } from "@/components/ui";
 import { FormularioAcao } from "@/components/FormularioAcao";
 import { BotaoAcao } from "@/components/BotaoAcao";
 import { AcoesDeAcesso, SituacaoAcesso } from "@/components/AcessoDoCadastro";
+import { CamposEndereco } from "@/components/CamposEndereco";
+import { CampoDocumento } from "@/components/CampoDocumento";
 import { alternarClinica, salvarClinica } from "@/app/actions/cadastros";
 
 export const dynamic = "force-dynamic";
@@ -49,6 +51,12 @@ export default async function Clinicas() {
                   <td className="py-2 pr-3 text-gray-500">
                     {clinica.cidade ?? "—"}
                     {clinica.uf ? `/${clinica.uf}` : ""}
+                    {clinica.endereco && (
+                      <div className="text-[10px] text-gray-400">
+                        {clinica.endereco}
+                        {clinica.numero ? `, ${clinica.numero}` : ""}
+                      </div>
+                    )}
                   </td>
                   <td className="py-2 pr-3 text-gray-500">
                     {clinica._count.pedidos}
@@ -95,10 +103,7 @@ export default async function Clinicas() {
               <Campo name="nome" required />
             </div>
             <div className="grid grid-cols-2 gap-2">
-              <div>
-                <Rotulo>CNPJ</Rotulo>
-                <Campo name="cnpj" />
-              </div>
+              <CampoDocumento tipo="cnpj" name="cnpj" rotulo="CNPJ" />
               <div>
                 <Rotulo>Telefone</Rotulo>
                 <Campo name="telefone" placeholder="(11) 99999-0000" />
@@ -108,20 +113,8 @@ export default async function Clinicas() {
               <Rotulo>E-mail</Rotulo>
               <Campo name="email" type="email" />
             </div>
-            <div>
-              <Rotulo>Endereço</Rotulo>
-              <Campo name="endereco" />
-            </div>
-            <div className="grid grid-cols-3 gap-2">
-              <div className="col-span-2">
-                <Rotulo>Cidade</Rotulo>
-                <Campo name="cidade" />
-              </div>
-              <div>
-                <Rotulo>UF</Rotulo>
-                <Campo name="uf" maxLength={2} />
-              </div>
-            </div>
+
+            <CamposEndereco />
             <div>
               <Rotulo>Salas de atendimento simultâneo</Rotulo>
               <Campo name="salas" type="number" min={1} defaultValue={1} />

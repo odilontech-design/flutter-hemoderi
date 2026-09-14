@@ -137,3 +137,44 @@ export async function pagarRepasses(profissionalId: string, competencia: string)
   revalidatePath("/profissional/ganhos");
   return { ok: true };
 }
+
+/**
+ * A equipe confere o relatório e libera o repasse.
+ *
+ * É o passo que a ata de 14/09 separou do envio: em campo o procedimento
+ * muda (membrana que virou stickbone, quantidade diferente da combinada), e
+ * quem confere isso é a operação, não quem executou. Antes da aprovação o
+ * valor existe e é visível — só não entra na fila de pagamento.
+ */
+export async function aprovarRelatorio(pedidoId: string): Promise<Resultado> {
+  const sessao = await exigirInterno();
+
+  const relatorio = await prisma.relatorioAtendimento.findUnique({
+    where: { pedidoId },
+    select: { id: true, aprovadoEm: true, compareceu: true },
+  });
+  if (!relatorio) return { ok: false, erro: "Este atendimento ainda não tem relatório." };
+  if (relatorio.aprovadoEm) return { ok: false, erro: "Relatório já aprovado." };
+
+  await prisma.$transaction(async (tx) => {
+    await tx.relatorioAtendimento.update({
+      where: { id: relatorio.id },
+      data: { aprovadoEm: new Date(), aprovadoPorId: sessao.usuarioId },
+    });
+
+    // Falta não gera repasse automático — a aprovação confirma o relatório,
+    // não cria pagamento onde a regra não prevê.
+    if (relatorio.compareceu) {
+      await tx.repasse.updateMany({
+        where: { pedidoId, status: "AGUARDANDO_APROVACAO" },
+        data: { status: "PENDENTE" },
+      });
+    }
+  });
+
+  await registrarAuditoria(sessao.usuarioId, "Pedido", pedidoId, "aprovar-relatorio");
+
+  revalidatePath("/painel/financeiro");
+  revalidatePath("/profissional/ganhos");
+  return { ok: true };
+}

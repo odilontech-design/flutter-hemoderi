@@ -1,6 +1,7 @@
 import { MenuLateral } from "@/components/MenuLateral";
 import { Provedores } from "@/components/Provedores";
 import { exigirClinica } from "@/lib/sessao";
+import { BotaoWhatsapp } from "@/components/BotaoWhatsapp";
 
 export const dynamic = "force-dynamic";
 
@@ -22,6 +23,7 @@ export default async function LayoutPortal({ children }: { children: React.React
           itens={ITENS}
         />
         <main className="flex-1 min-h-screen overflow-x-hidden p-4 pt-20 md:p-8">{children}</main>
+      <BotaoWhatsapp contexto="portal da clínica" />
       </div>
     </Provedores>
   );

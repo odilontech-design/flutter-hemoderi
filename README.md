@@ -53,6 +53,7 @@ em "a pagar" passou por um relatório que alguém assinou.
 | **Automações** | Fila de WhatsApp para confirmação, alocação, lembrete e resultado, com rastro de envio |
 | **Avaliação** | A clínica dá de 1 a 5 estrelas e um comentário depois do atendimento; a equipe vê a média por profissional |
 | **Google Agenda** | Cada atendimento vira evento na agenda do Google do profissional — remarcar atualiza, cancelar apaga, trocar de profissional move |
+| **Importação em lote** | A planilha de profissionais vira cadastro e acesso com senha provisória, colada direto na tela |
 
 ### Os três níveis de acesso
 
@@ -214,6 +215,7 @@ npm run fumaca          # ciclo completo no navegador (precisa da app rodando + 
 npm run fumaca:acessos  # ciclo de uma credencial: criar, trocar, redefinir, suspender
 npm run fumaca:avaliacao # a clínica avalia, corrige, e a equipe enxerga
 npm run fumaca:agenda   # ciclo do evento no Google, com o Google substituído por um duplo
+npm run fumaca:ata      # as decisões da reunião de 14/09, tela por tela
 ```
 
 Os testes unitários cobrem o que é fácil de quebrar sem perceber: sobreposição

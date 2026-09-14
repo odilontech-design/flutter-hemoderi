@@ -328,3 +328,93 @@ export async function trocarSenha(_anterior: Resultado, dados: FormData): Promis
   atualizarTelas();
   return { ok: true };
 }
+
+export type ResultadoImportacao = Resultado & {
+  credenciais?: Credencial[];
+  problemas?: { linha: number; conteudo: string; motivo: string }[];
+  jaExistiam?: string[];
+};
+
+/**
+ * Importa a planilha de profissionais da Hemoderi: cadastro e acesso de uma
+ * vez, com senha provisória.
+ *
+ * Cadastrar sessenta pessoas uma a uma é o que trava a virada para uso real —
+ * e é trabalho que ninguém faz duas vezes, então errar aqui custa caro. Por
+ * isso a importação é conservadora: quem já existe é PULADO, nunca
+ * sobrescrito. Um e-mail repetido pode ser a mesma pessoa reenviada na
+ * planilha, e apagar o acesso de quem já está trabalhando para recriar seria
+ * o pior desfecho possível.
+ */
+export async function importarProfissionais(
+  _anterior: ResultadoImportacao,
+  dados: FormData
+): Promise<ResultadoImportacao> {
+  const sessao = await exigirInterno();
+
+  const { lerPlanilha } = await import("@/lib/importacao");
+  const { validos, problemas } = lerPlanilha(String(dados.get("planilha") ?? ""));
+
+  if (validos.length === 0) {
+    return {
+      ok: false,
+      erro: "Nenhuma linha aproveitável. Cole nome e e-mail, um profissional por linha.",
+      problemas,
+    };
+  }
+
+  const emails = validos.map((v) => v.email);
+  const [usuariosExistentes, profissionaisExistentes] = await Promise.all([
+    prisma.usuario.findMany({ where: { email: { in: emails } }, select: { email: true } }),
+    prisma.profissional.findMany({ where: { email: { in: emails } }, select: { email: true } }),
+  ]);
+  const jaExistem = new Set([
+    ...usuariosExistentes.map((u) => u.email),
+    ...profissionaisExistentes.map((p) => p.email ?? ""),
+  ]);
+
+  const credenciais: Credencial[] = [];
+  const jaExistiam: string[] = [];
+
+  for (const { nome, email } of validos) {
+    if (jaExistem.has(email)) {
+      jaExistiam.push(email);
+      continue;
+    }
+
+    const senha = gerarSenha();
+    // Um por vez, em transação própria: numa importação de sessenta linhas,
+    // uma linha problemática não pode desfazer as cinquenta e nove que deram
+    // certo — quem reprocessa a planilha inteira acaba criando duplicata.
+    try {
+      const profissional = await prisma.profissional.create({ data: { nome, email } });
+      await prisma.usuario.create({
+        data: {
+          nome,
+          email,
+          senhaHash: await bcrypt.hash(senha, 10),
+          papel: "PROFISSIONAL",
+          profissionalId: profissional.id,
+          senhaProvisoria: true,
+        },
+      });
+      await registrarAuditoria(sessao.usuarioId, "Profissional", profissional.id, "IMPORTADO", email);
+      credenciais.push({ nome, email, senha, redefinida: false });
+    } catch (erro) {
+      problemas.push({
+        linha: 0,
+        conteudo: `${nome} · ${email}`,
+        motivo: erro instanceof Error ? erro.message.slice(0, 120) : "falhou ao criar",
+      });
+    }
+  }
+
+  atualizarTelas();
+  return {
+    ok: credenciais.length > 0,
+    erro: credenciais.length === 0 ? "Nenhum profissional novo: todos já estavam cadastrados." : undefined,
+    credenciais,
+    problemas,
+    jaExistiam,
+  };
+}

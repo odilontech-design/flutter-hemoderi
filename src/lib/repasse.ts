@@ -12,8 +12,11 @@
  *   2. Serviço — a exceção existe justamente porque a estrutura de custo
  *      daquele procedimento é diferente; ela vence o percentual genérico do
  *      profissional. Quem precisar furar isso registra a regra do par (1).
- *   3. Percentual padrão do profissional.
- *   4. Percentual padrão da operação (Parametros).
+ *   3. Valor fixo do profissional. A operação decidiu (ata de 14/09) pagar
+ *      valor fechado por atendimento em vez de fatia do que a clínica paga —
+ *      então o fixo vence o percentual do mesmo profissional.
+ *   4. Percentual padrão do profissional.
+ *   5. Percentual padrão da operação (Parametros).
  *
  * A primeira regra que responder decide, e a função devolve QUAL respondeu:
  * quando o profissional questiona o valor, a resposta precisa ser "veio da
@@ -28,7 +31,7 @@ export type EntradaRepasse = {
   valorServicoCentavos: number;
   regra?: { percent: number | null; fixoCentavos: number | null } | null;
   servico?: { repassePercent: number | null; repasseFixoCentavos: number | null } | null;
-  profissional?: { repassePercentPadrao: number | null } | null;
+  profissional?: { repassePercentPadrao: number | null; repasseFixoCentavos?: number | null } | null;
   percentPadrao: number;
 };
 
@@ -66,6 +69,13 @@ export function calcularRepasse(entrada: EntradaRepasse): ResultadoRepasse {
         percent: servico.repassePercent,
       };
     }
+  }
+
+  // O fixo vem antes do percentual do mesmo profissional: quando os dois
+  // existem, o fixo é o acerto atual e o percentual é o histórico de um
+  // combinado anterior, guardado para quem for conferir um mês fechado.
+  if (profissional?.repasseFixoCentavos != null) {
+    return { valorCentavos: profissional.repasseFixoCentavos, origem: "PROFISSIONAL", percent: null };
   }
 
   if (profissional?.repassePercentPadrao != null) {
