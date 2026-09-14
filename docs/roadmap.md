@@ -90,6 +90,9 @@ conferir o resultado em um comando.
 - [ ] Definir o terceiro depositário do escrow trimestral (Cláusula 6.1.1).
 - [ ] Treinamento da equipe interna e material curto para clínicas e
       profissionais.
-- [ ] Definir o domínio final ANTES de imprimir os QR Codes: o link do QR sai
-      de `NEXTAUTH_URL`, e trocar o domínio depois invalida o que já foi
-      distribuído.
+- [ ] Apontar `hemoderi.dilontech.com.br` na Vercel (registro CNAME no DNS de
+      `dilontech.com.br`), ajustar `NEXTAUTH_URL` e fazer o redeploy — domínio
+      final já definido, falta só a configuração (passo a passo em
+      [`deploy.md`](deploy.md#6-domínio)). Só depois disso imprimir os QR
+      Codes: o link sai de `NEXTAUTH_URL`, e trocar o domínio depois invalida
+      o que já foi distribuído.

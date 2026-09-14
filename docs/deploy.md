@@ -28,7 +28,7 @@ trava com timeout — por isso as migrations usam a conexão direta.
 | `DATABASE_URL` | conexão com `-pooler` |
 | `DATABASE_URL_UNPOOLED` | conexão sem `-pooler` |
 | `NEXTAUTH_SECRET` | gere com `openssl rand -base64 32` |
-| `NEXTAUTH_URL` | a URL final, ex. `https://operacoes.hemoderi.com.br` |
+| `NEXTAUTH_URL` | a URL final: `https://hemoderi.dilontech.com.br` |
 | `CRON_SECRET` | gere com `openssl rand -base64 32` |
 | `SETUP_SECRET` | gere com `openssl rand -hex 24` — só para o próximo passo, dá para remover depois |
 
@@ -105,8 +105,33 @@ elas ficam visíveis como pendentes, sem envio.
 
 ## 6. Domínio
 
-Aponte o domínio definitivo na Vercel e ajuste `NEXTAUTH_URL` para ele. Só
-depois disso imprima os QR Codes das clínicas.
+O domínio definitivo é **`hemoderi.dilontech.com.br`** — subdomínio de
+`dilontech.com.br`, então o DNS é configurado no mesmo provedor onde os
+outros produtos da linha já estão, não no lado da Hemoderi.
+
+1. Na Vercel: **Project → Settings → Domains → Add**, digite
+   `hemoderi.dilontech.com.br`.
+2. A Vercel devolve um registro **CNAME** para criar (algo como
+   `hemoderi` → `cname.vercel-dns.com.`). Crie exatamente esse registro no
+   painel de DNS de `dilontech.com.br`.
+3. Espere o painel da Vercel marcar o domínio como **Valid Configuration**
+   (minutos, na maioria dos casos).
+4. Ajuste `NEXTAUTH_URL` para `https://hemoderi.dilontech.com.br` em
+   **Production** — mudar uma env var não reinicia o deploy sozinho, então
+   force um redeploy depois (Deployments → ⋯ → Redeploy no último, sem
+   precisar de commit novo).
+5. Confirme com `curl https://hemoderi.dilontech.com.br/api/saude` e um
+   login de teste.
+
+Como a autenticação é só `CredentialsProvider` (sem OAuth de terceiro), não
+existe nenhum provedor externo com "URL de redirecionamento" para atualizar
+em paralelo — a troca fica inteira dentro da Vercel e do DNS.
+
+Só depois do domínio validado e do redeploy é que os QR Codes das clínicas
+devem ser gerados ou impressos: o link sai de `NEXTAUTH_URL` na hora em que a
+página renderiza, e um QR já impresso com o domínio antigo (`*.vercel.app` ou
+qualquer provisório) para de funcionar assim que a variável muda — reimprimir
+é a única forma de corrigi-lo.
 
 ## Ambiente local
 
