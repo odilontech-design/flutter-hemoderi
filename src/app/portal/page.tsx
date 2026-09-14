@@ -5,7 +5,9 @@ import { Cartao, Kpi, SeloStatus, Tabela, Titulo, Vazio } from "@/components/ui"
 import { formatarDataCurta, hojeUTC } from "@/lib/data";
 import { STATUS_ATIVOS } from "@/lib/pedido";
 import { AcoesClinica } from "./AcoesClinica";
+import { AvaliarAtendimento } from "./AvaliarAtendimento";
 import { CartaoDivulgacao } from "@/components/CartaoDivulgacao";
+import { formatarMedia, mediaDeNotas } from "@/lib/avaliacao";
 
 export const dynamic = "force-dynamic";
 
@@ -18,7 +20,7 @@ export default async function MeusAgendamentos() {
   const sessao = await exigirClinica();
   const hoje = hojeUTC();
 
-  const [proximos, historico, total, clinica] = await Promise.all([
+  const [proximos, historico, total, clinica, aAvaliar, notasDadas] = await Promise.all([
     prisma.pedido.findMany({
       where: { clinicaId: sessao.clinicaId, data: { gte: hoje }, status: { in: STATUS_ATIVOS } },
       orderBy: [{ data: "asc" }, { horaInicio: "asc" }],
@@ -28,11 +30,30 @@ export default async function MeusAgendamentos() {
       where: { clinicaId: sessao.clinicaId, status: { in: ["REALIZADO", "FALTOU", "CANCELADO"] } },
       orderBy: [{ data: "desc" }],
       take: 30,
-      include: { servico: { select: { nome: true } }, profissional: { select: { nome: true } } },
+      include: {
+        servico: { select: { nome: true } },
+        profissional: { select: { nome: true } },
+        avaliacao: { select: { nota: true, comentario: true } },
+      },
     }),
     prisma.pedido.count({ where: { clinicaId: sessao.clinicaId, status: "REALIZADO" } }),
     prisma.clinica.findUnique({ where: { id: sessao.clinicaId }, select: { slug: true, nome: true } }),
+    // A fila de avaliação é o atendimento realizado que ainda não tem nota.
+    // Fica limitada aos cinco mais recentes: a clínica que voltou depois de um
+    // mês não pode ser recebida por trinta formulários abertos.
+    prisma.pedido.findMany({
+      where: { clinicaId: sessao.clinicaId, status: "REALIZADO", avaliacao: { is: null } },
+      orderBy: [{ data: "desc" }, { horaInicio: "desc" }],
+      take: 5,
+      include: { servico: { select: { nome: true } }, profissional: { select: { nome: true } } },
+    }),
+    prisma.avaliacao.findMany({
+      where: { clinicaId: sessao.clinicaId },
+      select: { nota: true },
+    }),
   ]);
+
+  const minhaMedia = mediaDeNotas(notasDadas.map((a) => a.nota));
 
   return (
     <>
@@ -56,6 +77,11 @@ export default async function MeusAgendamentos() {
           rotulo="Aguardando confirmação"
           valor={String(proximos.filter((p) => p.status === "SOLICITADO").length)}
           sub="a central confirma"
+        />
+        <Kpi
+          rotulo="Média que você deu"
+          valor={formatarMedia(minhaMedia)}
+          sub={notasDadas.length ? `${notasDadas.length} avaliação(ões)` : "nenhuma avaliação ainda"}
         />
       </div>
 
@@ -86,19 +112,62 @@ export default async function MeusAgendamentos() {
         )}
       </Cartao>
 
+      {aAvaliar.length > 0 && (
+        <Cartao className="mb-3 border-amber-200 bg-amber-50/40">
+          <div className="font-display font-bold text-bordo text-sm mb-1">
+            Como foi o atendimento?
+          </div>
+          <div className="text-[11px] text-gray-500 mb-4 leading-relaxed">
+            Sua nota é o que nos diz qual profissional mandar de volta para você. Leva dez
+            segundos e só a equipe da Hemoderi lê.
+          </div>
+          <div className="space-y-4">
+            {aAvaliar.map((pedido) => (
+              <div key={pedido.id} className="border-t border-amber-200/70 pt-3 first:border-0 first:pt-0">
+                <div className="text-xs font-semibold text-bordo">
+                  {pedido.servico.nome}
+                  <span className="font-normal text-gray-500">
+                    {" · "}
+                    {formatarDataCurta(pedido.data)}
+                    {pedido.profissional ? ` · ${pedido.profissional.nome}` : ""}
+                  </span>
+                </div>
+                {pedido.pacienteNome && (
+                  <div className="text-[10px] text-gray-400 mb-2">Paciente: {pedido.pacienteNome}</div>
+                )}
+                <AvaliarAtendimento pedidoId={pedido.id} atual={null} />
+              </div>
+            ))}
+          </div>
+        </Cartao>
+      )}
+
       <Cartao className="mb-3">
         <div className="font-display font-bold text-bordo text-sm mb-3">Histórico</div>
         {historico.length === 0 ? (
           <Vazio>Ainda sem histórico.</Vazio>
         ) : (
-          <Tabela cabecalho={["Data", "Serviço", "Profissional", "Status"]}>
+          <Tabela cabecalho={["Data", "Serviço", "Profissional", "Status", "Sua avaliação"]}>
             {historico.map((pedido) => (
-              <tr key={pedido.id} className="border-b border-gray-100 last:border-0">
+              <tr key={pedido.id} className="border-b border-gray-100 last:border-0 align-top">
                 <td className="py-2 pr-3">{formatarDataCurta(pedido.data)}</td>
                 <td className="py-2 pr-3 text-gray-600">{pedido.servico.nome}</td>
                 <td className="py-2 pr-3 text-gray-600">{pedido.profissional?.nome ?? "—"}</td>
                 <td className="py-2 pr-3">
                   <SeloStatus status={pedido.status} />
+                </td>
+                <td className="py-2 min-w-[180px]">
+                  {/* Só atendimento realizado com profissional se avalia:
+                      cancelado e falta não são trabalho de ninguém. */}
+                  {pedido.status === "REALIZADO" && pedido.profissional ? (
+                    <AvaliarAtendimento
+                      pedidoId={pedido.id}
+                      atual={pedido.avaliacao}
+                      compacto
+                    />
+                  ) : (
+                    <span className="text-gray-300">—</span>
+                  )}
                 </td>
               </tr>
             ))}

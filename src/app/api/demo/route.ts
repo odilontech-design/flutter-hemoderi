@@ -71,6 +71,7 @@ function tabelaResumo(resumo: ResumoDemo): string {
     ["Relatórios", resumo.relatorios],
     ["Repasses", resumo.repasses],
     ["Faturas", resumo.faturas],
+    ["Avaliações", resumo.avaliacoes],
     ["Acessos", resumo.acessos],
   ];
   return `<table>${linhas.map(([r, v]) => `<tr><td>${r}</td><td>${v}</td></tr>`).join("")}</table>`;

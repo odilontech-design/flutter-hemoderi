@@ -5,6 +5,8 @@ import { Cartao, Kpi, SeloStatus, Tabela, Titulo, Vazio } from "@/components/ui"
 import { competenciaAtual, formatarData, hojeUTC } from "@/lib/data";
 import { formatarReais, formatarReaisCurto } from "@/lib/dinheiro";
 import { STATUS_PENDENTES } from "@/lib/pedido";
+import { estrelas, formatarMedia, mediaDeNotas } from "@/lib/avaliacao";
+import { MostrarEstrelas } from "@/components/Estrelas";
 
 export const dynamic = "force-dynamic";
 
@@ -60,6 +62,36 @@ export default async function Hoje() {
     where: { id: { in: porProfissional.map((p) => p.profissionalId as string) } },
     select: { id: true, nome: true },
   });
+
+  const [notasPorProfissional, comentariosRecentes, todasAsNotas] = await Promise.all([
+    // Média de TODAS as avaliações do profissional, não só as do mês: a tabela
+    // é do mês, mas a nota serve para decidir a quem mandar a próxima vaga, e
+    // três avaliações de setembro dizem menos que trinta do ano.
+    prisma.avaliacao.groupBy({
+      by: ["profissionalId"],
+      where: { profissionalId: { in: porProfissional.map((p) => p.profissionalId as string) } },
+      _avg: { nota: true },
+      _count: true,
+    }),
+    // Só as que têm comentário: uma lista de cinco estrelas sem texto não é
+    // leitura, é enfeite. O que a equipe age em cima é o que foi escrito.
+    prisma.avaliacao.findMany({
+      where: { comentario: { not: null } },
+      orderBy: { criadaEm: "desc" },
+      take: 5,
+      select: {
+        id: true,
+        nota: true,
+        comentario: true,
+        criadaEm: true,
+        clinica: { select: { nome: true } },
+        profissional: { select: { nome: true } },
+      },
+    }),
+    prisma.avaliacao.findMany({ select: { nota: true } }),
+  ]);
+
+  const mediaGeral = mediaDeNotas(todasAsNotas.map((a) => a.nota));
 
   // Taxa de comparecimento: dos atendimentos que chegaram ao fim no mês,
   // quantos aconteceram. É o número que diz se o problema de capacidade é de
@@ -155,9 +187,11 @@ export default async function Hoje() {
         {porProfissional.length === 0 ? (
           <Vazio>Nenhum atendimento realizado neste mês ainda.</Vazio>
         ) : (
-          <Tabela cabecalho={["Profissional", "Atendimentos", "Serviços gerados", "Participação"]}>
+          <Tabela cabecalho={["Profissional", "Atendimentos", "Serviços gerados", "Avaliação", "Participação"]}>
             {porProfissional.map((linha) => {
               const profissional = profissionais.find((p) => p.id === linha.profissionalId);
+              const nota = notasPorProfissional.find((n) => n.profissionalId === linha.profissionalId);
+              const media = nota?._avg.nota != null ? Math.round(nota._avg.nota * 10) / 10 : null;
               const participacao =
                 realizadosMes._count > 0 ? Math.round((linha._count / realizadosMes._count) * 100) : 0;
               return (
@@ -166,6 +200,18 @@ export default async function Hoje() {
                   <td className="py-2 pr-3">{linha._count}</td>
                   <td className="py-2 pr-3 text-gray-600">
                     {formatarReais(linha._sum.valorServicoCentavos ?? 0)}
+                  </td>
+                  <td className="py-2 pr-3 whitespace-nowrap">
+                    {media === null ? (
+                      <span className="text-gray-300">sem avaliação</span>
+                    ) : (
+                      <>
+                        <span className="text-amber-500">{estrelas(media)}</span>
+                        <span className="text-gray-500 ml-1">
+                          {formatarMedia(media)} ({nota?._count})
+                        </span>
+                      </>
+                    )}
                   </td>
                   <td className="py-2 pr-3">
                     <div className="flex items-center gap-2">
@@ -179,6 +225,37 @@ export default async function Hoje() {
               );
             })}
           </Tabela>
+        )}
+      </Cartao>
+
+      <Cartao className="mt-3">
+        <div className="flex flex-wrap items-baseline justify-between gap-2 mb-3">
+          <div className="font-display font-bold text-bordo text-sm">O que as clínicas disseram</div>
+          {mediaGeral !== null && (
+            <div className="text-[11px] text-gray-500">
+              Média geral: <strong className="text-bordo">{formatarMedia(mediaGeral)}</strong> em{" "}
+              {todasAsNotas.length} avaliação{todasAsNotas.length === 1 ? "" : "ões"}
+            </div>
+          )}
+        </div>
+
+        {comentariosRecentes.length === 0 ? (
+          <Vazio>Nenhum comentário ainda. A clínica avalia pelo portal, depois do atendimento.</Vazio>
+        ) : (
+          <div className="space-y-3">
+            {comentariosRecentes.map((avaliacao) => (
+              <div key={avaliacao.id} className="border-b border-gray-100 last:border-0 pb-3 last:pb-0">
+                <div className="flex flex-wrap items-center gap-x-2 gap-y-1 mb-1">
+                  <MostrarEstrelas nota={avaliacao.nota} />
+                  <span className="text-[11px] font-semibold text-bordo">{avaliacao.clinica.nome}</span>
+                  <span className="text-[10px] text-gray-400">
+                    sobre {avaliacao.profissional.nome} · {formatarData(avaliacao.criadaEm)}
+                  </span>
+                </div>
+                <div className="text-xs text-gray-600 leading-relaxed">{avaliacao.comentario}</div>
+              </div>
+            ))}
+          </div>
         )}
       </Cartao>
     </>

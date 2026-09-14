@@ -6,11 +6,21 @@ import { BotaoAcao } from "@/components/BotaoAcao";
 import { AcoesDeAcesso, SituacaoAcesso } from "@/components/AcessoDoCadastro";
 import { alternarProfissional, salvarProfissional } from "@/app/actions/cadastros";
 import { formatarPercent } from "@/lib/dinheiro";
+import { estrelas, formatarMedia } from "@/lib/avaliacao";
 
 export const dynamic = "force-dynamic";
 
 export default async function Profissionais() {
   await exigirInterno();
+
+  // A nota vem de um groupBy separado, não de um include: trazer todas as
+  // avaliações de cada profissional só para tirar a média carregaria o
+  // histórico inteiro da operação numa tela de lista.
+  const notas = await prisma.avaliacao.groupBy({
+    by: ["profissionalId"],
+    _avg: { nota: true },
+    _count: true,
+  });
 
   const profissionais = await prisma.profissional.findMany({
     orderBy: [{ ativo: "desc" }, { nome: "asc" }],
@@ -36,9 +46,20 @@ export default async function Profissionais() {
             <Vazio>Nenhum profissional cadastrado.</Vazio>
           ) : (
             <Tabela
-              cabecalho={["Profissional", "Conselho", "Repasse", "Disponibilidade", "Acesso ao portal", "Ações"]}
+              cabecalho={[
+                "Profissional",
+                "Conselho",
+                "Repasse",
+                "Avaliação",
+                "Disponibilidade",
+                "Acesso ao portal",
+                "Ações",
+              ]}
             >
-              {profissionais.map((profissional) => (
+              {profissionais.map((profissional) => {
+                const nota = notas.find((n) => n.profissionalId === profissional.id);
+                const media = nota?._avg.nota != null ? Math.round(nota._avg.nota * 10) / 10 : null;
+                return (
                 <tr key={profissional.id} className="border-b border-gray-100 last:border-0 align-top">
                   <td className="py-2 pr-3">
                     <div className="font-semibold text-bordo">{profissional.nome}</div>
@@ -53,6 +74,18 @@ export default async function Profissionais() {
                     {profissional.repassePercentPadrao != null
                       ? formatarPercent(profissional.repassePercentPadrao)
                       : <span className="text-gray-400">padrão</span>}
+                  </td>
+                  <td className="py-2 pr-3 whitespace-nowrap">
+                    {media === null ? (
+                      <span className="text-gray-300">sem avaliação</span>
+                    ) : (
+                      <>
+                        <span className="text-amber-500">{estrelas(media)}</span>
+                        <div className="text-[10px] text-gray-400">
+                          {formatarMedia(media)} em {nota?._count}
+                        </div>
+                      </>
+                    )}
                   </td>
                   <td className="py-2 pr-3">
                     {profissional._count.disponibilidades === 0 ? (
@@ -87,7 +120,8 @@ export default async function Profissionais() {
                     </div>
                   </td>
                 </tr>
-              ))}
+                );
+              })}
             </Tabela>
           )}
         </Cartao>

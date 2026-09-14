@@ -78,6 +78,7 @@ model Usuario {
   senhaTrocadaEm  DateTime?
 
   pedidosCriados     Pedido[]            @relation("PedidoCriadoPor")
+  avaliacoesCriadas  Avaliacao[]         @relation("AvaliacaoCriadaPor")
   registrosAuditoria RegistroAuditoria[]
 
   @@index([papel])
@@ -171,10 +172,11 @@ model Clinica {
   atualizadaEm DateTime  @updatedAt
   desativadaEm DateTime?
 
-  usuarios Usuario[]
-  precos   PrecoClinica[]
-  pedidos  Pedido[]
-  faturas  Fatura[]
+  usuarios   Usuario[]
+  precos     PrecoClinica[]
+  pedidos    Pedido[]
+  faturas    Fatura[]
+  avaliacoes Avaliacao[]
 
   @@index([ativa])
 }
@@ -326,6 +328,7 @@ model Profissional {
   pedidos          Pedido[]
   relatorios       RelatorioAtendimento[]
   repasses         Repasse[]
+  avaliacoes       Avaliacao[]
 
   @@index([ativo])
 }
@@ -490,6 +493,7 @@ model Pedido {
 
   relatorio RelatorioAtendimento?
   repasse   Repasse?
+  avaliacao Avaliacao?
   mensagens MensagemWhatsapp[]
 
   @@index([data, status])
@@ -553,6 +557,54 @@ enum StatusRepasse {
 /// Um repasse por pedido, e não um total por mês, porque a conferência que o
 /// profissional faz é atendimento a atendimento — o total só fecha a
 /// discussão se der para abrir linha a linha.
+/// A nota que a clínica dá ao atendimento depois que ele acontece.
+///
+/// Existe porque com ~60 prestadores a equipe não consegue acompanhar a
+/// qualidade de cada um olhando a esteira: a diferença entre o profissional
+/// que a clínica quer de volta e o que ela evita só aparece quando alguém
+/// pergunta — e pergunta sempre, no mesmo formato.
+///
+/// Quem responde é a clínica contratante, não o paciente. É ela que contrata
+/// a Hemoderi, e é a percepção dela que decide se o contrato continua.
+model Avaliacao {
+  id String @id @default(cuid())
+
+  pedidoId String @unique
+  pedido   Pedido @relation(fields: [pedidoId], references: [id], onDelete: Cascade)
+
+  /// Quem atendeu e quem avaliou ficam gravados aqui, além de estarem no
+  /// pedido: a média por profissional é a consulta que a equipe roda o tempo
+  /// todo, e passar por um join no pedido para cada linha é o que faz a tela
+  /// de 60 prestadores ficar lenta.
+  profissionalId String
+  profissional   Profissional @relation(fields: [profissionalId], references: [id])
+
+  clinicaId String
+  clinica   Clinica @relation(fields: [clinicaId], references: [id])
+
+  /// De 1 a 5. O limite é reforçado na action; aqui fica Int porque nenhum
+  /// banco guarda "estrela" — e uma escala que um dia vire 1-10 não deve
+  /// exigir migração de tipo.
+  nota Int
+
+  /// Opcional de propósito. Exigir texto derruba a taxa de resposta, e uma
+  /// nota sem comentário ainda é informação; um comentário forçado é ruído.
+  comentario String?
+
+  criadoPorId String?
+  criadoPor   Usuario? @relation("AvaliacaoCriadaPor", fields: [criadoPorId], references: [id])
+
+  criadaEm DateTime @default(now())
+  /// A clínica pode corrigir a própria avaliação — errar a estrela no celular
+  /// é comum demais para virar registro permanente. Guardar quando mudou é o
+  /// que mantém a correção honesta em vez de silenciosa.
+  atualizadaEm DateTime @updatedAt
+
+  @@index([profissionalId])
+  @@index([clinicaId, criadaEm])
+  @@index([nota])
+}
+
 model Repasse {
   id String @id @default(cuid())
 

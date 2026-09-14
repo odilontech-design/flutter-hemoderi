@@ -51,6 +51,7 @@ em "a pagar" passou por um relatório que alguém assinou.
 | **Painel do dia** | O que acontece hoje, o que está parado esperando alguém, produtividade por profissional e taxa de comparecimento |
 | **Fechamento** | Fatura por clínica e competência, baixa de repasses em lote e exportação mensal em CSV para a contabilidade |
 | **Automações** | Fila de WhatsApp para confirmação, alocação, lembrete e resultado, com rastro de envio |
+| **Avaliação** | A clínica dá de 1 a 5 estrelas e um comentário depois do atendimento; a equipe vê a média por profissional |
 
 ### Os três níveis de acesso
 
@@ -89,6 +90,25 @@ Não existe autocadastro nem senha escolhida pela equipe. O ciclo é:
 
 Tudo isso vira registro em `RegistroAuditoria`: "quem devolveu o acesso do
 fulano em março" tem resposta.
+
+### A avaliação do atendimento
+
+Quem avalia é a **clínica contratante**, não o paciente: é ela que contrata a
+Hemoderi, e é a percepção dela que decide se o contrato continua. A nota só
+existe depois de `REALIZADO` — nota antes do atendimento é palpite.
+
+No portal da clínica, o atendimento realizado sem nota vira uma fila curta
+("Como foi o atendimento?", os cinco mais recentes) e o histórico guarda o que
+já foi respondido. A clínica pode corrigir a própria nota: errar a estrela no
+celular é comum demais para virar registro permanente, e `atualizadaEm`
+mantém a correção visível em vez de silenciosa.
+
+Do lado da equipe, a nota entra onde a decisão acontece: a média por
+profissional na lista de profissionais e na produtividade do mês — com ~60
+prestadores, é o que separa quem a clínica quer de volta de quem ela evita — e
+os comentários recentes no painel do dia, que é o que a operação lê e age em
+cima. O comentário é opcional de propósito: exigir texto derruba a taxa de
+resposta, e uma nota sem comentário ainda é informação.
 
 ## Decisões que valem explicar
 
@@ -161,6 +181,7 @@ npm run typecheck
 npm run build
 npm run fumaca          # ciclo completo no navegador (precisa da app rodando + seed)
 npm run fumaca:acessos  # ciclo de uma credencial: criar, trocar, redefinir, suspender
+npm run fumaca:avaliacao # a clínica avalia, corrige, e a equipe enxerga
 ```
 
 Os testes unitários cobrem o que é fácil de quebrar sem perceber: sobreposição
@@ -186,6 +207,8 @@ src/lib/senha.ts            sorteio da senha provisória e regras da senha escol
 src/app/actions/acessos.ts  criar, redefinir, suspender e trocar a própria senha
 scripts/fumaca.mjs          teste de fumaça do ciclo completo, no navegador
 scripts/fumaca-acessos.mjs  teste de fumaça da gestão de acesso, no navegador
+scripts/fumaca-avaliacao.mjs teste de fumaça da avaliação pela clínica
+src/lib/avaliacao.ts        escala de 1 a 5, média e formatação
 src/app/painel/             equipe Hemoderi
 src/app/portal/             clínica contratante
 src/app/profissional/       prestador

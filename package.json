@@ -18,7 +18,8 @@
     "db:seed": "dotenv -e .env -- tsx prisma/seed.ts",
     "db:usuario": "dotenv -e .env -- tsx prisma/criar-usuario.ts",
     "fumaca": "node scripts/fumaca.mjs",
-    "fumaca:acessos": "node scripts/fumaca-acessos.mjs"
+    "fumaca:acessos": "node scripts/fumaca-acessos.mjs",
+    "fumaca:avaliacao": "node scripts/fumaca-avaliacao.mjs"
   },
   "prisma": {
     "seed": "dotenv -e .env -- tsx prisma/seed.ts"

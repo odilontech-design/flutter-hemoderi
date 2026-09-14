@@ -92,22 +92,25 @@ export type ResumoDemo = {
   relatorios: number;
   repasses: number;
   faturas: number;
+  avaliacoes: number;
   acessos: number;
 };
 
 /** Quanto de demonstração existe agora no banco. */
 export async function estadoDemo(prisma: PrismaClient): Promise<ResumoDemo> {
   const onde = { id: { startsWith: PREFIXO } };
-  const [clinicas, profissionais, pedidos, relatorios, repasses, faturas, acessos] = await Promise.all([
-    prisma.clinica.count({ where: onde }),
-    prisma.profissional.count({ where: onde }),
-    prisma.pedido.count({ where: onde }),
-    prisma.relatorioAtendimento.count({ where: onde }),
-    prisma.repasse.count({ where: onde }),
-    prisma.fatura.count({ where: onde }),
-    prisma.usuario.count({ where: onde }),
-  ]);
-  return { clinicas, profissionais, pedidos, relatorios, repasses, faturas, acessos };
+  const [clinicas, profissionais, pedidos, relatorios, repasses, faturas, avaliacoes, acessos] =
+    await Promise.all([
+      prisma.clinica.count({ where: onde }),
+      prisma.profissional.count({ where: onde }),
+      prisma.pedido.count({ where: onde }),
+      prisma.relatorioAtendimento.count({ where: onde }),
+      prisma.repasse.count({ where: onde }),
+      prisma.fatura.count({ where: onde }),
+      prisma.avaliacao.count({ where: onde }),
+      prisma.usuario.count({ where: onde }),
+    ]);
+  return { clinicas, profissionais, pedidos, relatorios, repasses, faturas, avaliacoes, acessos };
 }
 
 /**
@@ -124,6 +127,7 @@ export async function limparDemo(prisma: PrismaClient): Promise<ResumoDemo> {
   const onde = { id: { startsWith: PREFIXO } };
 
   await prisma.repasse.deleteMany({ where: onde });
+  await prisma.avaliacao.deleteMany({ where: onde });
   await prisma.relatorioAtendimento.deleteMany({ where: onde });
   await prisma.mensagemWhatsapp.deleteMany({ where: onde });
   await prisma.pedido.deleteMany({ where: onde });
@@ -137,6 +141,31 @@ export async function limparDemo(prisma: PrismaClient): Promise<ResumoDemo> {
   await prisma.clinica.deleteMany({ where: onde });
 
   return antes;
+}
+
+const COMENTARIOS: Record<"bom" | "medio" | "ruim", string[]> = {
+  bom: [
+    "Pontual e muito atenciosa com a paciente. Pode mandar sempre.",
+    "Excelente. A equipe da clínica elogiou o cuidado no preparo da sala.",
+    "Chegou antes do horário e deixou tudo organizado. Sem nenhuma queixa.",
+    "Profissional ótima, paciente pediu para remarcar com a mesma pessoa.",
+  ],
+  medio: [
+    "Atendimento correto, mas atrasou uns 15 minutos e não avisou.",
+    "Tudo certo no procedimento. Faltou passar as orientações por escrito.",
+    "Dentro do esperado. Nada a reclamar, nada que se destacasse.",
+  ],
+  ruim: [
+    "Chegou 40 minutos atrasada e a paciente foi embora antes.",
+    "Precisamos remarcar. Combinar melhor o horário da próxima.",
+  ],
+};
+
+/** Comentário coerente com a nota — elogio sob duas estrelas denuncia a demo. */
+function comentarioPara(nota: number, i: number): string {
+  const faixa = nota >= 4 ? "bom" : nota === 3 ? "medio" : "ruim";
+  const lista = COMENTARIOS[faixa];
+  return lista[i % lista.length];
 }
 
 /**
@@ -379,6 +408,31 @@ export async function montarDemo(prisma: PrismaClient): Promise<ResumoDemo> {
         // a diferença que a tela "a pagar" mostra.
         status: mesPassado ? "PAGO" : "PENDENTE",
         pagoEm: mesPassado ? somarDias(hoje, -5) : null,
+      };
+    }),
+  });
+
+  // ── Avaliações das clínicas ───────────────────────────────────────────────
+  // Nem todo atendimento é avaliado, e é assim mesmo na operação real: uma
+  // demonstração em que 100% tem nota esconde justamente a fila de pendentes
+  // que o portal da clínica mostra. Nota alta na maioria, com algumas médias e
+  // uma ruim — a média que só tem cinco estrelas não informa nada.
+  const avaliaveis = realizados.filter(() => aleatorio() < 0.7);
+  await prisma.avaliacao.createMany({
+    data: avaliaveis.map((p, i) => {
+      const sorte = aleatorio();
+      const nota = sorte < 0.55 ? 5 : sorte < 0.82 ? 4 : sorte < 0.94 ? 3 : sorte < 0.98 ? 2 : 1;
+      return {
+        id: `${PREFIXO}avaliacao-${p.numero}`,
+        pedidoId: p.id,
+        profissionalId: p.profissionalId!,
+        clinicaId: p.clinicaId,
+        nota,
+        // Comentário só em parte delas, e escolhido pela faixa da nota: um
+        // elogio embaixo de duas estrelas é o detalhe que faz a demonstração
+        // parecer inventada.
+        comentario: i % 3 === 0 ? comentarioPara(nota, i) : null,
+        criadaEm: somarDias(p.data, 1),
       };
     }),
   });
