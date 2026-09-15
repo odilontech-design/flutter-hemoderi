@@ -11,6 +11,9 @@ const config: Config = {
         // nele o dia inteiro é a equipe deles, não a nossa.
         bordo: "#9C3A32",
         bordoEscuro: "#6E2620", // hover e profundidade — sidebar, fundo do botão primário no hover
+        // O fundo creme das telas, o mesmo do body em globals.css. Vira token
+        // para a página pública não repetir o hex solto.
+        bege: "#FAF5F2",
       },
       fontFamily: {
         display: ["var(--font-poppins)"],

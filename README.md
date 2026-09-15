@@ -54,6 +54,7 @@ em "a pagar" passou por um relatório que alguém assinou.
 | **Avaliação** | A clínica dá de 1 a 5 estrelas e um comentário depois do atendimento; a equipe vê a média por profissional |
 | **Google Agenda** | Cada atendimento vira evento na agenda do Google do profissional — remarcar atualiza, cancelar apaga, trocar de profissional move |
 | **Importação em lote** | A planilha de profissionais vira cadastro e acesso com senha provisória, colada direto na tela |
+| **Agendamento público** | Quem ainda não é cliente escolhe o procedimento e o dia sem login; o pedido cai numa fila de triagem e vira agendamento em um clique |
 
 ### Os três níveis de acesso
 
@@ -122,6 +123,32 @@ evento é uma projeção dele. Se o Google recusar (causa mais comum: a agenda
 deixou de estar compartilhada), a falha vira registro em `SincronizacaoExterna`
 e o painel do dia avisa — uma integração que falha calada é pior que integração
 nenhuma, porque a equipe continua confiando na agenda do celular.
+
+### O pedido de quem ainda não é cliente
+
+A porta da rua do sistema é `/agendar`, sem login. A ordem é **escolher
+primeiro, identificar depois**: procedimento, dia e horário, e só no terceiro
+passo o telefone. Na ordem inversa a pessoa desiste antes de ver o que existe
+— o esforço já investido nos dois primeiros passos é o que faz valer a pena
+preencher o cadastro.
+
+O catálogo aparece agrupado por **família** (`src/lib/familia.ts`) — "PRF",
+"Piezo", "Laser" —, que é como o comercial fala, e não pela categoria interna.
+A família é campo do serviço; vazia, o sistema deduz do nome, e famílias de um
+item só se juntam em "Outros" para a vitrine não virar uma lista de rótulos
+com um item cada.
+
+O horário escolhido é **preferência, não reserva**, e a tela diz isso com
+todas as letras: sem saber de qual clínica é o pedido, o sistema não tem como
+conferir sala nem equipamento, e prometer horário seria prometer o que a
+operação ainda não sabe se cumpre.
+
+O pedido nasce em `SolicitacaoPublica` e espera em `/painel/solicitacoes`. A
+equipe vincula a uma clínica — existente, sugerida pelo telefone, ou nova — e
+ele vira `Pedido` na esteira normal. Nada entra na agenda sem passar por
+alguém: é o contrário de um formulário público que grava direto no banco de
+produção. Contra enxurrada, o envio é limitado por telefone e no total dentro
+de uma janela de uma hora.
 
 ### A avaliação do atendimento
 
@@ -216,6 +243,7 @@ npm run fumaca:acessos  # ciclo de uma credencial: criar, trocar, redefinir, sus
 npm run fumaca:avaliacao # a clínica avalia, corrige, e a equipe enxerga
 npm run fumaca:agenda   # ciclo do evento no Google, com o Google substituído por um duplo
 npm run fumaca:ata      # as decisões da reunião de 14/09, tela por tela
+npm run fumaca:publico  # a vitrine sem login e a triagem do pedido que chega dela
 ```
 
 Os testes unitários cobrem o que é fácil de quebrar sem perceber: sobreposição
@@ -242,7 +270,12 @@ src/app/actions/acessos.ts  criar, redefinir, suspender e trocar a própria senh
 scripts/fumaca.mjs          teste de fumaça do ciclo completo, no navegador
 scripts/fumaca-acessos.mjs  teste de fumaça da gestão de acesso, no navegador
 scripts/fumaca-avaliacao.mjs teste de fumaça da avaliação pela clínica
+scripts/fumaca-ata.mjs      teste de fumaça das decisões da reunião de 14/09
+scripts/fumaca-publico.mjs  teste de fumaça do agendamento público e da triagem
 src/lib/avaliacao.ts        escala de 1 a 5, média e formatação
+src/lib/familia.ts          agrupamento comercial do catálogo, usado na vitrine
+src/app/actions/publico.ts  o pedido de quem ainda não tem cadastro, e a triagem
+src/app/agendar/            vitrine pública: escolher primeiro, identificar depois
 src/lib/integracoes/google-evento.ts  a decisão da sincronização, sem banco nem rede
 src/lib/integracoes/google-api.ts     o único ponto que fala com o Google
 src/app/painel/             equipe Hemoderi

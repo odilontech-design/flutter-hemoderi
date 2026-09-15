@@ -166,6 +166,9 @@ export async function salvarServico(_anterior: Resultado, dados: FormData): Prom
     repasseFixoCentavos: fixo ? lerCentavos(fixo) : null,
     exigeEquipamento,
     equipamentoIlimitado,
+    // Vazio deixa lib/familia.ts inferir do nome — a vitrine pública não pode
+    // depender de alguém classificar dezoito itens antes de existir.
+    familia: String(dados.get("familia") ?? "").trim() || null,
     // Sem "exige equipamento", tipo não faz sentido — mantém o dado limpo em
     // vez de deixar um tipo órfão de um serviço que não usa mais equipamento.
     tipoEquipamento: exigeEquipamento ? String(dados.get("tipoEquipamento") ?? "").trim() || null : null,

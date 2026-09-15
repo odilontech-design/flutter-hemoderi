@@ -109,7 +109,12 @@ ok("seleção de profissional está oculta", (await p.locator('select[name="prof
 ok("campo do doutor é obrigatório", (await p.locator('input[name="doutorNome"][required]').count()) > 0);
 
 // urgência: data de hoje dispara a saída pelo WhatsApp
-const hoje = new Date().toISOString().slice(0, 10);
+// "Hoje" tem de ser o hoje de São Paulo, não o de UTC. Depois das 21h em BRT
+// o dia UTC já virou, e a tela — que só avisa quando até o ÚLTIMO horário do
+// dia cai dentro da antecedência — corretamente não mostra urgência para o
+// dia seguinte. O teste passaria de manhã e falharia de madrugada, que é a
+// pior espécie de teste instável: o que acusa o app por causa do relógio.
+const hoje = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Sao_Paulo" }).format(new Date());
 await p.fill('input[name="data"]', hoje);
 await p.waitForTimeout(800);
 const comUrgencia = await p.innerText("body");

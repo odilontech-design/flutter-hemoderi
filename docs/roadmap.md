@@ -47,6 +47,12 @@ de acesso reconferem o banco a cada navegação, então uma sessão já aberta �
 cortada no próximo clique, não só no próximo login. Ninguém desativa a
 própria conta.
 
+**Agendamento público.** `/agendar`, sem login, é a porta da rua: procedimento
+agrupado por família comercial, dia e horário de preferência, e a identificação
+só no último passo. O pedido cai em `/painel/solicitacoes` e vira agendamento
+quando a equipe o vincula a uma clínica — nada entra na esteira sem passar por
+alguém.
+
 **Módulo 04 — financeiro e relatórios.** Repasse calculado a partir do
 relatório; a receber e a pagar em visões separadas; painel diário com
 atendimentos, faturamento, margem, produtividade por profissional e taxa de

@@ -188,11 +188,12 @@ model Clinica {
   atualizadaEm DateTime  @updatedAt
   desativadaEm DateTime?
 
-  usuarios   Usuario[]
-  precos     PrecoClinica[]
-  pedidos    Pedido[]
-  faturas    Fatura[]
-  avaliacoes Avaliacao[]
+  usuarios     Usuario[]
+  precos       PrecoClinica[]
+  pedidos      Pedido[]
+  faturas      Fatura[]
+  avaliacoes   Avaliacao[]
+  solicitacoes SolicitacaoPublica[]
 
   @@index([ativa])
 }
@@ -220,6 +221,12 @@ model Servico {
   repassePercent      Float?
   repasseFixoCentavos Int?
 
+  /// Agrupamento comercial — PRF, Piezo, Laser. Ortogonal à categoria: "PRF"
+  /// aparece em odontologia, estética e saúde, e é assim que a operação fala
+  /// dos serviços. Vazio, o sistema infere do nome (lib/familia.ts), para a
+  /// vitrine pública não nascer com dezoito itens soltos.
+  familia String?
+
   /// Serviço que só acontece com equipamento da Hemoderi em campo. Quando
   /// verdadeiro, alocar o pedido exige reservar um equipamento livre.
   exigeEquipamento Boolean @default(false)
@@ -243,6 +250,7 @@ model Servico {
   desativadoEm DateTime?
 
   precos        PrecoClinica[]
+  solicitacoes  SolicitacaoPublica[]
   regrasRepasse RegraRepasse[]
   pedidos       Pedido[]
 
@@ -545,10 +553,11 @@ model Pedido {
   canceladoEm        DateTime?
   motivoCancelamento String?
 
-  relatorio RelatorioAtendimento?
-  repasse   Repasse?
-  avaliacao Avaliacao?
-  mensagens MensagemWhatsapp[]
+  relatorio   RelatorioAtendimento?
+  repasse     Repasse?
+  avaliacao   Avaliacao?
+  solicitacao SolicitacaoPublica?
+  mensagens   MensagemWhatsapp[]
 
   @@index([data, status])
   @@index([clinicaId, data])
@@ -629,6 +638,70 @@ enum StatusRepasse {
 /// Um repasse por pedido, e não um total por mês, porque a conferência que o
 /// profissional faz é atendimento a atendimento — o total só fecha a
 /// discussão se der para abrir linha a linha.
+/// Pedido de agendamento feito por quem ainda NÃO tem cadastro.
+///
+/// Existe separado de Pedido de propósito. A clínica é o escopo inteiro do
+/// sistema — preço, sala, fatura, portal —, e um pedido sem clínica não tem
+/// como ser alocado nem cobrado. Deixar isso entrar direto na esteira
+/// encheria a fila de trabalho de registros que a operação não consegue
+/// executar.
+///
+/// Aqui é uma antessala: a equipe recebe, confere, e vincula ao cadastro
+/// certo (pelo telefone) ou cria a clínica na hora. Só então vira Pedido.
+model SolicitacaoPublica {
+  id String @id @default(cuid())
+
+  /// O telefone é a chave de verdade deste fluxo: é por ele que a equipe
+  /// acha a clínica na base e é o que o WhatsApp usa para conversar.
+  /// Guardado só com dígitos, para casar independente da formatação.
+  telefone     String
+  solicitante  String
+  email        String?
+  /// Como a pessoa chamou a própria clínica. Texto livre porque ela ainda
+  /// não é um cadastro — vira um quando a equipe vincular.
+  clinicaNome  String
+
+  servicoId String
+  servico   Servico @relation(fields: [servicoId], references: [id])
+
+  /// Preferência, não reserva: sem clínica definida não dá para conferir sala
+  /// nem equipamento, então prometer horário aqui seria prometer o que a
+  /// operação ainda não sabe se cumpre.
+  dataDesejada   DateTime
+  horarioDesejado String
+
+  doutorNome    String?
+  pacienteNome  String?
+  observacoes   String?
+
+  status StatusSolicitacao @default(NOVA)
+
+  /// Preenchidos quando a equipe tria: a clínica a que foi vinculada e o
+  /// agendamento que nasceu dela.
+  clinicaId String?
+  clinica   Clinica? @relation(fields: [clinicaId], references: [id])
+  pedidoId  String?  @unique
+  pedido    Pedido?  @relation(fields: [pedidoId], references: [id])
+
+  motivoRecusa String?
+
+  criadaEm    DateTime  @default(now())
+  tratadaEm   DateTime?
+  tratadaPorId String?
+
+  @@index([status, criadaEm])
+  @@index([telefone])
+}
+
+enum StatusSolicitacao {
+  /// Chegou e ninguém olhou ainda — é a fila de trabalho.
+  NOVA
+  /// Virou agendamento de verdade, vinculada a uma clínica.
+  VINCULADA
+  /// Recusada (trote, fora de área, serviço que a operação não faz).
+  RECUSADA
+}
+
 /// A nota que a clínica dá ao atendimento depois que ele acontece.
 ///
 /// Existe porque com ~60 prestadores a equipe não consegue acompanhar a

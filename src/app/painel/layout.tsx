@@ -9,6 +9,7 @@ export const dynamic = "force-dynamic";
 const ITENS = [
   { href: "/painel", icone: "◈", rotulo: "Hoje" },
   { href: "/painel/pedidos", icone: "◉", rotulo: "Agendamentos" },
+  { href: "/painel/solicitacoes", icone: "✉", rotulo: "Pedidos do site" },
   { href: "/painel/agenda", icone: "📅", rotulo: "Agenda" },
   { href: "/painel/clinicas", icone: "🏥", rotulo: "Clínicas" },
   { href: "/painel/profissionais", icone: "👤", rotulo: "Profissionais" },

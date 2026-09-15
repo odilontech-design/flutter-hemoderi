@@ -5,6 +5,7 @@ import { FormularioAcao } from "@/components/FormularioAcao";
 import { BotaoAcao } from "@/components/BotaoAcao";
 import { alternarServico, salvarEquipamento, salvarServico } from "@/app/actions/cadastros";
 import { formatarPercent, formatarReais } from "@/lib/dinheiro";
+import { familiaDoNome } from "@/lib/familia";
 
 export const dynamic = "force-dynamic";
 
@@ -34,6 +35,12 @@ export default async function Catalogo() {
   // Sugestões para o campo de tipo, para reduzir o erro de digitação que
   // quebraria o casamento com Equipamento.tipo na hora de alocar.
   const tiposDeEquipamento = Array.from(new Set(equipamentos.map((e) => e.tipo).filter(Boolean))) as string[];
+
+  // As famílias já usadas viram sugestão, para o cadastro não criar "PRF",
+  // "prf" e "P.R.F." como três grupos na vitrine.
+  const familias = Array.from(
+    new Set(servicos.map((s) => s.familia?.trim()).filter(Boolean).concat(servicos.map((s) => familiaDoNome(s.nome))))
+  ).sort((a, b) => String(a).localeCompare(String(b), "pt-BR")) as string[];
 
   return (
     <>
@@ -146,6 +153,19 @@ export default async function Catalogo() {
                 &ldquo;Sem limite&rdquo; para aparelho que a operação tem de sobra, ou que o
                 profissional leva o próprio: o serviço continua exigindo equipamento, mas não
                 disputa o estoque — senão um item abundante limita a agenda como se fosse escasso.
+              </div>
+            </div>
+            <div>
+              <Rotulo>Família (agrupa na vitrine pública)</Rotulo>
+              <Campo name="familia" list="familias" placeholder="ex.: PRF" />
+              <datalist id="familias">
+                {familias.map((f) => (
+                  <option key={f} value={f} />
+                ))}
+              </datalist>
+              <div className="text-[10px] text-gray-400 mt-1 mb-3">
+                Vazio, o sistema deduz do nome. É o agrupamento comercial — “PRF”, “Piezo” —, que
+                atravessa as categorias.
               </div>
             </div>
             <div>

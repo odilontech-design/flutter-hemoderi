@@ -34,6 +34,11 @@ function proximaSegunda() {
   return d.toISOString().slice(0, 10);
 }
 const DATA_ALVO = process.env.DATA_ALVO ?? proximaSegunda();
+// O paciente leva carimbo de tempo porque é por ele que o teste encontra a
+// PRÓPRIA linha na tabela do portal. Sem isso o "Reagendar" cai na primeira
+// linha da tela — que, numa base que já rodou o teste antes, é o pedido de
+// outra rodada, e o script passa a medir um atendimento que não é o dele.
+const PACIENTE = `Paciente Teste ${Date.now().toString().slice(-6)}`;
 const passos = [];
 function ok(msg) { passos.push(`  ok  ${msg}`); }
 function falha(msg) { passos.push(`FALHA ${msg}`); }
@@ -61,14 +66,16 @@ try {
 
   await page.goto(`${BASE}/portal/agendar`);
   await page.selectOption('select[name="servicoId"]', { index: 1 });
-  await page.selectOption('select[name="profissionalId"]', { index: 1 });
+  // A clínica não escolhe mais o profissional (decisão da reunião de 14/09):
+  // quem atende é definido na alocação, pela equipe.
   await page.fill('input[name="data"]', DATA_ALVO);
   await page.waitForSelector('input[name="horaInicio"]', { timeout: 15000 });
   const qtd = await page.locator('input[name="horaInicio"]').count();
   qtd > 0 ? ok(`portal ofereceu ${qtd} horários livres para ${DATA_ALVO}`) : falha("portal não ofereceu horário");
 
   await page.locator('label:has(input[name="horaInicio"])').first().click();
-  await page.fill('input[name="pacienteNome"]', "Paciente Teste");
+  await page.fill('input[name="doutorNome"]', "Dr. Teste");
+  await page.fill('input[name="pacienteNome"]', PACIENTE);
   await page.click('button[type="submit"]');
   await page.waitForURL(`${BASE}/portal`, { timeout: 15000 });
   const temSolicitado = await page.locator("text=Solicitado").count();
@@ -78,8 +85,9 @@ try {
   temQr > 0 ? ok("QR Code de divulgação renderizou no portal") : falha("QR Code não renderizou");
 
   // ── 1b. Clínica remarca o próprio pedido ─────────────────────────────────
-  const horaOriginal = (await page.locator("tbody tr").first().textContent()) ?? "";
-  await page.click("text=Reagendar");
+  const linhaDoPedido = page.locator("tbody tr", { hasText: PACIENTE }).first();
+  const horaOriginal = (await linhaDoPedido.textContent()) ?? "";
+  await linhaDoPedido.locator("text=Reagendar").click();
   await page.waitForURL(/\/portal\/reagendar\//, { timeout: 15000 });
   await page.fill('input[name="data"]', DATA_ALVO);
   await page.waitForSelector('label:has(input[name="horaInicio"])', { timeout: 15000 });
@@ -87,7 +95,7 @@ try {
   await page.locator('label:has(input[name="horaInicio"])').last().click();
   await page.click('button:has-text("Confirmar novo horário")');
   await page.waitForURL(`${BASE}/portal`, { timeout: 15000 });
-  const horaNova = (await page.locator("tbody tr").first().textContent()) ?? "";
+  const horaNova = (await page.locator("tbody tr", { hasText: PACIENTE }).first().textContent()) ?? "";
   horaNova !== horaOriginal
     ? ok("clínica remarcou o próprio atendimento pelo portal")
     : falha("reagendamento não mudou o horário");
