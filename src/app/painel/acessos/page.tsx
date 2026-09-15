@@ -1,12 +1,13 @@
 import { prisma } from "@/lib/prisma";
-import { exigirInterno } from "@/lib/sessao";
+import { exigirResponsavel } from "@/lib/sessao";
 import { Cartao, Kpi, Tabela, Titulo, Vazio } from "@/components/ui";
 import { BotaoAcao } from "@/components/BotaoAcao";
 import { BotaoCredencial } from "@/components/BotaoCredencial";
 import { alternarAcesso, redefinirSenha } from "@/app/actions/acessos";
-import { ROTULO_PAPEL } from "@/lib/papeis";
+import { ROTULO_PAPEL, perfilEfetivo } from "@/lib/papeis";
 import { formatarData } from "@/lib/data";
 import { NovoAcesso, type Vinculo } from "./NovoAcesso";
+import { SeletorPerfil } from "./SeletorPerfil";
 
 export const dynamic = "force-dynamic";
 
@@ -20,7 +21,7 @@ export const dynamic = "force-dynamic";
  * dele.
  */
 export default async function Acessos() {
-  const sessao = await exigirInterno();
+  const sessao = await exigirResponsavel();
 
   const [usuarios, clinicas, profissionais] = await Promise.all([
     prisma.usuario.findMany({
@@ -81,7 +82,7 @@ export default async function Acessos() {
           {usuarios.length === 0 ? (
             <Vazio>Nenhum acesso criado.</Vazio>
           ) : (
-            <Tabela cabecalho={["Pessoa", "Nível", "Vínculo", "Situação", "Senha", "Ações"]}>
+            <Tabela cabecalho={["Pessoa", "Nível", "Perfil", "Vínculo", "Situação", "Senha", "Ações"]}>
               {usuarios.map((usuario) => {
                 const ativo = !usuario.desativadoEm;
                 const souEu = usuario.id === sessao.usuarioId;
@@ -102,6 +103,17 @@ export default async function Acessos() {
                       <div className="text-[10px] text-gray-400 break-all">{usuario.email}</div>
                     </td>
                     <td className="py-2 pr-3 whitespace-nowrap">{ROTULO_PAPEL[usuario.papel]}</td>
+                    <td className="py-2 pr-3 whitespace-nowrap">
+                      {usuario.papel !== "INTERNO" ? (
+                        "—"
+                      ) : (
+                        <SeletorPerfil
+                          usuarioId={usuario.id}
+                          perfilAtual={perfilEfetivo(usuario.perfilInterno)}
+                          desabilitado={!ativo}
+                        />
+                      )}
+                    </td>
                     <td className="py-2 pr-3 text-gray-500">
                       {usuario.clinica?.nome ?? usuario.profissional?.nome ?? "—"}
                       {vinculoInativo && (

@@ -192,6 +192,39 @@ const larguraCorpo = await pm.evaluate(() => document.documentElement.scrollWidt
 ok("painel de acessos não estoura a largura no celular", larguraCorpo <= 390, `scrollWidth=${larguraCorpo}`);
 await mobile.close();
 
+// ── Perfil interno: Atendente vê menos que Responsável ──────────────────────
+// Decisão da reunião de 14/09: "as meninas" operam a esteira, mas repasse e
+// gestão de acesso são coisa de quem responde pela operação. O seed já traz
+// um Atendente pronto (fixture, não criado por este teste) — assim a conta
+// existe mesmo que a criação de acesso interno pela tela venha a falhar.
+await sair(contexto);
+url = await entrar(pagina, "atendente@hemoderi.com.br", "hemoderi123");
+ok("atendente entra e cai no painel", url.includes("/painel"), url);
+
+const menuAtendente = await pagina.innerText("body");
+ok("menu do atendente não mostra Financeiro", !menuAtendente.includes("Financeiro"));
+ok("menu do atendente não mostra Acessos", !/\bAcessos\b/.test(menuAtendente));
+
+await pagina.goto(`${BASE}/painel/financeiro`);
+await pagina.waitForTimeout(1200);
+ok("atendente é barrado de /painel/financeiro", pagina.url().endsWith("/painel"), pagina.url());
+
+await pagina.goto(`${BASE}/painel/acessos`);
+await pagina.waitForTimeout(1200);
+ok("atendente é barrado de /painel/acessos", pagina.url().endsWith("/painel"), pagina.url());
+
+// O responsável continua vendo as duas telas e pode alternar o perfil de
+// quem é atendente — a mudança que a ata pediu ser possível a qualquer hora,
+// não só na criação do acesso.
+await sair(contexto);
+await entrar(pagina, EQUIPE.email, EQUIPE.senha);
+await pagina.goto(`${BASE}/painel/acessos`);
+const menuResponsavel = await pagina.innerText("body");
+ok("menu do responsável mostra Financeiro e Acessos", menuResponsavel.includes("Financeiro") && /\bAcessos\b/.test(menuResponsavel));
+
+const linhaAtendente = pagina.locator("tr", { hasText: "atendente@hemoderi.com.br" }).first();
+ok("linha do atendente mostra o seletor de perfil", (await linhaAtendente.locator('select[aria-label="Perfil do acesso interno"]').count()) > 0);
+
 console.log(`\n${passos - falhas}/${passos} OK`);
 await navegador.close();
 process.exit(falhas ? 1 : 0);

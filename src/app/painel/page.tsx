@@ -19,7 +19,7 @@ export const dynamic = "force-dynamic";
  * a operação escalar de 400 para 1.500 atendimentos sem contratar mais gente.
  */
 export default async function Hoje() {
-  await exigirInterno();
+  const sessao = await exigirInterno();
 
   const hoje = hojeUTC();
   const competencia = competenciaAtual();
@@ -220,12 +220,14 @@ export default async function Hoje() {
           >
             Trabalhar a esteira →
           </Link>
-          <Link
-            href="/painel/financeiro"
-            className="block bg-white border border-gray-200 rounded-2xl p-5 text-center text-xs font-semibold text-bordo hover:bg-gray-50"
-          >
-            Financeiro e repasses →
-          </Link>
+          {sessao.perfil === "RESPONSAVEL" && (
+            <Link
+              href="/painel/financeiro"
+              className="block bg-white border border-gray-200 rounded-2xl p-5 text-center text-xs font-semibold text-bordo hover:bg-gray-50"
+            >
+              Financeiro e repasses →
+            </Link>
+          )}
         </div>
       </div>
 

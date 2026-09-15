@@ -53,7 +53,16 @@ export function NovoAcesso({ clinicas, profissionais }: { clinicas: Vinculo[]; p
       </div>
 
       {papel === "INTERNO" ? (
-        <input type="hidden" name="vinculoId" value="" />
+        <>
+          <input type="hidden" name="vinculoId" value="" />
+          <div>
+            <Rotulo>Perfil</Rotulo>
+            <Selecao name="perfilInterno" defaultValue="ATENDENTE">
+              <option value="ATENDENTE">Atendente — esteira e cadastros, sem financeiro nem acessos</option>
+              <option value="RESPONSAVEL">Responsável — também vê o repasse e gerencia acessos</option>
+            </Selecao>
+          </div>
+        </>
       ) : (
         <div>
           <Rotulo>{papel === "CLINICA" ? "Clínica" : "Profissional"}</Rotulo>

@@ -93,15 +93,23 @@ O teste percorre o caminho que o dinheiro faz: a clínica agenda pelo portal,
 remarca, a equipe confirma e aloca, o atendimento é fechado e o repasse
 aparece no financeiro.
 
-## 5. Rotina de lembretes
+## 5. Rotina de lembretes (e de NPS)
 
-O `vercel.json` já registra o cron de hora em hora em
-`/api/rotinas/mensagens`. A Vercel envia o `CRON_SECRET` no cabeçalho
-`Authorization`; sem a variável configurada, a rota fica aberta — configure-a.
+O `vercel.json` já registra o cron diário em `/api/rotinas/mensagens` — uma
+vez por dia, não de hora em hora, porque é o que o plano Hobby da Vercel
+permite (um schedule mais frequente faz o deploy inteiro ser recusado). A
+Vercel envia o `CRON_SECRET` no cabeçalho `Authorization`; sem a variável
+configurada, a rota fica aberta — configure-a.
 
 A rotina é idempotente: rodar duas vezes não manda o lembrete duas vezes.
 Enquanto o WhatsApp não estiver ligado (Fase 4), ela enfileira as mensagens e
 elas ficam visíveis como pendentes, sem envio.
+
+A mesma chamada dispara também a geração da pesquisa de NPS de 60 em 60 dias
+(`src/lib/rotinas/nps.ts`) — encaixada aqui pelo mesmo motivo: é o único cron
+diário que o plano atual permite. Ao migrar para o plano Pro, `vercel.json`
+pode voltar para `"0 * * * *"` e, se fizer sentido separar as rotinas,
+`/api/rotinas/nps` já existe como rota própria.
 
 ## 6. Domínio
 
@@ -143,5 +151,6 @@ npm run db:seed
 npm run dev              # http://localhost:3003
 ```
 
-Acessos do seed (senha `hemoderi123`): `equipe@hemoderi.com.br`,
-`clinica-santa-rita@exemplo.com.br`, `ana@exemplo.com.br`.
+Acessos do seed (senha `hemoderi123`): `equipe@hemoderi.com.br` (Responsável),
+`atendente@hemoderi.com.br` (Atendente), `clinica-santa-rita@exemplo.com.br`,
+`ana@exemplo.com.br`.

@@ -3,10 +3,10 @@
 import { revalidatePath } from "next/cache";
 import { getServerSession } from "next-auth";
 import bcrypt from "bcryptjs";
-import { Prisma, type PapelUsuario } from "@prisma/client";
+import { Prisma, type PapelUsuario, type PerfilInterno } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { authOptions } from "@/lib/auth";
-import { exigirInterno, registrarAuditoria } from "@/lib/sessao";
+import { exigirResponsavel, registrarAuditoria } from "@/lib/sessao";
 import { conferirSenhaNova, gerarSenha } from "@/lib/senha";
 import type { Resultado } from "./pedidos";
 
@@ -63,6 +63,7 @@ async function criarUsuarioComSenha(dados: {
   papel: PapelUsuario;
   clinicaId: string | null;
   profissionalId: string | null;
+  perfilInterno?: PerfilInterno | null;
   autorId: string;
 }): Promise<ResultadoAcesso> {
   const senha = gerarSenha();
@@ -76,6 +77,7 @@ async function criarUsuarioComSenha(dados: {
         papel: dados.papel,
         clinicaId: dados.clinicaId,
         profissionalId: dados.profissionalId,
+        perfilInterno: dados.papel === "INTERNO" ? (dados.perfilInterno ?? "ATENDENTE") : null,
         senhaProvisoria: true,
       },
       select: { id: true },
@@ -86,7 +88,9 @@ async function criarUsuarioComSenha(dados: {
       "Usuario",
       usuario.id,
       "ACESSO_CRIADO",
-      `${dados.email} · ${dados.papel}`
+      dados.papel === "INTERNO"
+        ? `${dados.email} · ${dados.papel} · ${dados.perfilInterno ?? "ATENDENTE"}`
+        : `${dados.email} · ${dados.papel}`
     );
   } catch (erro) {
     if (erro instanceof Prisma.PrismaClientKnownRequestError && erro.code === "P2002") {
@@ -110,12 +114,13 @@ async function criarUsuarioComSenha(dados: {
  * problema nenhum.
  */
 export async function criarAcesso(_anterior: ResultadoAcesso, dados: FormData): Promise<ResultadoAcesso> {
-  const sessao = await exigirInterno();
+  const sessao = await exigirResponsavel();
 
   const nome = String(dados.get("nome") ?? "").trim();
   const email = normalizarEmail(dados.get("email"));
   const papel = String(dados.get("papel") ?? "");
   const vinculoId = String(dados.get("vinculoId") ?? "");
+  const perfilInterno = String(dados.get("perfilInterno") ?? "ATENDENTE");
 
   if (!nome || !email) return { ok: false, erro: "Informe o nome e o e-mail." };
   if (!["INTERNO", "CLINICA", "PROFISSIONAL"].includes(papel)) {
@@ -123,6 +128,9 @@ export async function criarAcesso(_anterior: ResultadoAcesso, dados: FormData): 
   }
   if (papel !== "INTERNO" && !vinculoId) {
     return { ok: false, erro: "Selecione a clínica ou o profissional deste acesso." };
+  }
+  if (papel === "INTERNO" && !["ATENDENTE", "RESPONSAVEL"].includes(perfilInterno)) {
+    return { ok: false, erro: "Selecione o perfil do acesso interno." };
   }
 
   // O vínculo é o escopo inteiro da conta — apontar para uma clínica
@@ -152,6 +160,7 @@ export async function criarAcesso(_anterior: ResultadoAcesso, dados: FormData): 
     papel: papel as PapelUsuario,
     clinicaId: papel === "CLINICA" ? vinculoId : null,
     profissionalId: papel === "PROFISSIONAL" ? vinculoId : null,
+    perfilInterno: papel === "INTERNO" ? (perfilInterno as PerfilInterno) : null,
     autorId: sessao.usuarioId,
   });
 }
@@ -167,7 +176,7 @@ export async function gerarAcessoDoCadastro(
   tipo: "clinica" | "profissional",
   id: string
 ): Promise<ResultadoAcesso> {
-  const sessao = await exigirInterno();
+  const sessao = await exigirResponsavel();
 
   const cadastro =
     tipo === "clinica"
@@ -211,7 +220,7 @@ export async function gerarAcessoDoCadastro(
  * definitiva de ninguém.
  */
 export async function redefinirSenha(usuarioId: string): Promise<ResultadoAcesso> {
-  const sessao = await exigirInterno();
+  const sessao = await exigirResponsavel();
 
   const usuario = await prisma.usuario.findUnique({
     where: { id: usuarioId },
@@ -249,7 +258,7 @@ export async function redefinirSenha(usuarioId: string): Promise<ResultadoAcesso
  * aberta neste segundo.
  */
 export async function alternarAcesso(id: string, ativo: boolean): Promise<Resultado> {
-  const sessao = await exigirInterno();
+  const sessao = await exigirResponsavel();
 
   // Ninguém se tranca pra fora sozinho — se a conta precisa sair, é outra
   // pessoa da equipe que suspende.
@@ -261,9 +270,9 @@ export async function alternarAcesso(id: string, ativo: boolean): Promise<Result
   if (!usuario) return { ok: false, erro: "Acesso não encontrado." };
 
   // Não existe verificação de "último acesso da equipe" aqui de propósito:
-  // quem chega neste ponto passou por exigirInterno, então já é um acesso
-  // interno ativo, e a linha acima impede que seja o próprio. Sempre sobra
-  // pelo menos um — o de quem está suspendendo.
+  // quem chega neste ponto passou por exigirResponsavel, então já é um
+  // acesso interno ativo (e RESPONSAVEL), e a linha acima impede que seja o
+  // próprio. Sempre sobra pelo menos um — o de quem está suspendendo.
 
   await prisma.usuario.update({
     where: { id },
@@ -277,6 +286,52 @@ export async function alternarAcesso(id: string, ativo: boolean): Promise<Result
     ativo ? "ACESSO_REATIVADO" : "ACESSO_SUSPENSO",
     usuario.email
   );
+
+  atualizarTelas();
+  return { ok: true };
+}
+
+/**
+ * Promove ou rebaixa um acesso interno entre Atendente e Responsável.
+ *
+ * Duas travas evitam a operação inteira ficar sem quem gerencia acesso e
+ * financeiro: ninguém rebaixa a si mesmo (o mesmo princípio de
+ * `alternarAcesso` — sair de RESPONSAVEL é sempre coisa de outra pessoa), e
+ * o último RESPONSAVEL ativo não pode virar ATENDENTE, ponto. Sem a segunda
+ * trava, dois responsáveis rebaixando um ao outro por engano — ou de
+ * propósito, achando que "algum outro fica" — deixariam a equipe inteira
+ * sem ninguém que possa desfazer o próprio erro.
+ */
+export async function alterarPerfilInterno(usuarioId: string, perfil: PerfilInterno): Promise<Resultado> {
+  const sessao = await exigirResponsavel();
+
+  if (usuarioId === sessao.usuarioId && perfil !== "RESPONSAVEL") {
+    return { ok: false, erro: "Você não pode rebaixar o seu próprio perfil." };
+  }
+
+  const usuario = await prisma.usuario.findUnique({
+    where: { id: usuarioId },
+    select: { email: true, papel: true, desativadoEm: true, perfilInterno: true },
+  });
+  if (!usuario || usuario.papel !== "INTERNO") return { ok: false, erro: "Acesso não encontrado." };
+
+  if (perfil !== "RESPONSAVEL") {
+    const outrosResponsaveis = await prisma.usuario.count({
+      where: {
+        papel: "INTERNO",
+        desativadoEm: null,
+        id: { not: usuarioId },
+        OR: [{ perfilInterno: "RESPONSAVEL" }, { perfilInterno: null }],
+      },
+    });
+    if (outrosResponsaveis === 0) {
+      return { ok: false, erro: "Precisa sobrar pelo menos um Responsável ativo na equipe." };
+    }
+  }
+
+  await prisma.usuario.update({ where: { id: usuarioId }, data: { perfilInterno: perfil } });
+
+  await registrarAuditoria(sessao.usuarioId, "Usuario", usuarioId, "PERFIL_ALTERADO", `${usuario.email} · ${perfil}`);
 
   atualizarTelas();
   return { ok: true };
@@ -350,7 +405,7 @@ export async function importarProfissionais(
   _anterior: ResultadoImportacao,
   dados: FormData
 ): Promise<ResultadoImportacao> {
-  const sessao = await exigirInterno();
+  const sessao = await exigirResponsavel();
 
   const { lerPlanilha } = await import("@/lib/importacao");
   const { validos, problemas } = lerPlanilha(String(dados.get("planilha") ?? ""));

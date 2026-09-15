@@ -63,6 +63,7 @@ export function AcoesPedido({
       {status === "CONFIRMADO" && (
         <>
           <Selecao
+            aria-label="Profissional para alocar"
             value={profissionalId}
             onChange={(e) => setProfissionalId(e.target.value)}
             className="!w-auto !py-1.5 !min-h-[40px] sm:!min-h-0 text-xs"

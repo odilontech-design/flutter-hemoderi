@@ -81,6 +81,17 @@ export function somarDias(data: Date, dias: number): Date {
   return d;
 }
 
+/**
+ * Meia-noite UTC do dia calendário de `data` — usado para ancorar contagens
+ * de dias a partir de um timestamp qualquer (`criadaEm`, por exemplo), que ao
+ * contrário de `Pedido.data` não nasce já truncado. A imprecisão de algumas
+ * horas ao redor da meia-noite não importa aqui: é usado para janelas de 60
+ * dias, não para casar com um horário de atendimento.
+ */
+export function inicioDoDiaUTC(data: Date): Date {
+  return new Date(Date.UTC(data.getUTCFullYear(), data.getUTCMonth(), data.getUTCDate()));
+}
+
 export function inicioDoMesUTC(data: Date = hojeUTC()): Date {
   return new Date(Date.UTC(data.getUTCFullYear(), data.getUTCMonth(), 1));
 }

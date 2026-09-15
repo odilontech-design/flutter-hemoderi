@@ -2,9 +2,10 @@ import { getServerSession } from "next-auth";
 import { redirect } from "next/navigation";
 import { authOptions } from "./auth";
 import { prisma } from "./prisma";
-import { inicioDe } from "./papeis";
+import type { PerfilInterno } from "@prisma/client";
+import { inicioDe, perfilEfetivo } from "./papeis";
 
-export type SessaoInterno = { usuarioId: string; nome: string };
+export type SessaoInterno = { usuarioId: string; nome: string; perfil: PerfilInterno };
 export type SessaoClinica = { usuarioId: string; nome: string; clinicaId: string; clinicaNome: string };
 export type SessaoProfissional = {
   usuarioId: string;
@@ -45,12 +46,25 @@ export async function exigirInterno(): Promise<SessaoInterno> {
 
   const usuario = await prisma.usuario.findUnique({
     where: { id: u.id },
-    select: { desativadoEm: true, senhaProvisoria: true },
+    select: { desativadoEm: true, senhaProvisoria: true, perfilInterno: true },
   });
   if (!usuario || usuario.desativadoEm) redirect("/login");
   if (usuario.senhaProvisoria) redirect(ROTA_TROCAR_SENHA);
 
-  return { usuarioId: u.id, nome: u.name ?? "" };
+  return { usuarioId: u.id, nome: u.name ?? "", perfil: perfilEfetivo(usuario.perfilInterno) };
+}
+
+/**
+ * A metade sensível do painel: repasse aos profissionais e gestão de
+ * acesso. Quem não é RESPONSAVEL cai em `/painel` em vez de ver um erro —
+ * o item já está fora do menu para esse perfil, chegar aqui só acontece
+ * por link direto ou aba antiga, e devolver para a tela de sempre é menos
+ * confuso que uma página de "acesso negado" para quem nem escolheu a URL.
+ */
+export async function exigirResponsavel(): Promise<SessaoInterno> {
+  const sessao = await exigirInterno();
+  if (sessao.perfil !== "RESPONSAVEL") redirect("/painel");
+  return sessao;
 }
 
 export async function exigirClinica(): Promise<SessaoClinica> {

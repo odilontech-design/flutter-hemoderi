@@ -2,6 +2,7 @@ import { getServerSession } from "next-auth";
 import { prisma } from "@/lib/prisma";
 import { authOptions } from "@/lib/auth";
 import { competenciaAtual, formatarData } from "@/lib/data";
+import { perfilEfetivo } from "@/lib/papeis";
 
 // Rota de dados vivos: nunca pré-renderizada no build.
 export const dynamic = "force-dynamic";
@@ -19,6 +20,17 @@ export const dynamic = "force-dynamic";
 export async function GET(requisicao: Request) {
   const sessao = await getServerSession(authOptions);
   if (sessao?.user?.papel !== "INTERNO") {
+    return new Response("Não autorizado", { status: 401 });
+  }
+
+  // A planilha leva CPF e repasse por profissional linha a linha — a mesma
+  // informação que o menu já esconde do perfil Atendente. Sem esta conferência
+  // aqui, bastaria montar a URL de cor para contornar o que a tela nega.
+  const usuario = await prisma.usuario.findUnique({
+    where: { id: sessao.user.id },
+    select: { perfilInterno: true },
+  });
+  if (!usuario || perfilEfetivo(usuario.perfilInterno) !== "RESPONSAVEL") {
     return new Response("Não autorizado", { status: 401 });
   }
 

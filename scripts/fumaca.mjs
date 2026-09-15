@@ -110,7 +110,10 @@ try {
   await page.waitForSelector("select", { state: "visible", timeout: 15000 });
   ok("pedido confirmado pela equipe");
 
-  await page.selectOption("select", { index: 1 });
+  // Por rótulo, não por "primeiro select da página": a linha também tem o
+  // select de Condição de pagamento, e pegar o errado deixa "Alocar"
+  // desabilitado sem erro nenhum na tela — falha muda, sempre confusa.
+  await page.selectOption('select[aria-label="Profissional para alocar"]', { index: 1 });
   await page.click('button:has-text("Alocar")');
   // Alocado sai da fila de "aguardando ação" — é justamente esse o efeito.
   await page.waitForTimeout(2000);

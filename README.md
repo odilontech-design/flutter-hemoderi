@@ -55,6 +55,8 @@ em "a pagar" passou por um relatório que alguém assinou.
 | **Google Agenda** | Cada atendimento vira evento na agenda do Google do profissional — remarcar atualiza, cancelar apaga, trocar de profissional move |
 | **Importação em lote** | A planilha de profissionais vira cadastro e acesso com senha provisória, colada direto na tela |
 | **Agendamento público** | Quem ainda não é cliente escolhe o procedimento e o dia sem login; o pedido cai numa fila de triagem e vira agendamento em um clique |
+| **Perfis de acesso interno** | Atendente (esteira, cadastros, triagem) e Responsável (também financeiro e gestão de acesso) — a divisão que a equipe pediu ao crescer |
+| **Pesquisa de NPS** | A cada 60 dias, para a clínica que NÃO teve múltiplos atendimentos no período — nota de 0 a 10 e três perguntas abertas |
 
 ### Os três níveis de acesso
 
@@ -67,6 +69,24 @@ em "a pagar" passou por um relatório que alguém assinou.
 O escopo **sempre** vem da conta autenticada, nunca de um id no formulário ou
 na URL. É o que impede uma clínica ler os pedidos de outra trocando um
 parâmetro.
+
+Dentro de `/painel`, a equipe Hemoderi ainda se divide em dois perfis
+(`PerfilInterno`), decisão da reunião de 14/09 depois de ver a equipe
+crescer:
+
+| Perfil | Enxerga |
+| --- | --- |
+| Atendente | esteira, agenda, cadastros e triagem — o dia a dia |
+| Responsável | tudo isso, mais o repasse devido a cada profissional e a gestão de acesso (`/painel/financeiro`, `/painel/acessos`) |
+
+O perfil é escolhido na criação do acesso e pode ser alterado depois, direto
+na linha da tabela em `/painel/acessos` — sempre por um Responsável, nunca
+pela própria pessoa (a mesma trava de auto-suspensão vale aqui: ninguém se
+rebaixa, e a equipe nunca fica sem pelo menos um Responsável ativo). Uma
+conta interna criada **antes** deste campo existir continua com acesso
+total — é tratada como Responsável mesmo sem o campo preenchido
+(`perfilEfetivo` em `src/lib/papeis.ts`), para o campo novo não trancar
+ninguém que já trabalhava no sistema.
 
 ### Como um acesso nasce, é redefinido e é suspenso
 
@@ -169,6 +189,24 @@ os comentários recentes no painel do dia, que é o que a operação lê e age e
 cima. O comentário é opcional de propósito: exigir texto derruba a taxa de
 resposta, e uma nota sem comentário ainda é informação.
 
+### A pesquisa de NPS, de 60 em 60 dias
+
+Diferente da estrela por atendimento, esta pergunta é rara e mira o oposto de
+um NPS comum: só entra a clínica que **não** teve múltiplos atendimentos na
+janela de 60 dias (`src/lib/nps.ts`). O volume de uso de quem atende toda
+semana já é satisfação declarada; quem está esfriando é quem tem alguma coisa
+a dizer que a taxa de uso ainda não denunciou sozinha.
+
+A janela é calculada, nunca guardada como "próxima data": cada clínica tem
+períodos de 60 dias consecutivos contados a partir do próprio cadastro, e a
+rotina (`src/lib/rotinas/nps.ts`, chamada pela mesma rotina diária de
+lembretes) só cria a pesquisa quando a janela mais recente ainda não foi
+avaliada — idempotente por construção, não por trava. A escala é a clássica
+de 0 a 10 (promotor/neutro/detrator), com três perguntas abertas: o que
+funcionou bem, que expectativa não foi atendida, e o que poderia melhorar. A
+clínica responde uma vez só, no portal; a equipe vê nota, classificação e os
+três textos na tela de detalhe da clínica.
+
 ## Decisões que valem explicar
 
 **Dinheiro em centavos inteiros.** O repasse é percentual sobre o valor do
@@ -244,6 +282,7 @@ npm run fumaca:avaliacao # a clínica avalia, corrige, e a equipe enxerga
 npm run fumaca:agenda   # ciclo do evento no Google, com o Google substituído por um duplo
 npm run fumaca:ata      # as decisões da reunião de 14/09, tela por tela
 npm run fumaca:publico  # a vitrine sem login e a triagem do pedido que chega dela
+npm run fumaca:nps      # a pesquisa de NPS de 60 em 60 dias, ponta a ponta
 ```
 
 Os testes unitários cobrem o que é fácil de quebrar sem perceber: sobreposição
@@ -264,15 +303,20 @@ src/lib/agenda.ts           aritmética de agenda, sem banco — é o que os tes
 src/lib/alocacao.ts         as quatro travas juntas, consultando o banco
 src/lib/repasse.ts          a cadeia de regras de repasse
 src/lib/pedido.ts           a máquina de status da esteira
-src/lib/sessao.ts           as guardas dos três níveis de acesso
+src/lib/sessao.ts           as guardas dos três níveis de acesso (e do perfil Atendente/Responsável)
+src/lib/papeis.ts           rótulos e o perfil efetivo (NULL vira Responsável)
 src/lib/senha.ts            sorteio da senha provisória e regras da senha escolhida
-src/app/actions/acessos.ts  criar, redefinir, suspender e trocar a própria senha
+src/app/actions/acessos.ts  criar, redefinir, suspender, trocar a própria senha e o perfil interno
 scripts/fumaca.mjs          teste de fumaça do ciclo completo, no navegador
 scripts/fumaca-acessos.mjs  teste de fumaça da gestão de acesso, no navegador
 scripts/fumaca-avaliacao.mjs teste de fumaça da avaliação pela clínica
 scripts/fumaca-ata.mjs      teste de fumaça das decisões da reunião de 14/09
 scripts/fumaca-publico.mjs  teste de fumaça do agendamento público e da triagem
+scripts/fumaca-nps.mjs      teste de fumaça da pesquisa de NPS de 60 em 60 dias
 src/lib/avaliacao.ts        escala de 1 a 5, média e formatação
+src/lib/nps.ts              regras puras do NPS: elegibilidade, faixa e score
+src/lib/rotinas/nps.ts      geração da pesquisa a cada 60 dias, consultando o banco
+src/components/CampoDocumento.tsx  CPF/CNPJ com dígito verificador e, só CNPJ, consulta na Receita
 src/lib/familia.ts          agrupamento comercial do catálogo, usado na vitrine
 src/app/actions/publico.ts  o pedido de quem ainda não tem cadastro, e a triagem
 src/app/agendar/            vitrine pública: escolher primeiro, identificar depois

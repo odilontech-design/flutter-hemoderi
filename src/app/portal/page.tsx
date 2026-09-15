@@ -6,6 +6,7 @@ import { formatarDataCurta, hojeUTC } from "@/lib/data";
 import { STATUS_ATIVOS } from "@/lib/pedido";
 import { AcoesClinica } from "./AcoesClinica";
 import { AvaliarAtendimento } from "./AvaliarAtendimento";
+import { ResponderNps } from "./ResponderNps";
 import { CartaoDivulgacao } from "@/components/CartaoDivulgacao";
 import { formatarMedia, mediaDeNotas } from "@/lib/avaliacao";
 
@@ -20,7 +21,7 @@ export default async function MeusAgendamentos() {
   const sessao = await exigirClinica();
   const hoje = hojeUTC();
 
-  const [proximos, historico, total, clinica, aAvaliar, notasDadas] = await Promise.all([
+  const [proximos, historico, total, clinica, aAvaliar, notasDadas, npsPendente] = await Promise.all([
     prisma.pedido.findMany({
       where: { clinicaId: sessao.clinicaId, data: { gte: hoje }, status: { in: STATUS_ATIVOS } },
       orderBy: [{ data: "asc" }, { horaInicio: "asc" }],
@@ -50,6 +51,13 @@ export default async function MeusAgendamentos() {
     prisma.avaliacao.findMany({
       where: { clinicaId: sessao.clinicaId },
       select: { nota: true },
+    }),
+    // No máximo uma pesquisa pendente por vez na prática (cadência de 60
+    // dias): `findFirst`, não lista, porque não há "fila" para paginar aqui.
+    prisma.pesquisaNps.findFirst({
+      where: { clinicaId: sessao.clinicaId, respondidaEm: null },
+      orderBy: { criadaEm: "asc" },
+      select: { id: true },
     }),
   ]);
 
@@ -139,6 +147,18 @@ export default async function MeusAgendamentos() {
               </div>
             ))}
           </div>
+        </Cartao>
+      )}
+
+      {npsPendente && (
+        <Cartao className="mb-3 border-bordo/20 bg-bege/60">
+          <div className="font-display font-bold text-bordo text-sm mb-1">Pesquisa de satisfação</div>
+          <div className="text-[11px] text-gray-500 mb-4 leading-relaxed">
+            Faz um tempo que a gente não vê muito movimento — e é exatamente por
+            isso que a sua opinião vale mais agora. Duas perguntas, sem
+            compromisso.
+          </div>
+          <ResponderNps pesquisaId={npsPendente.id} />
         </Cartao>
       )}
 

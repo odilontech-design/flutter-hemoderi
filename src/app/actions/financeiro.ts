@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
-import { exigirInterno, registrarAuditoria } from "@/lib/sessao";
+import { exigirResponsavel, registrarAuditoria } from "@/lib/sessao";
 import { parametros } from "@/lib/alocacao";
 import { competenciaPorExtenso } from "@/lib/data";
 import type { Resultado } from "./pedidos";
@@ -24,7 +24,7 @@ import type { Resultado } from "./pedidos";
  * lançamento à parte — não pode ser efeito automático de um status.
  */
 export async function fecharFatura(clinicaId: string, competencia: string): Promise<Resultado> {
-  const sessao = await exigirInterno();
+  const sessao = await exigirResponsavel();
 
   const pedidos = await prisma.pedido.findMany({
     where: {
@@ -99,7 +99,7 @@ function proximaCompetencia(competencia: string): Date {
 }
 
 export async function baixarFatura(faturaId: string): Promise<Resultado> {
-  const sessao = await exigirInterno();
+  const sessao = await exigirResponsavel();
   await prisma.fatura.update({
     where: { id: faturaId },
     data: { status: "PAGA", pagaEm: new Date() },
@@ -116,7 +116,7 @@ export async function baixarFatura(faturaId: string): Promise<Resultado> {
  * por atendimento seria transformar uma transferência em quarenta cliques.
  */
 export async function pagarRepasses(profissionalId: string, competencia: string): Promise<Resultado> {
-  const sessao = await exigirInterno();
+  const sessao = await exigirResponsavel();
 
   const { count } = await prisma.repasse.updateMany({
     where: { profissionalId, competencia, status: "PENDENTE" },
@@ -147,7 +147,7 @@ export async function pagarRepasses(profissionalId: string, competencia: string)
  * valor existe e é visível — só não entra na fila de pagamento.
  */
 export async function aprovarRelatorio(pedidoId: string): Promise<Resultado> {
-  const sessao = await exigirInterno();
+  const sessao = await exigirResponsavel();
 
   const relatorio = await prisma.relatorioAtendimento.findUnique({
     where: { pedidoId },

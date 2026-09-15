@@ -47,6 +47,12 @@ de acesso reconferem o banco a cada navegação, então uma sessão já aberta �
 cortada no próximo clique, não só no próximo login. Ninguém desativa a
 própria conta.
 
+Dentro do acesso interno, dois perfis (`PerfilInterno`): **Atendente**
+(esteira, agenda, cadastros, triagem) e **Responsável** (também financeiro e
+gestão de acesso). Decisão da reunião de 14/09 ao ver a equipe crescer — as
+telas de dinheiro e de acesso não precisam estar abertas o dia inteiro para
+quem só opera a esteira.
+
 **Agendamento público.** `/agendar`, sem login, é a porta da rua: procedimento
 agrupado por família comercial, dia e horário de preferência, e a identificação
 só no último passo. O pedido cai em `/painel/solicitacoes` e vira agendamento
@@ -60,6 +66,20 @@ comparecimento; exportação mensal em CSV.
 *A rever:* a lista de indicadores do painel, com a equipe, depois de duas
 semanas de uso real — indicador escolhido antes do uso vira gráfico que
 ninguém abre.
+
+**Pesquisa de NPS.** A cada 60 dias, só para a clínica que NÃO teve múltiplos
+atendimentos no período — quem atende toda semana já mostra satisfação pelo
+volume; o NPS mira em quem está esfriando. Escala de 0 a 10 mais três
+perguntas abertas, gerada por rotina idempotente e respondida uma vez no
+portal.
+
+**Confirmação de CNPJ na Receita.** O cadastro de clínica confirma o CNPJ na
+BrasilAPI (espelho público dos dados abertos da Receita) ao sair do campo,
+mostrando razão social e situação cadastral — um alerta quando não está
+ATIVA. CPF não ganhou o mesmo reforço: a Receita não expõe CPF de terceiro
+sem autorização do titular, então o cadastro de profissional continua só com
+o dígito verificador, que é o único cheque possível sem contratar um serviço
+pago de terceiro.
 
 ## Fase 4 — o que falta ligar
 

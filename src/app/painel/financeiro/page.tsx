@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { prisma } from "@/lib/prisma";
-import { exigirInterno } from "@/lib/sessao";
+import { exigirResponsavel } from "@/lib/sessao";
 import { Cartao, Kpi, Tabela, Titulo, Vazio } from "@/components/ui";
 import { BotaoAcao } from "@/components/BotaoAcao";
 import { baixarFatura, fecharFatura, pagarRepasses } from "@/app/actions/financeiro";
@@ -22,7 +22,7 @@ function competenciaVizinha(competencia: string, passo: number): string {
  * resultado.
  */
 export default async function Financeiro({ searchParams }: { searchParams: { competencia?: string } }) {
-  await exigirInterno();
+  await exigirResponsavel();
 
   const competencia = searchParams.competencia ?? competenciaAtual();
   const [ano, mes] = competencia.split("-").map(Number);

@@ -2,6 +2,7 @@ import { prisma } from "@/lib/prisma";
 import { despacharPendentes, enfileirarMensagem } from "@/lib/integracoes/whatsapp";
 import { hojeUTC, somarDias } from "@/lib/data";
 import { parametros } from "@/lib/alocacao";
+import { gerarPesquisasNps } from "@/lib/rotinas/nps";
 
 // Rota de dados vivos: nunca pré-renderizada no build.
 export const dynamic = "force-dynamic";
@@ -23,6 +24,10 @@ export const dynamic = "force-dynamic";
  * unicidade por pedido × tipo, então rodar duas vezes no mesmo dia não manda
  * a mensagem duas vezes. Idempotência aqui não é elegância — é o que separa
  * "lembramos a clínica" de "enchemos a clínica de mensagem".
+ *
+ * Também dispara a geração da pesquisa de NPS (lib/rotinas/nps.ts): outra
+ * rotina diária e idempotente, encaixada aqui pelo mesmo motivo do parágrafo
+ * acima — é o único cron que o plano atual permite.
  */
 export async function GET(requisicao: Request) {
   const segredo = process.env.CRON_SECRET;
@@ -51,6 +56,7 @@ export async function GET(requisicao: Request) {
   }
 
   const entrega = await despacharPendentes();
+  const nps = await gerarPesquisasNps();
 
-  return Response.json({ enfileirados: pedidos.length, ...entrega });
+  return Response.json({ enfileirados: pedidos.length, ...entrega, nps });
 }

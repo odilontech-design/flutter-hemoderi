@@ -24,10 +24,31 @@ async function main() {
   const senhaHash = await bcrypt.hash("hemoderi123", 10);
 
   // ── Equipe interna ────────────────────────────────────────────────────────
+  // Dois perfis desde o seed, porque a distinção só se testa tendo os dois:
+  // o Responsável (financeiro e acessos) e o Atendente (esteira do dia a
+  // dia, sem repasse nem gestão de acesso) — a separação que a reunião de
+  // 14/09 pediu ao ver "as meninas" mexendo no sistema.
   await prisma.usuario.upsert({
     where: { email: "equipe@hemoderi.com.br" },
     update: {},
-    create: { nome: "Equipe Hemoderi", email: "equipe@hemoderi.com.br", senhaHash, papel: "INTERNO" },
+    create: {
+      nome: "Equipe Hemoderi",
+      email: "equipe@hemoderi.com.br",
+      senhaHash,
+      papel: "INTERNO",
+      perfilInterno: "RESPONSAVEL",
+    },
+  });
+  await prisma.usuario.upsert({
+    where: { email: "atendente@hemoderi.com.br" },
+    update: {},
+    create: {
+      nome: "Atendente Hemoderi",
+      email: "atendente@hemoderi.com.br",
+      senhaHash,
+      papel: "INTERNO",
+      perfilInterno: "ATENDENTE",
+    },
   });
 
   // ── Clínicas ──────────────────────────────────────────────────────────────
