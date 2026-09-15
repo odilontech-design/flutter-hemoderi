@@ -11,11 +11,11 @@
  *      exatamente isso, e não precisa adivinhar nada nem chegar perto de um
  *      dado real. Se um dia esta operação estiver rodando de verdade, tirar a
  *      demonstração de cena é uma operação segura e completa.
- *   2. Nada de catálogo é alterado. Os 18 serviços e os equipamentos reais
- *      continuam como estão — inclusive o valor de tabela zerado. O preço que
- *      aparece na demonstração entra como PREÇO NEGOCIADO das clínicas de
- *      demonstração (PrecoClinica), que é onde ele vive de verdade no modelo
- *      da Hemoderi.
+ *   2. Nada de catálogo é alterado. Os serviços e os equipamentos reais
+ *      continuam como estão. O preço da demonstração entra como PREÇO
+ *      NEGOCIADO das clínicas de demonstração (PrecoClinica) — que é onde
+ *      um valor por clínica vive de verdade no modelo da Hemoderi, mesmo
+ *      agora que o catálogo tem preço de tabela real por trás.
  */
 
 import type { PrismaClient } from "@prisma/client";

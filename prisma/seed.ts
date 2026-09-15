@@ -16,7 +16,7 @@ import { inicializarCatalogo } from "../src/lib/inicializar";
 const prisma = new PrismaClient();
 
 async function main() {
-  // Parâmetros, equipamentos e os 18 serviços do catálogo real — a mesma
+  // Parâmetros, equipamentos e os serviços do catálogo real — a mesma
   // função que /api/setup roda em produção. Ver src/lib/inicializar.ts.
   const { equipamentosCriados, servicosCriados } = await inicializarCatalogo(prisma);
   console.log(`Catálogo pronto (${servicosCriados} serviços, ${equipamentosCriados} equipamentos novos).`);

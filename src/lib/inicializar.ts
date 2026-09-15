@@ -1,12 +1,17 @@
 /**
  * O catálogo real da Hemoderi: parâmetros da operação, o parque de
- * equipamentos e os 18 serviços do site/catálogo do WhatsApp
- * (https://hemoderi.com.br/). Compartilhado entre o seed de desenvolvimento
- * (`prisma/seed.ts`, que soma clínicas e profissionais fictícios por cima) e
- * a configuração inicial de produção (`/api/setup`, que NUNCA deve tocar em
- * dado fictício) — para as duas fontes não divergirem com o tempo.
+ * equipamentos e os serviços do catálogo comercial 2026
+ * (CAT_LOGO_HEMODERI_2026.pdf — enviado pela Hemoderi). Compartilhado entre
+ * o seed de desenvolvimento (`prisma/seed.ts`, que soma clínicas e
+ * profissionais fictícios por cima) e a configuração inicial de produção
+ * (`/api/setup`, que NUNCA deve tocar em dado fictício) — para as duas
+ * fontes não divergirem com o tempo.
  *
- * Idempotente: rodar de novo não duplica nada.
+ * Idempotente na criação: rodar de novo não duplica nada, mas também não
+ * ATUALIZA um serviço que já existe — o cadastro pelo painel (agora com
+ * todo campo editável) é o caminho certo para corrigir um valor depois do
+ * catálogo já estar de pé, sem que rodar `/api/setup` de novo apague um
+ * ajuste que a equipe fez na tela.
  */
 
 import type { PrismaClient } from "@prisma/client";
@@ -20,6 +25,8 @@ type DefinicaoServico = {
   categoria: CategoriaServico;
   descricao: string;
   duracaoMin: number;
+  /** Em centavos — o "Investimento" do catálogo 2026, valor Grande São Paulo. */
+  valorPadraoCentavos: number;
   exigeEquipamento: boolean;
   tipoEquipamento?: string;
 };
@@ -30,7 +37,7 @@ type DefinicaoServico = {
 // do mesmo tipo caírem no mesmo horário. Confirmar na Fase 0.
 export const EQUIPAMENTOS_DO_CATALOGO: DefinicaoEquipamento[] = [
   { tipo: "GBT AirFlow", unidades: 1 },
-  { tipo: "Centrífuga PRF", unidades: 2 }, // seis serviços de PRF dependem deste tipo
+  { tipo: "Centrífuga PRF", unidades: 2 }, // cinco serviços de PRF dependem deste tipo
   { tipo: "Laser LiteTouch", unidades: 1 },
   { tipo: "Piezosurgery Mectron Touch", unidades: 1 },
   { tipo: "Motor de Implante", unidades: 1 },
@@ -41,160 +48,359 @@ export const EQUIPAMENTOS_DO_CATALOGO: DefinicaoEquipamento[] = [
   { tipo: "Atria Ultrassom", unidades: 1 },
 ];
 
-// Nome, categoria e a descrição visível vêm do catálogo real; o resto é
-// estimativa a confirmar na Fase 0 (ver docs/fase-0-insumos.md):
+// Nome, categoria, preço e descrição vêm do catálogo 2026 (a seção
+// "Investimento", páginas finais — é a tabela que a própria Hemoderi usa
+// como preço de referência). O que ainda é estimativa a confirmar na Fase 0
+// (docs/fase-0-insumos.md):
 //
-//   • Preço: fica em branco (0) de propósito. O catálogo não lista preço
-//     porque o modelo é negociado por clínica — é para isso que existe
-//     PrecoClinica; a "tabela" aqui só serve de referência interna.
-//   • Duração: chute a partir do tipo de procedimento, para a agenda ter
-//     algo para calcular. Precisa vir da equipe antes do go-live real.
+//   • Duração: onde o catálogo declara o período contratado ("4 horas",
+//     "até 3 horas de funcionamento"), a duração vem de lá. Sem essa
+//     informação, é um chute a partir do tipo de procedimento — a agenda
+//     precisa de algo para calcular até a equipe confirmar o tempo real.
 //   • Categoria: nossa leitura da divisão que a própria Hemoderi usa no
 //     catálogo ("🦷 Odontologia | ✨ Estética | 🩸 Saúde") — alguns itens
 //     cruzam especialidade (PRF, Sedação) e a categorização é só uma
 //     primeira aproximação para revisão da equipe.
+//   • Preço: é o valor "Grande São Paulo" quando o catálogo lista mais de
+//     uma região (Sedação Consciente também tem tarifa de Interior,
+//     R$1.050,00 — fica só na descrição, o sistema não modela preço por
+//     praça). É o valor de TABELA: PrecoClinica continua sendo onde mora o
+//     valor negociado por clínica quando ele existir.
+//
+// Um combo do catálogo ficou de fora de propósito: "Stickybone + Membranas
+// + Piezosurgery + Sedação" (R$1.690,00) reserva DOIS equipamentos ao mesmo
+// tempo (Piezo e Rotamix), e o sistema hoje só trava um tipo de equipamento
+// por serviço. Cadastrar esse combo aqui arriscaria dar dois "sim" para o
+// mesmo Rotamix em horários simultâneos — o oposto do que a alocação existe
+// para evitar. Falta modelar equipamento múltiplo por serviço antes de
+// oferecê-lo como reserva automática.
 export const SERVICOS_DO_CATALOGO: DefinicaoServico[] = [
+  // ── AirFlow – GBT Machine ──────────────────────────────────────────────
   {
-    nome: "GBT Machine – AirFlow",
+    nome: "AirFlow – GBT Machine (1 paciente)",
     categoria: "ODONTOLOGIA",
-    descricao: "Leve uma nova experiência de profilaxia para os seus pacientes. A tecnologia GBT…",
-    duracaoMin: 45,
+    descricao: "Profilaxia guiada (GBT): identifica e remove o biofilme com AirFlow, minimamente invasiva.",
+    duracaoMin: 60,
+    valorPadraoCentavos: 50_000,
     exigeEquipamento: true,
     tipoEquipamento: "GBT AirFlow",
   },
   {
-    nome: "PRF – Coleta e Produção de Concentrados Plaquetários",
-    categoria: "SAUDE",
-    descricao: "Transforme seus procedimentos com o suporte completo da Hemoderi na produção…",
-    duracaoMin: 30,
+    nome: "AirFlow – GBT Machine (pacote 3 pacientes)",
+    categoria: "ODONTOLOGIA",
+    descricao: "Locação do GBT Machine por 4 horas para até 3 pacientes, com profissional incluso no primeiro.",
+    duracaoMin: 240,
+    valorPadraoCentavos: 120_000,
     exigeEquipamento: true,
-    tipoEquipamento: "Centrífuga PRF",
+    tipoEquipamento: "GBT AirFlow",
   },
   {
-    nome: "LiteTouch – Laser de Alta Potência",
+    nome: "AirFlow – GBT Machine (pacote 6 pacientes)",
     categoria: "ODONTOLOGIA",
-    descricao: "Tenha acesso à tecnologia do Laser LiteTouch diretamente na sua clínica.",
+    descricao: "Locação do GBT Machine por 6 horas para até 6 pacientes, com profissional incluso no primeiro.",
+    duracaoMin: 360,
+    valorPadraoCentavos: 210_000,
+    exigeEquipamento: true,
+    tipoEquipamento: "GBT AirFlow",
+  },
+  {
+    nome: "AirFlow – GBT Machine (pacote 9 pacientes)",
+    categoria: "ODONTOLOGIA",
+    descricao: "Locação do GBT Machine por 8 horas para até 9 pacientes, com profissional incluso no primeiro.",
+    duracaoMin: 480,
+    valorPadraoCentavos: 300_000,
+    exigeEquipamento: true,
+    tipoEquipamento: "GBT AirFlow",
+  },
+
+  // ── LiteTouch ────────────────────────────────────────────────────────────
+  {
+    nome: "LiteTouch – Remoção de Lentes, Facetas e Coroas",
+    categoria: "ODONTOLOGIA",
+    descricao: "Remoção com laser de alta potência, por paciente, até 2 elementos.",
     duracaoMin: 60,
+    valorPadraoCentavos: 75_000,
     exigeEquipamento: true,
     tipoEquipamento: "Laser LiteTouch",
   },
   {
-    nome: "Piezosurgery + Stickybone + Membranas",
+    nome: "LiteTouch – Remoção de Lentes, Facetas e Coroas (FULL)",
     categoria: "ODONTOLOGIA",
-    descricao: "Uma solução completa para procedimentos que exigem tecnologia e planejamento.",
-    duracaoMin: 90,
+    descricao: "Remoção com laser de alta potência para casos acima de 5 elementos.",
+    duracaoMin: 120,
+    valorPadraoCentavos: 150_000,
     exigeEquipamento: true,
-    tipoEquipamento: "Piezosurgery Mectron Touch",
+    tipoEquipamento: "Laser LiteTouch",
   },
+  {
+    nome: "LiteTouch – Dessensibilização Dentária",
+    categoria: "ODONTOLOGIA",
+    descricao: "Dessensibilização a laser, por paciente, sem limite de elementos.",
+    duracaoMin: 45,
+    valorPadraoCentavos: 75_000,
+    exigeEquipamento: true,
+    tipoEquipamento: "Laser LiteTouch",
+  },
+  {
+    nome: "LiteTouch – Frenectomia",
+    categoria: "ODONTOLOGIA",
+    descricao: "Frenectomia com laser de alta potência, por paciente.",
+    duracaoMin: 60,
+    valorPadraoCentavos: 150_000,
+    exigeEquipamento: true,
+    tipoEquipamento: "Laser LiteTouch",
+  },
+
+  // ── Piezosurgery ─────────────────────────────────────────────────────────
   {
     nome: "Piezosurgery Mectron Touch",
     categoria: "ODONTOLOGIA",
     descricao: "Tecnologia e precisão para elevar o nível dos seus procedimentos cirúrgicos.",
     duracaoMin: 60,
+    valorPadraoCentavos: 63_500,
     exigeEquipamento: true,
     tipoEquipamento: "Piezosurgery Mectron Touch",
   },
   {
-    nome: "PRF para Medicina",
-    categoria: "SAUDE",
-    descricao: "Estrutura e suporte profissional para procedimentos realizados em consultórios e…",
+    nome: "Piezosurgery + Stickybone + Membranas",
+    categoria: "ODONTOLOGIA",
+    descricao: "Piezosurgery com produção de Stickybone e membranas de PRF no mesmo procedimento.",
+    duracaoMin: 90,
+    valorPadraoCentavos: 93_500,
+    exigeEquipamento: true,
+    tipoEquipamento: "Piezosurgery Mectron Touch",
+  },
+
+  // ── PRF ──────────────────────────────────────────────────────────────────
+  {
+    nome: "Membranas – PRF",
+    categoria: "ODONTOLOGIA",
+    descricao: "Produção especializada de membranas de PRF (L-PRF, A-PRF, A-PRF+) para complementar o procedimento.",
+    duracaoMin: 30,
+    valorPadraoCentavos: 35_000,
+    exigeEquipamento: true,
+    tipoEquipamento: "Centrífuga PRF",
+  },
+  {
+    nome: "Stickybone + Membranas",
+    categoria: "ODONTOLOGIA",
+    descricao: "Produção de membranas e Stickybone personalizado (enxerto ósseo) no mesmo procedimento.",
     duracaoMin: 45,
+    valorPadraoCentavos: 60_000,
     exigeEquipamento: true,
     tipoEquipamento: "Centrífuga PRF",
   },
   {
     nome: "PRF para Harmonização",
     categoria: "ESTETICA",
-    descricao: "Leve a tecnologia dos concentrados plaquetários para seus procedimentos…",
+    descricao: "Produção de I-PRF, I-PRF+, S-PRF ou PRP e aplicação, por paciente/procedimento.",
     duracaoMin: 45,
+    valorPadraoCentavos: 35_000,
+    exigeEquipamento: true,
+    tipoEquipamento: "Centrífuga PRF",
+  },
+  {
+    nome: "PRF para Medicina",
+    categoria: "SAUDE",
+    descricao: "Produção de membranas, PRP e PRF em fase líquida para consultórios e hospitais.",
+    duracaoMin: 45,
+    valorPadraoCentavos: 70_000,
     exigeEquipamento: true,
     tipoEquipamento: "Centrífuga PRF",
   },
   {
     nome: "I-PRF Day",
     categoria: "SAUDE",
-    descricao: "Uma experiência completa para produção de concentrados plaquetários em um…",
+    descricao: "Produção de I-PRF, I-PRF+, S-PRF ou PRP por período de 4 horas, para até 6 pessoas.",
     duracaoMin: 240,
+    valorPadraoCentavos: 75_000,
     exigeEquipamento: true,
     tipoEquipamento: "Centrífuga PRF",
   },
+
+  // ── Fotografia ───────────────────────────────────────────────────────────
   {
-    nome: "Stickybone / PRF Block",
+    nome: "Cobertura Fotográfica Odontológica",
     categoria: "ODONTOLOGIA",
-    descricao: "Mais personalização para o planejamento dos seus procedimentos.",
-    duracaoMin: 30,
-    exigeEquipamento: true,
-    tipoEquipamento: "Centrífuga PRF",
+    descricao: "Fotógrafo especialista em fotografia odontológica intra oral, disponível por 4 horas.",
+    duracaoMin: 240,
+    valorPadraoCentavos: 67_000,
+    exigeEquipamento: false,
   },
+
+  // ── Sedação ──────────────────────────────────────────────────────────────
   {
-    nome: "Membranas – PRF",
-    categoria: "ODONTOLOGIA",
-    descricao: "Produção especializada de membranas de PRF para complementar seus…",
-    duracaoMin: 30,
-    exigeEquipamento: true,
-    tipoEquipamento: "Centrífuga PRF",
-  },
-  {
-    nome: "Motor de Implante",
-    categoria: "ODONTOLOGIA",
-    descricao: "Tenha mais praticidade para realizar seus procedimentos com uma…",
-    duracaoMin: 90,
-    exigeEquipamento: true,
-    tipoEquipamento: "Motor de Implante",
-  },
-  {
-    nome: "Bisturi Elétrico",
+    nome: "Sedação Consciente",
     categoria: "SAUDE",
-    descricao: "Mais estrutura e praticidade para seus procedimentos cirúrgicos.",
-    duracaoMin: 60,
-    exigeEquipamento: true,
-    tipoEquipamento: "Bisturi Elétrico",
+    descricao: "Locação de equipamento Rotamix com cirurgião habilitado, até 3h de funcionamento (Interior: R$1.050,00).",
+    duracaoMin: 180,
+    valorPadraoCentavos: 85_000,
+    exigeEquipamento: false,
   },
+
+  // ── Megaderme ────────────────────────────────────────────────────────────
   {
-    nome: "Laser Therapy EC + ILIB",
-    categoria: "SAUDE",
-    descricao: "Uma solução prática para profissionais que desejam contar com tecnologia de…",
-    duracaoMin: 60,
-    exigeEquipamento: true,
-    tipoEquipamento: "Laser Therapy EC + ILIB",
-  },
-  {
-    nome: "Platinum Platform",
+    nome: "Megaderme – Tratamento Facial (1 paciente)",
     categoria: "ESTETICA",
-    descricao: "Uma plataforma. Múltiplas possibilidades. A Platinum Platform reúne tecnologia…",
+    descricao: "Microagulhamento com radiofrequência fracionada, por paciente.",
     duracaoMin: 60,
-    exigeEquipamento: true,
-    tipoEquipamento: "Platinum Platform",
-  },
-  {
-    nome: "Megaderme® – Radiofrequência Microagulhada",
-    categoria: "ESTETICA",
-    descricao: "Tecnologia avançada para protocolos estéticos que buscam inovação e resultados.",
-    duracaoMin: 60,
+    valorPadraoCentavos: 78_000,
     exigeEquipamento: true,
     tipoEquipamento: "Megaderme",
   },
   {
-    nome: "Ultrassom Micro e Macrofocado – Atria®",
+    nome: "Megaderme – Pacote 2 Pacientes",
     categoria: "ESTETICA",
-    descricao: "Tecnologia, inovação e suporte especializado para seus protocolos estéticos.",
+    descricao: "Locação do Megaderme por 2 horas, para 2 pacientes.",
+    duracaoMin: 120,
+    valorPadraoCentavos: 140_000,
+    exigeEquipamento: true,
+    tipoEquipamento: "Megaderme",
+  },
+  {
+    nome: "Megaderme – Pacote 3 Pacientes",
+    categoria: "ESTETICA",
+    descricao: "Locação do Megaderme por 3 horas, para 3 pacientes.",
+    duracaoMin: 180,
+    valorPadraoCentavos: 200_000,
+    exigeEquipamento: true,
+    tipoEquipamento: "Megaderme",
+  },
+  {
+    nome: "Megaderme – Pacote 4 Pacientes",
+    categoria: "ESTETICA",
+    descricao: "Locação do Megaderme por 4 horas, para 4 pacientes.",
+    duracaoMin: 240,
+    valorPadraoCentavos: 260_000,
+    exigeEquipamento: true,
+    tipoEquipamento: "Megaderme",
+  },
+
+  // ── Platinum Platform ────────────────────────────────────────────────────
+  {
+    nome: "Platinum Platform – Pacote 1 Paciente",
+    categoria: "ESTETICA",
+    descricao: "Locação da Platinum Platform (IPL, Er:Yag e Q-Switched), por paciente.",
     duracaoMin: 60,
+    valorPadraoCentavos: 99_000,
+    exigeEquipamento: true,
+    tipoEquipamento: "Platinum Platform",
+  },
+  {
+    nome: "Platinum Platform – Locação 4 Horas",
+    categoria: "ESTETICA",
+    descricao: "Locação da Platinum Platform por 4 horas, sem limite de pacientes no período.",
+    duracaoMin: 240,
+    valorPadraoCentavos: 150_000,
+    exigeEquipamento: true,
+    tipoEquipamento: "Platinum Platform",
+  },
+  {
+    nome: "Platinum Platform – Locação 8 Horas",
+    categoria: "ESTETICA",
+    descricao: "Locação da Platinum Platform por 8 horas, sem limite de pacientes no período.",
+    duracaoMin: 480,
+    valorPadraoCentavos: 199_000,
+    exigeEquipamento: true,
+    tipoEquipamento: "Platinum Platform",
+  },
+
+  // ── Ultrassom Atria® ─────────────────────────────────────────────────────
+  {
+    nome: "Ultrassom Atria® – Tratamento Facial",
+    categoria: "ESTETICA",
+    descricao: "Ultrassom micro e macrofocado para tratamento facial, por paciente.",
+    duracaoMin: 60,
+    valorPadraoCentavos: 99_000,
     exigeEquipamento: true,
     tipoEquipamento: "Atria Ultrassom",
   },
   {
-    nome: "Cobertura Fotográfica Odontológica",
-    categoria: "ODONTOLOGIA",
-    descricao: "Cada detalhe merece ser registrado com qualidade profissional.",
-    duracaoMin: 60,
-    exigeEquipamento: false,
+    nome: "Ultrassom Atria® – Tratamento Corporal",
+    categoria: "ESTETICA",
+    descricao: "Ultrassom micro e macrofocado para tratamento corporal, por paciente.",
+    duracaoMin: 90,
+    valorPadraoCentavos: 180_000,
+    exigeEquipamento: true,
+    tipoEquipamento: "Atria Ultrassom",
   },
   {
-    nome: "Sedação Consciente",
+    nome: "Ultrassom Atria® – Locação 4 Horas",
+    categoria: "ESTETICA",
+    descricao: "Locação do equipamento Atria® por período de 4 horas.",
+    duracaoMin: 240,
+    valorPadraoCentavos: 174_000,
+    exigeEquipamento: true,
+    tipoEquipamento: "Atria Ultrassom",
+  },
+  {
+    nome: "Ultrassom Atria® – Locação 8 Horas",
+    categoria: "ESTETICA",
+    descricao: "Locação do equipamento Atria® por período de 8 horas.",
+    duracaoMin: 480,
+    valorPadraoCentavos: 320_000,
+    exigeEquipamento: true,
+    tipoEquipamento: "Atria Ultrassom",
+  },
+
+  // ── Laser Therapy EC + ILIB ──────────────────────────────────────────────
+  {
+    nome: "Laser Therapy EC + ILIB",
     categoria: "SAUDE",
-    descricao: "Mais tranquilidade para o profissional. Mais conforto durante o atendimento.",
+    descricao: "Terapia fotodinâmica por paciente, acompanhada por profissional habilitado.",
     duracaoMin: 60,
-    exigeEquipamento: false,
+    valorPadraoCentavos: 30_000,
+    exigeEquipamento: true,
+    tipoEquipamento: "Laser Therapy EC + ILIB",
+  },
+  {
+    nome: "Laser Therapy EC + ILIB (adicional a outro serviço)",
+    categoria: "SAUDE",
+    descricao: "Valor exclusivo para contratação junto de outro serviço Hemoderi no mesmo atendimento.",
+    duracaoMin: 30,
+    valorPadraoCentavos: 10_000,
+    exigeEquipamento: true,
+    tipoEquipamento: "Laser Therapy EC + ILIB",
+  },
+
+  // ── Motor de Implante ────────────────────────────────────────────────────
+  {
+    nome: "Motor de Implante – Por Cirurgia",
+    categoria: "ODONTOLOGIA",
+    descricao: "Locação do motor de implante para 1 cirurgia, com entrega e retirada.",
+    duracaoMin: 90,
+    valorPadraoCentavos: 50_000,
+    exigeEquipamento: true,
+    tipoEquipamento: "Motor de Implante",
+  },
+  {
+    nome: "Motor de Implante – Diária (8 Horas)",
+    categoria: "ODONTOLOGIA",
+    descricao: "Locação do motor de implante por diária de até 8 horas, horários flexíveis.",
+    duracaoMin: 480,
+    valorPadraoCentavos: 75_000,
+    exigeEquipamento: true,
+    tipoEquipamento: "Motor de Implante",
+  },
+
+  // ── Bisturi Elétrico ─────────────────────────────────────────────────────
+  {
+    nome: "Bisturi Elétrico – Por Cirurgia",
+    categoria: "SAUDE",
+    descricao: "Locação do bisturi elétrico para 1 cirurgia, com entrega e retirada.",
+    duracaoMin: 60,
+    valorPadraoCentavos: 50_000,
+    exigeEquipamento: true,
+    tipoEquipamento: "Bisturi Elétrico",
+  },
+  {
+    nome: "Bisturi Elétrico – Diária (8 Horas)",
+    categoria: "SAUDE",
+    descricao: "Locação do bisturi elétrico por diária de até 8 horas, horários flexíveis.",
+    duracaoMin: 480,
+    valorPadraoCentavos: 75_000,
+    exigeEquipamento: true,
+    tipoEquipamento: "Bisturi Elétrico",
   },
 ];
 
@@ -205,8 +411,8 @@ export type ResultadoInicializacao = {
 
 /**
  * Cria os Parametros (se ainda não existirem), o parque de equipamentos e os
- * 18 serviços do catálogo real — nunca dado fictício. Chamada tanto pelo
- * seed de desenvolvimento quanto pela configuração inicial de produção.
+ * serviços do catálogo real — nunca dado fictício. Chamada tanto pelo seed
+ * de desenvolvimento quanto pela configuração inicial de produção.
  */
 export async function inicializarCatalogo(prisma: PrismaClient): Promise<ResultadoInicializacao> {
   await prisma.parametros.upsert({
@@ -236,7 +442,7 @@ export async function inicializarCatalogo(prisma: PrismaClient): Promise<Resulta
     const existente = await prisma.servico.findFirst({ where: { nome: servico.nome } });
     if (!existente) {
       await prisma.servico.create({
-        data: { ...servico, valorPadraoCentavos: 0, tipoEquipamento: servico.tipoEquipamento ?? null },
+        data: { ...servico, tipoEquipamento: servico.tipoEquipamento ?? null },
       });
       servicosCriados++;
     }

@@ -10,31 +10,50 @@ referência de valor ou de regra.
 
 ## 1. Tabela de serviços
 
-Os 18 itens do catálogo comercial (site/catálogo do WhatsApp) já estão
-cadastrados — nome e categoria vêm de lá. **Três campos ficaram com
-estimativa e precisam de confirmação da equipe antes do go-live real:**
+Os 34 itens do catálogo comercial 2026 (CAT_LOGO_HEMODERI_2026.pdf, seção
+"Investimento") já estão cadastrados — nome, categoria e **preço de tabela**
+vêm de lá. Cada linha de "Investimento" virou um serviço próprio, incluindo
+os pacotes por volume (GBT, Megaderme, Platinum, Ultrassom) e as diárias
+(Motor de Implante, Bisturi Elétrico) — são produtos comerciais distintos,
+com preço próprio, não variações de um único item. **Dois campos ainda
+ficaram com estimativa e precisam de confirmação da equipe antes do
+go-live real:**
 
 | Informação | Onde entra | Estado |
 | --- | --- | --- |
-| Nome do serviço | `Servico.nome` | ✅ do catálogo real |
+| Nome do serviço | `Servico.nome` | ✅ do catálogo 2026 |
+| Valor de tabela (Grande São Paulo) | `Servico.valorPadraoCentavos` | ✅ do catálogo 2026 — ver item 2 para preço por clínica |
 | Categoria (Odontologia/Estética/Saúde) | `Servico.categoria` | ⚠️ nossa leitura do catálogo — alguns itens cruzam especialidade (PRF, Sedação Consciente) e merecem revisão |
-| Duração cheia, incluindo preparo | `Servico.duracaoMin` | ⚠️ estimativa por tipo de procedimento, não veio de nenhuma fonte da Hemoderi |
-| Valor cobrado da clínica (tabela) | `Servico.valorPadraoCentavos` | Zerado de propósito — ver item 2 |
+| Duração cheia, incluindo preparo | `Servico.duracaoMin` | ⚠️ onde o catálogo declara o período contratado ("4 horas", "até 3h de funcionamento"), veio de lá; sem essa informação, é estimativa por tipo de procedimento |
 | Exige equipamento da Hemoderi? | `Servico.exigeEquipamento` + `Servico.tipoEquipamento` | ⚠️ presumido pelo tipo de item (ex.: fotografia e sedação marcados como "não exige", por serem mais sobre o profissional que sobre o aparelho) |
+
+Um combo do catálogo ficou de fora de propósito: "Stickybone + Membranas +
+Piezosurgery + Sedação" (R$1.690,00) reserva dois equipamentos ao mesmo
+tempo (Piezo e Rotamix), e o sistema hoje só trava um tipo de equipamento
+por serviço — falta modelar equipamento múltiplo por serviço antes de
+oferecê-lo como reserva automática (ver `src/lib/inicializar.ts`).
+
+Sedação Consciente também tem tarifa de Interior (R$1.050,00) além da de
+Grande São Paulo (R$850,00, cadastrada como valor de tabela): o sistema não
+modela preço por praça, só por clínica (item 2) — se isso importar na
+prática, cada clínica de fora da Grande SP precisa do preço negociado
+correspondente.
 
 A **duração cheia** importa mais do que parece: é ela que define o bloco na
 agenda e o cálculo de conflito. Duração subestimada gera dois atendimentos que
 o sistema considera possíveis e a operação não cumpre. A lista completa está
-em `prisma/seed.ts`, com o comentário de cada estimativa — é mais rápido
-revisar ali linha a linha do que recadastrar do zero.
+em `src/lib/inicializar.ts`, com o comentário de cada estimativa — é mais
+rápido revisar ali linha a linha do que recadastrar do zero. Qualquer ajuste
+pode ser feito direto na tela **Serviços e equipamentos** (todo campo é
+editável ali, inclusive depois do go-live).
 
 **`tipoEquipamento`** é o que a alocação usa para reservar o aparelho
 certo — um AirFlow não substitui um laser LiteTouch. Ele precisa casar
 exatamente com o campo `tipo` do equipamento cadastrado (tela **Serviços e
-equipamentos**). Seis dos dezoito serviços (as variações de PRF) compartilham
-o tipo "Centrífuga PRF": confirmar quantas centrífugas a operação tem de
-verdade — o seed chutou 2, e é esse número que decide quantos atendimentos de
-PRF cabem ao mesmo tempo.
+equipamentos**). Cinco dos trinta e quatro serviços (as variações de PRF)
+compartilham o tipo "Centrífuga PRF": confirmar quantas centrífugas a
+operação tem de verdade — o seed chutou 2, e é esse número que decide
+quantos atendimentos de PRF cabem ao mesmo tempo.
 
 ## 2. Preço negociado por clínica
 
@@ -48,7 +67,8 @@ existem na prática:
 
 1. **Acerto específico** de um profissional em um serviço → `RegraRepasse`
 2. **Regra do serviço** — procedimento em que a Hemoderi banca o insumo e
-   repassa menos → `Servico.repassePercent` ou `repasseFixoCentavos`
+   repassa menos → `Servico.repasseFixoCentavos` (sempre valor fixo, nunca
+   percentual — decisão da reunião de 14/09; a tela só oferece esse campo)
 3. **Percentual do profissional** → `Profissional.repassePercentPadrao`
 4. **Padrão da operação** → `Parametros.repassePercentPadrao`
 

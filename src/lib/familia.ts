@@ -23,7 +23,9 @@ const REGRAS: { familia: string; padrao: RegExp }[] = [
   { familia: "Ultrassom", padrao: /ultrassom|atria/i },
   { familia: "Radiofrequência", padrao: /radiofrequ|megaderme/i },
   { familia: "Profilaxia", padrao: /airflow|gbt/i },
+  { familia: "Platinum", padrao: /platinum/i },
   { familia: "Implante", padrao: /implante/i },
+  { familia: "Bisturi", padrao: /bisturi/i },
   { familia: "Sedação", padrao: /seda[çc]/i },
   { familia: "Fotografia", padrao: /fotogr/i },
 ];

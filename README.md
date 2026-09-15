@@ -249,14 +249,16 @@ Acessos criados pelo seed (senha `hemoderi123`):
 
 | Nível | E-mail |
 | --- | --- |
-| Equipe | `equipe@hemoderi.com.br` |
+| Equipe (Responsável) | `equipe@hemoderi.com.br` |
+| Equipe (Atendente) | `atendente@hemoderi.com.br` |
 | Clínica | `clinica-santa-rita@exemplo.com.br` |
 | Profissional | `ana@exemplo.com.br` |
 
-O catálogo semeado já são os 18 itens reais do site/catálogo do WhatsApp da
-Hemoderi (nome e categoria); duração, preço e inventário de equipamento estão
-com estimativa — ver `docs/fase-0-insumos.md` para o que falta confirmar
-antes do go-live.
+O catálogo semeado já são os 34 itens reais do catálogo comercial 2026 da
+Hemoderi (nome, categoria e preço de tabela); duração e inventário de
+equipamento ainda têm estimativa — ver `docs/fase-0-insumos.md` para o que
+falta confirmar antes do go-live. Todo campo do serviço é editável direto na
+tela **Serviços e equipamentos**.
 
 Em produção, o primeiro acesso interno é criado pela linha de comando — quem
 cria um usuário interno enxerga a operação inteira, e essa porta não se abre

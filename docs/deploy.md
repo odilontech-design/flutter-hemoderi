@@ -57,7 +57,7 @@ deploy é conduzido), abra uma vez, no navegador:
 https://SEU-DOMINIO/api/setup?key=O-VALOR-DE-SETUP_SECRET
 ```
 
-A página carrega o catálogo real (18 serviços, equipamentos) e cria o
+A página carrega o catálogo real (serviços e equipamentos) e cria o
 primeiro acesso interno com o nome, e-mail e senha que você informar. A rota
 se tranca sozinha assim que existe qualquer usuário interno — não é uma porta
 que fica aberta esperando alguém achar a chave. Depois de usar, pode remover

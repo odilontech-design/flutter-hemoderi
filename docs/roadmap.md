@@ -108,7 +108,10 @@ conferir o resultado em um comando.
 - [ ] Preencher parâmetros reais da operação (`Parametros`): horário de
       funcionamento, antecedência mínima do portal, janela de lembrete,
       percentual de repasse padrão e prazo de faturamento.
-- [ ] Carregar serviços, equipamentos e a tabela de preço por clínica.
+- [x] Carregar o catálogo de serviços com preço de tabela real (34 itens,
+      catálogo comercial 2026) — falta confirmar duração e inventário de
+      equipamento (`docs/fase-0-insumos.md`) e, por clínica, o preço
+      negociado quando divergir da tabela.
 - [ ] Cadastrar os 60 profissionais e criar os acessos.
 - [ ] Criar os acessos das clínicas contratantes.
 - [ ] Confirmar o repositório privado (Cláusula 6.1 — hoje o repositório está

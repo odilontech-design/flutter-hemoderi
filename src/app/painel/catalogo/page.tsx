@@ -2,10 +2,9 @@ import { prisma } from "@/lib/prisma";
 import { exigirInterno } from "@/lib/sessao";
 import { Area, Campo, Cartao, Rotulo, Selecao, Tabela, Titulo, Vazio } from "@/components/ui";
 import { FormularioAcao } from "@/components/FormularioAcao";
-import { BotaoAcao } from "@/components/BotaoAcao";
-import { alternarServico, salvarEquipamento, salvarServico } from "@/app/actions/cadastros";
-import { formatarPercent, formatarReais } from "@/lib/dinheiro";
+import { salvarEquipamento, salvarServico } from "@/app/actions/cadastros";
 import { familiaDoNome } from "@/lib/familia";
+import { EditarServico } from "./EditarServico";
 
 export const dynamic = "force-dynamic";
 
@@ -54,45 +53,12 @@ export default async function Catalogo() {
           ) : (
             <Tabela cabecalho={["Serviço", "Categoria", "Duração", "Valor de tabela", "Repasse", "Equipamento", ""]}>
               {servicos.map((servico) => (
-                <tr key={servico.id} className="border-b border-gray-100 last:border-0">
-                  <td className="py-2 pr-3 font-semibold text-bordo">{servico.nome}</td>
-                  <td className="py-2 pr-3 text-gray-500">{ROTULO_CATEGORIA[servico.categoria]}</td>
-                  <td className="py-2 pr-3 text-gray-500">{servico.duracaoMin} min</td>
-                  <td className="py-2 pr-3">
-                    {servico.valorPadraoCentavos > 0 ? (
-                      formatarReais(servico.valorPadraoCentavos)
-                    ) : (
-                      <span className="text-gray-400">a negociar</span>
-                    )}
-                  </td>
-                  <td className="py-2 pr-3">
-                    {servico.repasseFixoCentavos != null
-                      ? formatarReais(servico.repasseFixoCentavos)
-                      : servico.repassePercent != null
-                        ? formatarPercent(servico.repassePercent)
-                        : <span className="text-gray-400">padrão</span>}
-                  </td>
-                  <td className="py-2 pr-3 text-gray-500">
-                    {!servico.exigeEquipamento ? (
-                      "—"
-                    ) : (
-                      <>
-                        {servico.tipoEquipamento ?? "exige (tipo livre)"}
-                        {servico.equipamentoIlimitado && (
-                          <div className="text-[10px] text-gray-400">sem limite de quantidade</div>
-                        )}
-                      </>
-                    )}
-                  </td>
-                  <td className="py-2">
-                    <BotaoAcao
-                      acao={alternarServico.bind(null, servico.id, !servico.ativo)}
-                      variante={servico.ativo ? "perigo" : "secundario"}
-                    >
-                      {servico.ativo ? "Desativar" : "Reativar"}
-                    </BotaoAcao>
-                  </td>
-                </tr>
+                <EditarServico
+                  key={servico.id}
+                  servico={servico}
+                  tiposDeEquipamento={tiposDeEquipamento}
+                  familias={familias}
+                />
               ))}
             </Tabela>
           )}
@@ -132,14 +98,12 @@ export default async function Catalogo() {
                 <Campo name="valorPadrao" placeholder="em branco = a negociar por clínica" />
               </div>
             </div>
-            <div className="grid grid-cols-2 gap-2">
-              <div>
-                <Rotulo>Repasse (%)</Rotulo>
-                <Campo name="repassePercent" placeholder="opcional" />
-              </div>
-              <div>
-                <Rotulo>ou valor fixo</Rotulo>
-                <Campo name="repasseFixo" placeholder="opcional" />
+            <div>
+              <Rotulo>Repasse (valor fixo)</Rotulo>
+              <Campo name="repasseFixo" placeholder="em branco = repasse padrão da operação" />
+              <div className="text-[10px] text-gray-400 mt-1">
+                Sempre valor fixo, nunca percentual (decisão da reunião de 14/09) — em branco,
+                vale o percentual padrão configurado nos parâmetros da operação.
               </div>
             </div>
             <div>
