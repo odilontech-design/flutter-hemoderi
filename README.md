@@ -53,7 +53,7 @@ em "a pagar" passou por um relatório que alguém assinou.
 | **Automações** | Fila de WhatsApp para confirmação, alocação, lembrete e resultado, com rastro de envio |
 | **Avaliação** | A clínica dá de 1 a 5 estrelas e um comentário depois do atendimento; a equipe vê a média por profissional |
 | **Google Agenda** | Cada atendimento vira evento na agenda do Google do profissional — remarcar atualiza, cancelar apaga, trocar de profissional move |
-| **Importação em lote** | A planilha de profissionais vira cadastro e acesso com senha provisória, colada direto na tela |
+| **Importação em lote** | A planilha de profissionais vira cadastro e acesso, colada direto na tela — uma senha provisória só, para o lote inteiro |
 | **Agendamento público** | Quem ainda não é cliente escolhe o procedimento e o dia sem login; o pedido cai numa fila de triagem e vira agendamento em um clique |
 | **Perfis de acesso interno** | Atendente (esteira, cadastros, triagem) e Responsável (também financeiro e gestão de acesso) — a divisão que a equipe pediu ao crescer |
 | **Pesquisa de NPS** | A cada 60 dias, para a clínica que NÃO teve múltiplos atendimentos no período — nota de 0 a 10 e três perguntas abertas |
@@ -104,6 +104,14 @@ Não existe autocadastro nem senha escolhida pela equipe. O ciclo é:
    não dá para chegar em nenhuma tela do sistema sem escolher a própria senha.
    A partir daí ninguém da operação conhece a senha de ninguém, o que importa
    num sistema que decide repasse.
+
+   A importação em lote (`/painel/profissionais` → *Importar planilha*) é a
+   exceção controlada: todo o lote recebe a **mesma** senha provisória — uma
+   só, sorteada na hora, para a equipe avisar todo mundo de uma vez em vez de
+   sessenta mensagens individuais. O que garante a mesma privacidade do passo
+   acima é a troca obrigatória: assim que cada pessoa escolhe a própria senha
+   na primeira entrada, a senha do lote para de valer para ela — ninguém
+   segue sabendo a senha de ninguém depois disso.
 4. **Redefinir.** *Redefinir senha* sorteia outra e volta ao passo 2. A senha
    anterior para de valer no mesmo instante.
 5. **Suspender.** *Suspender* desliga o login sem apagar nada: o cadastro, os

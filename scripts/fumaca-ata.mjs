@@ -10,9 +10,13 @@
  *   npm run fumaca:ata
  *   BASE_URL=https://... npm run fumaca:ata
  *
- * Precisa de pelo menos um agendamento na esteira — com a tela vazia, metade
- * destas verificações passa sem provar nada (foi assim que um erro de
- * runtime na esteira passou despercebido enquanto não havia pedido algum).
+ * Precisa de pelo menos um agendamento ATIVO na esteira (não fechado) — com
+ * a tela vazia, metade destas verificações passa sem provar nada (foi assim
+ * que um erro de runtime na esteira passou despercebido enquanto não havia
+ * pedido algum). Rodar só `npm run fumaca` antes NÃO basta: aquele script
+ * fecha o próprio pedido no final (é o que ele testa), e o filtro padrão da
+ * esteira não mostra REALIZADO. `npm run fumaca:publico` deixa um pedido
+ * ativo — ou qualquer solicitação da própria clínica ainda não alocada.
  *
  * ATENÇÃO: importa profissionais de verdade (e-mail com carimbo de tempo) e
  * grava condição de pagamento. É para ambiente de teste ou homologação.
@@ -98,7 +102,17 @@ const depois = await p.innerText("body");
 ok("importou os dois válidos", depois.includes("2 profissional(is) importado(s)"), depois.slice(0, 300));
 ok("nome em caixa alta virou legível", depois.includes("Maria da Silva"), "");
 ok("linha sem e-mail virou problema apontado", depois.includes("sem e-mail"));
-ok("senhas provisórias aparecem", (await p.locator(".font-mono").count()) >= 2);
+// innerText reflete o CSS: o rótulo usa uppercase, então o texto capturado
+// vem em caixa alta — daí o toLowerCase() na comparação.
+ok("senha provisória do lote aparece", depois.toLowerCase().includes("senha provisória do lote"));
+// Uma senha só para o lote inteiro — não uma por profissional (decisão desta
+// rodada): um único bloco com a senha. Escopado a .tracking-wider porque a
+// textarea de colar a planilha também é .font-mono, e contaria de mais.
+ok(
+  "é uma senha só para o lote, não uma por profissional",
+  (await p.locator(".font-mono.tracking-wider").count()) === 1
+);
+ok("lista mostra os dois profissionais importados", depois.includes("Maria da Silva") && depois.includes("Joao Souza"));
 
 // ── Portal da clínica ───────────────────────────────────────────────────────
 await ctx.clearCookies();

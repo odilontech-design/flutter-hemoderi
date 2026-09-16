@@ -385,7 +385,9 @@ export async function trocarSenha(_anterior: Resultado, dados: FormData): Promis
 }
 
 export type ResultadoImportacao = Resultado & {
-  credenciais?: Credencial[];
+  importados?: { nome: string; email: string }[];
+  /** Uma só, para o lote inteiro — ver o porquê no comentário da função. */
+  senhaPadrao?: string;
   problemas?: { linha: number; conteudo: string; motivo: string }[];
   jaExistiam?: string[];
 };
@@ -400,6 +402,17 @@ export type ResultadoImportacao = Resultado & {
  * sobrescrito. Um e-mail repetido pode ser a mesma pessoa reenviada na
  * planilha, e apagar o acesso de quem já está trabalhando para recriar seria
  * o pior desfecho possível.
+ *
+ * A senha é UMA SÓ para o lote inteiro, sorteada nesta chamada — não uma
+ * por profissional. É a diferença entre a equipe mandar uma mensagem só
+ * ("a senha de acesso de todo mundo é X, você troca ao entrar") e sessenta
+ * mensagens individuais, que é o que travava esse cadastro virar rotina. A
+ * senha ainda nasce provisória e cai na mesma obrigação de troca na primeira
+ * entrada — o que muda é só ser compartilhada até esse momento, não depois:
+ * assim que a pessoa escolhe a própria senha, ninguém mais a conhece, igual
+ * ao resto do sistema. Acesso criado um a um (`criarAcesso`,
+ * `gerarAcessoDoCadastro`) continua com senha individual sorteada — aqui o
+ * volume é que muda a decisão, não uma mudança de política geral.
  */
 export async function importarProfissionais(
   _anterior: ResultadoImportacao,
@@ -428,8 +441,14 @@ export async function importarProfissionais(
     ...profissionaisExistentes.map((p) => p.email ?? ""),
   ]);
 
-  const credenciais: Credencial[] = [];
+  const importados: { nome: string; email: string }[] = [];
   const jaExistiam: string[] = [];
+
+  // Uma senha para o lote inteiro (ver o comentário da função) — sorteada
+  // aqui fora do laço, uma vez só, mesmo formato ditável da senha
+  // individual.
+  const senhaPadrao = gerarSenha();
+  const senhaHash = await bcrypt.hash(senhaPadrao, 10);
 
   for (const { nome, email } of validos) {
     if (jaExistem.has(email)) {
@@ -437,7 +456,6 @@ export async function importarProfissionais(
       continue;
     }
 
-    const senha = gerarSenha();
     // Um por vez, em transação própria: numa importação de sessenta linhas,
     // uma linha problemática não pode desfazer as cinquenta e nove que deram
     // certo — quem reprocessa a planilha inteira acaba criando duplicata.
@@ -447,14 +465,14 @@ export async function importarProfissionais(
         data: {
           nome,
           email,
-          senhaHash: await bcrypt.hash(senha, 10),
+          senhaHash,
           papel: "PROFISSIONAL",
           profissionalId: profissional.id,
           senhaProvisoria: true,
         },
       });
       await registrarAuditoria(sessao.usuarioId, "Profissional", profissional.id, "IMPORTADO", email);
-      credenciais.push({ nome, email, senha, redefinida: false });
+      importados.push({ nome, email });
     } catch (erro) {
       problemas.push({
         linha: 0,
@@ -466,9 +484,10 @@ export async function importarProfissionais(
 
   atualizarTelas();
   return {
-    ok: credenciais.length > 0,
-    erro: credenciais.length === 0 ? "Nenhum profissional novo: todos já estavam cadastrados." : undefined,
-    credenciais,
+    ok: importados.length > 0,
+    erro: importados.length === 0 ? "Nenhum profissional novo: todos já estavam cadastrados." : undefined,
+    importados,
+    senhaPadrao: importados.length > 0 ? senhaPadrao : undefined,
     problemas,
     jaExistiam,
   };
