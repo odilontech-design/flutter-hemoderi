@@ -79,14 +79,18 @@ function Logo({ titulo, recolhido }: { titulo: string; recolhido: boolean }) {
       <img
         src="/logo-hemoderi.svg"
         alt="Hemoderi"
-        className={`h-8 w-auto max-w-full object-contain object-left ${recolhido ? "md:hidden" : ""}`}
+        className={`h-14 w-auto max-w-full object-contain object-left ${recolhido ? "md:hidden" : ""}`}
         onError={() => setFalhou(true)}
       />
+      {/* Recolhido usa um arquivo próprio (só o ícone, sem o nome por
+          extenso) — não é mais um recorte da logo larga: a logo real da
+          Hemoderi é empilhada (ícone sobre o nome), então "cortar a
+          esquerda" não isola o ícone como isolava na logo antiga. */}
       {/* eslint-disable-next-line @next/next/no-img-element -- idem. */}
       <img
-        src="/logo-hemoderi.svg"
+        src="/logo-hemoderi-icone.svg"
         alt="Hemoderi"
-        className={`hidden w-8 h-8 object-cover object-left shrink-0 ${recolhido ? "md:block" : ""}`}
+        className={`hidden w-8 h-8 object-contain shrink-0 ${recolhido ? "md:block" : ""}`}
         onError={() => setFalhou(true)}
       />
     </>

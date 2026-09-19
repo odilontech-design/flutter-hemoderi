@@ -2,12 +2,15 @@ import { prisma } from "@/lib/prisma";
 import { linkWhatsapp } from "@/lib/whatsapp-link";
 
 /**
- * A saída para a central, presente em toda página do sistema.
+ * A saída para a central, no portal da clínica e no do profissional.
  *
  * Existe porque a operação real não cabe inteira no portal: urgência de
  * menos de 24h, clínica que ainda não aderiu, dúvida que ninguém previu. Sem
  * um caminho visível, essas conversas acontecem no WhatsApp pessoal de quem
  * estiver por perto — e somem do registro da operação.
+ *
+ * Não aparece no painel da equipe: a central é a própria equipe, e um botão
+ * de WhatsApp ali seria a Hemoderi ligando para si mesma.
  *
  * É componente de servidor: o número vem dos parâmetros da operação, muda
  * sem deploy, e não existindo número o botão simplesmente não aparece (em vez

@@ -1,5 +1,14 @@
 import { prisma } from "@/lib/prisma";
-import { estadoDemo, limparDemo, montarDemo, SENHA_DEMO, type ResumoDemo } from "@/lib/demo";
+import {
+  estadoDemo,
+  estadoFixturesSeed,
+  limparDemo,
+  limparFixturesSeed,
+  montarDemo,
+  SENHA_DEMO,
+  type ResumoDemo,
+  type ResumoFixturesSeed,
+} from "@/lib/demo";
 
 // Rota de manutenção: nunca pré-renderizada.
 export const dynamic = "force-dynamic";
@@ -96,13 +105,32 @@ function botoes(chave: string, temDados: boolean): string {
     }`;
 }
 
+function tabelaResumoFixtures(resumo: ResumoFixturesSeed): string {
+  const linhas: [string, number][] = [
+    ["Clínicas (Santa Rita, Vida Plena)", resumo.clinicas],
+    ["Profissionais (Ana, Bruno)", resumo.profissionais],
+    ["Atendimentos ligados a eles", resumo.pedidos],
+  ];
+  return `<table>${linhas.map(([r, v]) => `<tr><td>${r}</td><td>${v}</td></tr>`).join("")}</table>`;
+}
+
+function botaoLimparFixtures(chave: string): string {
+  return `
+    <form method="post" action="/api/demo">
+      <input type="hidden" name="key" value="${chave}" />
+      <input type="hidden" name="acao" value="limpar-fixtures-seed" />
+      <button class="limpar" type="submit">Apagar esses 4 cadastros de teste</button>
+    </form>`;
+}
+
 export async function GET(requisicao: Request) {
   const segredo = segredoConfigurado();
   const chave = new URL(requisicao.url).searchParams.get("key");
   if (!segredo || chave !== segredo) return new Response("Not found", { status: 404 });
 
-  const resumo = await estadoDemo(prisma);
+  const [resumo, resumoFixtures] = await Promise.all([estadoDemo(prisma), estadoFixturesSeed(prisma)]);
   const temDados = resumo.clinicas > 0 || resumo.pedidos > 0;
+  const temFixtures = resumoFixtures.clinicas > 0 || resumoFixtures.profissionais > 0;
 
   return pagina(`
     <h1>Dados de demonstração</h1>
@@ -125,6 +153,14 @@ export async function GET(requisicao: Request) {
     </ul>
 
     ${botoes(chave, temDados)}
+
+    <h2>Cadastros de teste do ambiente de desenvolvimento</h2>
+    <p>Clínica Santa Rita, Instituto Vida Plena, Ana Ribeiro e Bruno Tavares —
+    os quatro que <code>prisma/seed.ts</code> usa para navegar em
+    desenvolvimento. Não deveriam estar aqui; se estão, é porque o seed rodou
+    neste banco em algum momento.</p>
+    ${temFixtures ? tabelaResumoFixtures(resumoFixtures) : "<p>Nenhum dos quatro está presente.</p>"}
+    ${temFixtures ? botaoLimparFixtures(chave) : ""}
   `);
 }
 
@@ -142,6 +178,16 @@ export async function POST(requisicao: Request) {
       <h1>Demonstração apagada</h1>
       <p>Saíram do banco:</p>
       ${tabelaResumo(apagado)}
+      <p style="margin-top:1.5rem;"><a href="/api/demo?key=${encodeURIComponent(chave)}">← voltar</a></p>
+    `);
+  }
+
+  if (acao === "limpar-fixtures-seed") {
+    const apagado = await limparFixturesSeed(prisma);
+    return pagina(`
+      <h1>Cadastros de teste apagados</h1>
+      <p>Saíram do banco:</p>
+      ${tabelaResumoFixtures(apagado)}
       <p style="margin-top:1.5rem;"><a href="/api/demo?key=${encodeURIComponent(chave)}">← voltar</a></p>
     `);
   }

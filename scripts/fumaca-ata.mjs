@@ -52,7 +52,9 @@ ok("KPI de agendados", painel.includes("Agendados"));
 ok("não mostra mais o a pagar a profissionais", !painel.includes("A pagar a profissionais"));
 ok("produtividade sem participação percentual", !painel.includes("Participação"));
 ok("produtividade mostra o que foi executado", painel.includes("O que executou"));
-ok("botão flutuante de WhatsApp", (await p.locator('a[aria-label*="WhatsApp"]').count()) > 0);
+// O botão de WhatsApp é para quem precisa falar com a central — a própria
+// central não precisa de um botão para ligar para si mesma.
+ok("painel da equipe não tem botão de WhatsApp", (await p.locator('a[aria-label*="WhatsApp"]').count()) === 0);
 
 // ── Esteira ─────────────────────────────────────────────────────────────────
 await p.goto(`${BASE}/painel/pedidos`);

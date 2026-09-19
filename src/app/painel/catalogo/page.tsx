@@ -51,7 +51,17 @@ export default async function Catalogo() {
           {servicos.length === 0 ? (
             <Vazio>Nenhum serviço cadastrado.</Vazio>
           ) : (
-            <Tabela cabecalho={["Serviço", "Categoria", "Duração", "Valor de tabela", "Repasse", "Equipamento", ""]}>
+            <Tabela
+              cabecalho={[
+                "Serviço",
+                { texto: "Categoria", ocultoMovel: true },
+                { texto: "Duração", ocultoMovel: true },
+                "Valor de tabela",
+                { texto: "Repasse", ocultoMovel: true },
+                { texto: "Equipamento", ocultoMovel: true },
+                "",
+              ]}
+            >
               {servicos.map((servico) => (
                 <EditarServico
                   key={servico.id}

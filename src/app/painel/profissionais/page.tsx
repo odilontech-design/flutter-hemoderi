@@ -1,6 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { exigirInterno } from "@/lib/sessao";
-import { Campo, Cartao, Rotulo, Tabela, Titulo, Vazio } from "@/components/ui";
+import { Campo, Cartao, OCULTO_MOVEL, Rotulo, Tabela, Titulo, Vazio } from "@/components/ui";
 import { FormularioAcao } from "@/components/FormularioAcao";
 import { BotaoAcao } from "@/components/BotaoAcao";
 import { AcoesDeAcesso, SituacaoAcesso } from "@/components/AcessoDoCadastro";
@@ -50,10 +50,10 @@ export default async function Profissionais() {
             <Tabela
               cabecalho={[
                 "Profissional",
-                "Conselho",
-                "Repasse",
-                "Avaliação",
-                "Disponibilidade",
+                { texto: "Conselho", ocultoMovel: true },
+                { texto: "Repasse", ocultoMovel: true },
+                { texto: "Avaliação", ocultoMovel: true },
+                { texto: "Disponibilidade", ocultoMovel: true },
                 "Acesso ao portal",
                 "Ações",
               ]}
@@ -69,10 +69,10 @@ export default async function Profissionais() {
                       {profissional.especialidade ?? profissional.telefone ?? "—"}
                     </div>
                   </td>
-                  <td className="py-2 pr-3 text-gray-500">
+                  <td className={`py-2 pr-3 text-gray-500 ${OCULTO_MOVEL}`}>
                     {profissional.conselho ? `${profissional.conselho} ${profissional.registro ?? ""}` : "—"}
                   </td>
-                  <td className="py-2 pr-3 whitespace-nowrap">
+                  <td className={`py-2 pr-3 whitespace-nowrap ${OCULTO_MOVEL}`}>
                     {profissional.repasseFixoCentavos != null ? (
                       formatarReais(profissional.repasseFixoCentavos)
                     ) : profissional.repassePercentPadrao != null ? (
@@ -81,7 +81,7 @@ export default async function Profissionais() {
                       <span className="text-gray-400">padrão</span>
                     )}
                   </td>
-                  <td className="py-2 pr-3 whitespace-nowrap">
+                  <td className={`py-2 pr-3 whitespace-nowrap ${OCULTO_MOVEL}`}>
                     {media === null ? (
                       <span className="text-gray-300">sem avaliação</span>
                     ) : (
@@ -93,7 +93,7 @@ export default async function Profissionais() {
                       </>
                     )}
                   </td>
-                  <td className="py-2 pr-3">
+                  <td className={`py-2 pr-3 ${OCULTO_MOVEL}`}>
                     {profissional._count.disponibilidades === 0 ? (
                       <span className="text-red-600 font-semibold">não declarada</span>
                     ) : (

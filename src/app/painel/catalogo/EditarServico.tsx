@@ -4,7 +4,7 @@ import { useState } from "react";
 import { salvarServico, alternarServico } from "@/app/actions/cadastros";
 import { FormularioAcao } from "@/components/FormularioAcao";
 import { BotaoAcao } from "@/components/BotaoAcao";
-import { Area, Botao, Campo, Rotulo, Selecao } from "@/components/ui";
+import { Area, Botao, Campo, OCULTO_MOVEL, Rotulo, Selecao } from "@/components/ui";
 import { formatarPercent, formatarReais } from "@/lib/dinheiro";
 
 /** Centavos → texto editável ("1234,56"), o mesmo formato que TabelaPrecos usa. */
@@ -66,8 +66,8 @@ export function EditarServico({
     <>
       <tr className="border-b border-gray-100 last:border-0">
         <td className="py-2 pr-3 font-semibold text-bordo">{servico.nome}</td>
-        <td className="py-2 pr-3 text-gray-500">{ROTULO_CATEGORIA[servico.categoria]}</td>
-        <td className="py-2 pr-3 text-gray-500">{servico.duracaoMin} min</td>
+        <td className={`py-2 pr-3 text-gray-500 ${OCULTO_MOVEL}`}>{ROTULO_CATEGORIA[servico.categoria]}</td>
+        <td className={`py-2 pr-3 text-gray-500 ${OCULTO_MOVEL}`}>{servico.duracaoMin} min</td>
         <td className="py-2 pr-3">
           {servico.valorPadraoCentavos > 0 ? (
             formatarReais(servico.valorPadraoCentavos)
@@ -75,7 +75,7 @@ export function EditarServico({
             <span className="text-gray-400">a negociar</span>
           )}
         </td>
-        <td className="py-2 pr-3">
+        <td className={`py-2 pr-3 ${OCULTO_MOVEL}`}>
           {servico.repasseFixoCentavos != null ? (
             formatarReais(servico.repasseFixoCentavos)
           ) : servico.repassePercent != null ? (
@@ -84,7 +84,7 @@ export function EditarServico({
             <span className="text-gray-400">padrão</span>
           )}
         </td>
-        <td className="py-2 pr-3 text-gray-500">
+        <td className={`py-2 pr-3 text-gray-500 ${OCULTO_MOVEL}`}>
           {!servico.exigeEquipamento ? (
             "—"
           ) : (

@@ -143,6 +143,71 @@ export async function limparDemo(prisma: PrismaClient): Promise<ResumoDemo> {
   return antes;
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Fixtures do seed de desenvolvimento (prisma/seed.ts)
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Os quatro cadastros fictícios que `prisma/seed.ts` cria para navegar em
+ * desenvolvimento — Clínica Santa Rita, Instituto Vida Plena, Ana Ribeiro e
+ * Bruno Tavares. O seed não deveria rodar contra produção, mas se rodou (ou
+ * se algum ambiente foi montado a partir de um dump que os carregava), esta
+ * limpeza os tira por identificador exato — slug e e-mail, nunca por nome —
+ * do mesmo jeito que `limparDemo` tira o que tem prefixo "demo-".
+ */
+const SLUGS_FIXTURE_SEED = ["clinica-santa-rita", "instituto-vida-plena"];
+const EMAILS_PROFISSIONAL_FIXTURE_SEED = ["ana@exemplo.com.br", "bruno@exemplo.com.br"];
+
+export type ResumoFixturesSeed = { clinicas: number; profissionais: number; pedidos: number };
+
+async function idsFixtureSeed(prisma: PrismaClient) {
+  const [clinicas, profissionais] = await Promise.all([
+    prisma.clinica.findMany({ where: { slug: { in: SLUGS_FIXTURE_SEED } }, select: { id: true } }),
+    prisma.profissional.findMany({
+      where: { email: { in: EMAILS_PROFISSIONAL_FIXTURE_SEED } },
+      select: { id: true },
+    }),
+  ]);
+  return { clinicaIds: clinicas.map((c) => c.id), profissionalIds: profissionais.map((p) => p.id) };
+}
+
+/** Quanto dos quatro cadastros do seed existe agora no banco. */
+export async function estadoFixturesSeed(prisma: PrismaClient): Promise<ResumoFixturesSeed> {
+  const { clinicaIds, profissionalIds } = await idsFixtureSeed(prisma);
+  const pedidos =
+    clinicaIds.length || profissionalIds.length
+      ? await prisma.pedido.count({
+          where: { OR: [{ clinicaId: { in: clinicaIds } }, { profissionalId: { in: profissionalIds } }] },
+        })
+      : 0;
+  return { clinicas: clinicaIds.length, profissionais: profissionalIds.length, pedidos };
+}
+
+/**
+ * Apaga só esses quatro cadastros, se existirem — idempotente, sem efeito se
+ * já tiverem sido removidos.
+ *
+ * Ordem curta porque a maior parte do schema já cascateia a partir de
+ * Profissional e Clínica (usuário, disponibilidade, agenda, preço
+ * negociado). O que fica de fora da cascata — Pedido e Fatura, ambos com
+ * chave obrigatória para Clínica — sai primeiro; o resto de um pedido
+ * (relatório, avaliação, repasse, mensagem) cascateia dele.
+ */
+export async function limparFixturesSeed(prisma: PrismaClient): Promise<ResumoFixturesSeed> {
+  const antes = await estadoFixturesSeed(prisma);
+  const { clinicaIds, profissionalIds } = await idsFixtureSeed(prisma);
+  if (clinicaIds.length === 0 && profissionalIds.length === 0) return antes;
+
+  await prisma.pedido.deleteMany({
+    where: { OR: [{ clinicaId: { in: clinicaIds } }, { profissionalId: { in: profissionalIds } }] },
+  });
+  await prisma.fatura.deleteMany({ where: { clinicaId: { in: clinicaIds } } });
+  await prisma.profissional.deleteMany({ where: { id: { in: profissionalIds } } });
+  await prisma.clinica.deleteMany({ where: { id: { in: clinicaIds } } });
+
+  return antes;
+}
+
 const COMENTARIOS: Record<"bom" | "medio" | "ruim", string[]> = {
   bom: [
     "Pontual e muito atenciosa com a paciente. Pode mandar sempre.",

@@ -33,8 +33,9 @@ export default async function TrocarSenha() {
     <div className="min-h-screen flex items-center justify-center bg-bordoEscuro px-4 py-10">
       <div className="w-full max-w-sm">
         <div className="text-center mb-6">
-          <div className="font-display font-extrabold text-2xl text-white">Hemoderi</div>
-          <div className="text-[11px] text-white/50 mt-1">Operações · Dilon Saúde</div>
+          {/* eslint-disable-next-line @next/next/no-img-element -- svg estático pequeno, sem ganho no otimizador. */}
+          <img src="/logo-hemoderi.svg" alt="Hemoderi" className="h-20 w-auto mx-auto" />
+          <div className="text-[11px] text-white/50 mt-2">Operações · Dilon Saúde</div>
         </div>
 
         <div className="bg-white rounded-2xl p-6">

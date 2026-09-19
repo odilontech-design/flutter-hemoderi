@@ -1,6 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { exigirResponsavel } from "@/lib/sessao";
-import { Cartao, Kpi, Tabela, Titulo, Vazio } from "@/components/ui";
+import { Cartao, Kpi, OCULTO_MOVEL, Tabela, Titulo, Vazio } from "@/components/ui";
 import { BotaoAcao } from "@/components/BotaoAcao";
 import { BotaoCredencial } from "@/components/BotaoCredencial";
 import { alternarAcesso, redefinirSenha } from "@/app/actions/acessos";
@@ -82,7 +82,17 @@ export default async function Acessos() {
           {usuarios.length === 0 ? (
             <Vazio>Nenhum acesso criado.</Vazio>
           ) : (
-            <Tabela cabecalho={["Pessoa", "Nível", "Perfil", "Vínculo", "Situação", "Senha", "Ações"]}>
+            <Tabela
+              cabecalho={[
+                "Pessoa",
+                { texto: "Nível", ocultoMovel: true },
+                { texto: "Perfil", ocultoMovel: true },
+                { texto: "Vínculo", ocultoMovel: true },
+                "Situação",
+                { texto: "Senha", ocultoMovel: true },
+                "Ações",
+              ]}
+            >
               {usuarios.map((usuario) => {
                 const ativo = !usuario.desativadoEm;
                 const souEu = usuario.id === sessao.usuarioId;
@@ -102,8 +112,8 @@ export default async function Acessos() {
                       </div>
                       <div className="text-[10px] text-gray-400 break-all">{usuario.email}</div>
                     </td>
-                    <td className="py-2 pr-3 whitespace-nowrap">{ROTULO_PAPEL[usuario.papel]}</td>
-                    <td className="py-2 pr-3 whitespace-nowrap">
+                    <td className={`py-2 pr-3 whitespace-nowrap ${OCULTO_MOVEL}`}>{ROTULO_PAPEL[usuario.papel]}</td>
+                    <td className={`py-2 pr-3 whitespace-nowrap ${OCULTO_MOVEL}`}>
                       {usuario.papel !== "INTERNO" ? (
                         "—"
                       ) : (
@@ -114,7 +124,7 @@ export default async function Acessos() {
                         />
                       )}
                     </td>
-                    <td className="py-2 pr-3 text-gray-500">
+                    <td className={`py-2 pr-3 text-gray-500 ${OCULTO_MOVEL}`}>
                       {usuario.clinica?.nome ?? usuario.profissional?.nome ?? "—"}
                       {vinculoInativo && (
                         <div className="text-[10px] font-semibold text-amber-700">cadastro desativado</div>
@@ -129,7 +139,7 @@ export default async function Acessos() {
                         </span>
                       )}
                     </td>
-                    <td className="py-2 pr-3 whitespace-nowrap">
+                    <td className={`py-2 pr-3 whitespace-nowrap ${OCULTO_MOVEL}`}>
                       {usuario.senhaProvisoria ? (
                         <span className="text-[10px] font-semibold text-amber-700">provisória</span>
                       ) : usuario.senhaTrocadaEm ? (

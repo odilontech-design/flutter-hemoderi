@@ -44,7 +44,7 @@ export default async function AgendamentoPublico() {
         <div className="max-w-5xl mx-auto px-5 py-5 flex flex-wrap items-center justify-between gap-3">
           {/* eslint-disable-next-line @next/next/no-img-element -- mesma razão
               do menu lateral: SVG externo, sem ganho no otimizador. */}
-          <img src="/logo-hemoderi.svg" alt="Hemoderi" className="h-8 w-auto object-contain object-left" />
+          <img src="/logo-hemoderi.svg" alt="Hemoderi" className="h-10 w-auto object-contain object-left" />
           <div className="flex items-center gap-3 text-xs">
             {whatsapp && (
               <a

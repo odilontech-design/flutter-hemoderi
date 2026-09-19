@@ -86,7 +86,12 @@ export function Botao({
   );
 }
 
-export function Tabela({ cabecalho, children }: { cabecalho: string[]; children: React.ReactNode }) {
+/** Classe para a mesma coluna somem no celular em <th> (via `cabecalho`) e nos `<td>` da linha. */
+export const OCULTO_MOVEL = "hidden sm:table-cell";
+
+type ColunaTabela = string | { texto: string; ocultoMovel?: boolean };
+
+export function Tabela({ cabecalho, children }: { cabecalho: ColunaTabela[]; children: React.ReactNode }) {
   return (
     // min-w-0 quebra o vício clássico do CSS Grid: sem ele, o item do grid
     // recusa encolher além do conteúdo mínimo da tabela, empurra a própria
@@ -102,15 +107,27 @@ export function Tabela({ cabecalho, children }: { cabecalho: string[]; children:
     // como o table-layout:auto do navegador reparte largura entre células tão
     // diferentes — o botão pode vazar pixels da própria tabela. Nesse caso,
     // linhas em flexbox servem melhor que <table> (ver TabelaPrecos).
+    //
+    // Uma tabela com muitas colunas não cabe em 390px mesmo com scroll
+    // horizontal contido: a coluna de Ações — a que tem os botões — ficava
+    // fora da tela sem nenhum indício de que dava para arrastar. Colunas
+    // secundárias (marcadas com `ocultoMovel`) somem abaixo do breakpoint
+    // `sm`, sobra sempre o identificador principal e as Ações.
     <div className="overflow-x-auto min-w-0 -mx-5 px-5 sm:mx-0 sm:px-0">
       <table className="min-w-full text-xs">
         <thead>
           <tr className="text-left text-gray-500 border-b border-gray-200">
-            {cabecalho.map((c) => (
-              <th key={c} className="font-semibold py-2 pr-3 whitespace-nowrap">
-                {c}
-              </th>
-            ))}
+            {cabecalho.map((c, i) => {
+              const coluna = typeof c === "string" ? { texto: c, ocultoMovel: false } : c;
+              return (
+                <th
+                  key={i}
+                  className={`font-semibold py-2 pr-3 whitespace-nowrap ${coluna.ocultoMovel ? OCULTO_MOVEL : ""}`}
+                >
+                  {coluna.texto}
+                </th>
+              );
+            })}
           </tr>
         </thead>
         <tbody>{children}</tbody>
