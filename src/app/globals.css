@@ -7,4 +7,24 @@ body {
      nem o cinza-azulado que a linha Dilon Tech usa nos outros produtos. */
   background: #faf5f2;
   color: #241412;
+  /* Sem isso, o navegador mostra o cursor de texto (I-beam) sobre qualquer
+     texto da tela — título, rótulo, célula de tabela — como se tudo fosse
+     campo de digitação. Aqui a tela é de operação, não de leitura de texto
+     corrido: cursor de seta é o padrão, e só quem realmente aceita clique ou
+     digitação recupera o próprio cursor abaixo. */
+  cursor: default;
+}
+
+a,
+button,
+select,
+[role="button"],
+label[for],
+summary {
+  cursor: pointer;
+}
+
+input,
+textarea {
+  cursor: text;
 }
