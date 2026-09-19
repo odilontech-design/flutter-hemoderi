@@ -40,28 +40,28 @@ function IconeSair() {
 }
 
 /**
- * Logo da Hemoderi: o ícone (gota + tubo) sempre em imagem, com "Hemoderi"
- * por extenso ao lado como texto — não como parte da imagem. É o layout que
- * a equipe já conhecia, e escrever o nome como texto (em vez de embutido
- * numa segunda imagem) é o que deixa alinhar ao lado do ícone sem depender
- * de proporção de arquivo nenhuma.
+ * Logo da Hemoderi: ícone (gota + tubo) e nome lado a lado, os dois em
+ * imagem — o nome não é texto composto na fonte do sistema, é o próprio
+ * traçado da marca (extraído do arquivo oficial), para não depender de
+ * nenhuma fonte parecida existir no aparelho de quem abre a tela.
  *
- * O nome é sempre "Hemoderi" fixo, nunca o `titulo` do menu: nos portais da
- * clínica e do profissional, `titulo` é o nome de quem está logado — a marca
- * aqui em cima é sempre a da Hemoderi, e quem está logado aparece embaixo,
- * no bloco de `subtitulo`.
+ * O nome mostrado aqui é sempre o da Hemoderi, nunca o `titulo` do menu: nos
+ * portais da clínica e do profissional, `titulo` é o nome de quem está
+ * logado — a marca no topo é sempre a da Hemoderi, e quem está logado
+ * aparece embaixo, no bloco de `subtitulo`.
  *
- * Recolhido, só o ícone fica — mesmo arquivo, controlado por `recolhido` via
- * classe (igual o resto do menu) e não por `if` de JavaScript, porque aqui
- * "recolhido" só existe a partir do breakpoint `md`: no celular a barra é
- * sempre larga e o nome sempre aparece.
+ * Recolhido, só o ícone fica — controlado por `recolhido` via classe (igual
+ * o resto do menu) e não por `if` de JavaScript, porque aqui "recolhido" só
+ * existe a partir do breakpoint `md`: no celular a barra é sempre larga e o
+ * nome sempre aparece.
  */
 function Logo({ recolhido }: { recolhido: boolean }) {
-  const [falhou, setFalhou] = useState(false);
+  const [falhouIcone, setFalhouIcone] = useState(false);
+  const [falhouTexto, setFalhouTexto] = useState(false);
 
   return (
     <div className="flex items-center gap-2 min-w-0">
-      {falhou ? (
+      {falhouIcone ? (
         <div className="w-8 h-8 rounded-lg bg-white/15 flex items-center justify-center font-display font-bold text-xs shrink-0">
           H
         </div>
@@ -71,10 +71,20 @@ function Logo({ recolhido }: { recolhido: boolean }) {
           src="/logo-hemoderi-icone.svg"
           alt="Hemoderi"
           className="w-8 h-8 object-contain shrink-0"
-          onError={() => setFalhou(true)}
+          onError={() => setFalhouIcone(true)}
         />
       )}
-      <span className={`font-display font-bold text-lg truncate ${recolhido ? "md:hidden" : ""}`}>Hemoderi</span>
+      {falhouTexto ? (
+        <span className={`font-display font-bold text-lg truncate ${recolhido ? "md:hidden" : ""}`}>Hemoderi</span>
+      ) : (
+        // eslint-disable-next-line @next/next/no-img-element -- idem.
+        <img
+          src="/logo-hemoderi-texto.svg"
+          alt=""
+          className={`h-6 w-auto max-w-full object-contain object-left ${recolhido ? "md:hidden" : ""}`}
+          onError={() => setFalhouTexto(true)}
+        />
+      )}
     </div>
   );
 }
