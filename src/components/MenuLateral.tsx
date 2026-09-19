@@ -40,60 +40,42 @@ function IconeSair() {
 }
 
 /**
- * Logo da Hemoderi, com um texto/monograma como reserva caso o arquivo suma
- * (aba anônima com cache limpo, arquivo removido do /public, etc.).
+ * Logo da Hemoderi: o ícone (gota + tubo) sempre em imagem, com "Hemoderi"
+ * por extenso ao lado como texto — não como parte da imagem. É o layout que
+ * a equipe já conhecia, e escrever o nome como texto (em vez de embutido
+ * numa segunda imagem) é o que deixa alinhar ao lado do ícone sem depender
+ * de proporção de arquivo nenhuma.
  *
- * O arquivo (`public/logo-hemoderi.svg`) é a marca inteira — gota + nome por
- * extenso, larga e baixa (proporção ~4:1). Expandido, cabe o menu inteiro
- * (`object-contain`, sem cortar nada). Recolhido, vira só a gota: mesmo
- * arquivo, mas `object-cover` + `object-left` amplia a imagem até a ALTURA
- * do selo quadrado preencher e mostra só a fatia esquerda — sem precisar de
- * um segundo arquivo só com o ícone.
+ * O nome é sempre "Hemoderi" fixo, nunca o `titulo` do menu: nos portais da
+ * clínica e do profissional, `titulo` é o nome de quem está logado — a marca
+ * aqui em cima é sempre a da Hemoderi, e quem está logado aparece embaixo,
+ * no bloco de `subtitulo`.
  *
- * As duas versões ficam sempre as duas no DOM; quem decide qual aparece é
- * `recolhido` via classe (igual o resto do menu) — nunca um `if` de
- * JavaScript, porque aqui "recolhido" só existe a partir do breakpoint `md`.
- * No celular a barra é sempre larga e a logo é sempre a inteira.
+ * Recolhido, só o ícone fica — mesmo arquivo, controlado por `recolhido` via
+ * classe (igual o resto do menu) e não por `if` de JavaScript, porque aqui
+ * "recolhido" só existe a partir do breakpoint `md`: no celular a barra é
+ * sempre larga e o nome sempre aparece.
  */
-function Logo({ titulo, recolhido }: { titulo: string; recolhido: boolean }) {
+function Logo({ recolhido }: { recolhido: boolean }) {
   const [falhou, setFalhou] = useState(false);
 
-  if (falhou) {
-    return (
-      <>
-        <div className={`font-display font-bold text-base ${recolhido ? "md:hidden" : ""}`}>{titulo}</div>
-        <div
-          className={`hidden w-8 h-8 rounded-lg bg-white/15 items-center justify-center font-display font-bold text-xs shrink-0 ${
-            recolhido ? "md:flex" : ""
-          }`}
-        >
-          {titulo.charAt(0)}
-        </div>
-      </>
-    );
-  }
-
   return (
-    <>
-      {/* eslint-disable-next-line @next/next/no-img-element -- svg estático pequeno, sem otimização de imagem a ganhar aqui. */}
-      <img
-        src="/logo-hemoderi.svg"
-        alt="Hemoderi"
-        className={`h-14 w-auto max-w-full object-contain object-left ${recolhido ? "md:hidden" : ""}`}
-        onError={() => setFalhou(true)}
-      />
-      {/* Recolhido usa um arquivo próprio (só o ícone, sem o nome por
-          extenso) — não é mais um recorte da logo larga: a logo real da
-          Hemoderi é empilhada (ícone sobre o nome), então "cortar a
-          esquerda" não isola o ícone como isolava na logo antiga. */}
-      {/* eslint-disable-next-line @next/next/no-img-element -- idem. */}
-      <img
-        src="/logo-hemoderi-icone.svg"
-        alt="Hemoderi"
-        className={`hidden w-8 h-8 object-contain shrink-0 ${recolhido ? "md:block" : ""}`}
-        onError={() => setFalhou(true)}
-      />
-    </>
+    <div className="flex items-center gap-2 min-w-0">
+      {falhou ? (
+        <div className="w-8 h-8 rounded-lg bg-white/15 flex items-center justify-center font-display font-bold text-xs shrink-0">
+          H
+        </div>
+      ) : (
+        // eslint-disable-next-line @next/next/no-img-element -- svg estático pequeno, sem otimização de imagem a ganhar aqui.
+        <img
+          src="/logo-hemoderi-icone.svg"
+          alt="Hemoderi"
+          className="w-8 h-8 object-contain shrink-0"
+          onError={() => setFalhou(true)}
+        />
+      )}
+      <span className={`font-display font-bold text-lg truncate ${recolhido ? "md:hidden" : ""}`}>Hemoderi</span>
+    </div>
   );
 }
 
@@ -196,7 +178,7 @@ export function MenuLateral({
 
         <div className={`p-4 border-b border-white/10 ${recolhido ? "md:px-2" : ""}`}>
           <div className={`flex ${recolhido ? "md:justify-center" : ""}`}>
-            <Logo titulo={titulo} recolhido={recolhido} />
+            <Logo recolhido={recolhido} />
           </div>
           {/* Só existe o que dizer aqui quando titulo é outra identidade além
               da Hemoderi (a clínica, o profissional) — a logo já diz
