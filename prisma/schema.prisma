@@ -41,18 +41,31 @@ enum PapelUsuario {
   PROFISSIONAL // prestador que executa o atendimento
 }
 
-/// Só existe (e só importa) quando papel = INTERNO. A distinção que a
-/// reunião de 14/09 pediu depois de ver a equipe crescer: "as meninas"
-/// operam a esteira do dia a dia, mas gerir acesso alheio e ver o repasse
-/// devido a cada profissional é coisa de quem responde pela operação.
+/// Só existe (e só importa) quando papel = INTERNO. Nasceu na reunião de
+/// 14/09 como uma distinção só (Atendente/Responsável); a de 21/09 nomeou as
+/// quatro funções reais da equipe — a esteira não é mais trabalhada por
+/// "atendentes" genéricos, é Joyce alocando, Stephanie conferindo relatório,
+/// Ana no comercial e Ingrid gerindo as pessoas.
+///
+/// RESPONSAVEL continua acima de todos (é o André e a Naiara): as guardas
+/// tratam RESPONSAVEL como coringa em qualquer verificação de perfil — ver
+/// `perfilPermite` em lib/papeis.ts. ATENDENTE segue existindo como o
+/// padrão de quem ainda não tem função definida (import em lote, por
+/// exemplo): sem ele, toda conta nova precisaria escolher uma das quatro
+/// funções específicas na hora do cadastro, mesmo quando ninguém sabe ainda
+/// qual é.
 ///
 /// NULL é tratado como RESPONSAVEL (ver `perfilEfetivo` em lib/papeis.ts) —
 /// assim nenhuma conta interna já existente perde acesso quando este campo
 /// nasce; a escolha explícita passa a valer só a partir da próxima conta
 /// criada ou do primeiro ajuste de perfil.
 enum PerfilInterno {
-  ATENDENTE // esteira, agenda, cadastros e triagem — sem financeiro nem acessos
-  RESPONSAVEL // tudo isso, mais o repasse aos profissionais e a gestão de acesso
+  ATENDENTE // sem função definida — esteira, agenda, cadastros e triagem
+  LOGISTICA // Joyce: cadastro, alocação de profissionais, gestão de entregas
+  POS_VENDA // Stephanie: financeiro do cliente, pesquisas, aprovação de relatório
+  COMERCIAL // Ana: atendimento, preços, agendamento, cancelamento
+  GESTAO // Ingrid: pessoas — ganhos, feedbacks e disponibilidade dos profissionais
+  RESPONSAVEL // André e Naiara: tudo isso, mais repasse e gestão de acesso
 }
 
 model Usuario {

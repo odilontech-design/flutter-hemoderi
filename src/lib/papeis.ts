@@ -24,6 +24,10 @@ export function inicioDe(papel: PapelUsuario): string {
 
 export const ROTULO_PERFIL_INTERNO: Record<PerfilInterno, string> = {
   ATENDENTE: "Atendente",
+  LOGISTICA: "Logística",
+  POS_VENDA: "Pós-venda",
+  COMERCIAL: "Comercial",
+  GESTAO: "Gestão",
   RESPONSAVEL: "Responsável",
 };
 
@@ -39,4 +43,15 @@ export const ROTULO_PERFIL_INTERNO: Record<PerfilInterno, string> = {
  */
 export function perfilEfetivo(perfilInterno: PerfilInterno | null): PerfilInterno {
   return perfilInterno ?? "RESPONSAVEL";
+}
+
+/**
+ * Uma ação é restrita a um ou mais perfis específicos (ex.: só Logística
+ * aloca, só Comercial cancela) — RESPONSAVEL sempre passa, porque é quem
+ * responde pela operação inteira (André, Naiara). Centralizado aqui para as
+ * actions não espalharem `perfil === "X" || perfil === "RESPONSAVEL"` cada
+ * uma com sua própria lista.
+ */
+export function perfilPermite(perfil: PerfilInterno, ...permitidos: PerfilInterno[]): boolean {
+  return perfil === "RESPONSAVEL" || permitidos.includes(perfil);
 }

@@ -2,9 +2,10 @@
 
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
-import { exigirResponsavel, registrarAuditoria } from "@/lib/sessao";
+import { exigirInterno, exigirResponsavel, registrarAuditoria } from "@/lib/sessao";
 import { parametros } from "@/lib/alocacao";
 import { competenciaPorExtenso } from "@/lib/data";
+import { perfilPermite } from "@/lib/papeis";
 import type { Resultado } from "./pedidos";
 
 /**
@@ -145,9 +146,16 @@ export async function pagarRepasses(profissionalId: string, competencia: string)
  * muda (membrana que virou stickbone, quantidade diferente da combinada), e
  * quem confere isso é a operação, não quem executou. Antes da aprovação o
  * valor existe e é visível — só não entra na fila de pagamento.
+ *
+ * Pós-venda (Stephanie) é quem confere na prática, ata de 21/09 — daí
+ * `exigirInterno` em vez de `exigirResponsavel` aqui, com a checagem de
+ * perfil logo abaixo.
  */
 export async function aprovarRelatorio(pedidoId: string): Promise<Resultado> {
-  const sessao = await exigirResponsavel();
+  const sessao = await exigirInterno();
+  if (!perfilPermite(sessao.perfil, "POS_VENDA")) {
+    return { ok: false, erro: "Só o pós-venda aprova relatório." };
+  }
 
   const relatorio = await prisma.relatorioAtendimento.findUnique({
     where: { pedidoId },

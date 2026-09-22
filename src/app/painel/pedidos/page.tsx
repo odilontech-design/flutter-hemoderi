@@ -12,6 +12,7 @@ import { AcoesPedido } from "./AcoesPedido";
 import { CondicaoPagamento } from "./CondicaoPagamento";
 import { BotaoAcao } from "@/components/BotaoAcao";
 import { aprovarRelatorio } from "@/app/actions/financeiro";
+import { perfilPermite } from "@/lib/papeis";
 
 export const dynamic = "force-dynamic";
 
@@ -29,7 +30,7 @@ const FILTROS: { chave: string; rotulo: string; status?: StatusPedido[] }[] = [
  * ordenada por data é um arquivo, não uma fila de trabalho.
  */
 export default async function Esteira({ searchParams }: { searchParams: { filtro?: string } }) {
-  await exigirInterno();
+  const sessao = await exigirInterno();
 
   const filtro = FILTROS.find((f) => f.chave === searchParams.filtro) ?? FILTROS[0];
 
@@ -136,17 +137,19 @@ export default async function Esteira({ searchParams }: { searchParams: { filtro
                   {pedido.observacoes && (
                     <div className="text-[11px] text-gray-400 mt-1">{pedido.observacoes}</div>
                   )}
-                  {pedido.relatorio && !pedido.relatorio.aprovadoEm && (
-                    <div className="mt-1.5">
-                      <BotaoAcao
-                        acao={aprovarRelatorio.bind(null, pedido.id)}
-                        variante="primario"
-                        confirmar="Conferiu o relatório? Aprovar libera o repasse deste atendimento para pagamento."
-                      >
-                        Aprovar relatório e liberar repasse
-                      </BotaoAcao>
-                    </div>
-                  )}
+                  {pedido.relatorio &&
+                    !pedido.relatorio.aprovadoEm &&
+                    perfilPermite(sessao.perfil, "POS_VENDA") && (
+                      <div className="mt-1.5">
+                        <BotaoAcao
+                          acao={aprovarRelatorio.bind(null, pedido.id)}
+                          variante="primario"
+                          confirmar="Conferiu o relatório? Aprovar libera o repasse deste atendimento para pagamento."
+                        >
+                          Aprovar relatório e liberar repasse
+                        </BotaoAcao>
+                      </div>
+                    )}
                   {pedido.relatorio?.aprovadoEm && (
                     <div className="text-[10px] font-semibold text-green-700 mt-1">
                       relatório conferido · repasse liberado
@@ -179,6 +182,7 @@ export default async function Esteira({ searchParams }: { searchParams: { filtro
               <AcoesPedido
                 pedidoId={pedido.id}
                 status={pedido.status}
+                perfil={sessao.perfil}
                 profissionais={profissionais.filter((p) => {
                   const indisponiveis = indisponiveisPorPedido.get(pedido.id);
                   return !indisponiveis || p.id === pedido.profissionalId || !indisponiveis.has(p.id);

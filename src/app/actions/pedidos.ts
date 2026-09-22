@@ -12,6 +12,7 @@ import { enfileirarMensagem } from "@/lib/integracoes/whatsapp";
 import { sincronizarEvento } from "@/lib/integracoes/google-agenda";
 import { marcarNegocioGanho } from "@/lib/integracoes/pipedrive";
 import { condicaoValida } from "@/lib/pagamento";
+import { perfilPermite } from "@/lib/papeis";
 
 export type Resultado = { ok: boolean; erro?: string; avisos?: string[] };
 
@@ -315,6 +316,9 @@ export async function confirmarPedido(pedidoId: string): Promise<Resultado> {
 
 export async function alocarPedido(pedidoId: string, profissionalId: string): Promise<Resultado> {
   const sessao = await exigirInterno();
+  if (!perfilPermite(sessao.perfil, "LOGISTICA")) {
+    return { ok: false, erro: "Só a logística aloca profissionais." };
+  }
 
   const pedido = await prisma.pedido.findUnique({
     where: { id: pedidoId },
@@ -405,9 +409,21 @@ export async function alocarPedido(pedidoId: string, profissionalId: string): Pr
   return { ok: true, avisos: resultado.avisos };
 }
 
-/** Devolve o pedido à fila quando o profissional desiste. */
-export async function desalocarPedido(pedidoId: string): Promise<Resultado> {
+/**
+ * Devolve o pedido à fila — profissional recusou, imprevisto, endereço fora
+ * de área. Exclusivo da logística (ata de 21/09): depois que o profissional
+ * aceita, só ela pode tirá-lo do caso, nunca a própria pessoa profissional
+ * de forma autônoma.
+ */
+export async function desalocarPedido(pedidoId: string, motivo: string): Promise<Resultado> {
   const sessao = await exigirInterno();
+  if (!perfilPermite(sessao.perfil, "LOGISTICA")) {
+    return { ok: false, erro: "Só a logística desaloca um profissional." };
+  }
+  if (!motivo.trim()) {
+    return { ok: false, erro: "Informe o motivo da realocação." };
+  }
+
   const resultado = await transicionar(pedidoId, "CONFIRMADO", sessao.usuarioId);
   if (resultado.ok) {
     await prisma.pedido.update({
@@ -423,18 +439,27 @@ export async function desalocarPedido(pedidoId: string): Promise<Resultado> {
     // quando me tiram do caso" é o mínimo para alguém confiar no que vê ali.
     // Cai na agenda da operação se houver uma, que é onde a equipe acompanha.
     await sincronizarEvento(pedidoId);
+    await registrarAuditoria(sessao.usuarioId, "Pedido", pedidoId, "desalocar", motivo);
     atualizarTelas();
   }
   return resultado;
 }
 
+/** Exclusivo do comercial (ata de 21/09) — é quem decide, com a clínica, se o atendimento cai. */
 export async function cancelarPedido(pedidoId: string, motivo: string): Promise<Resultado> {
   const sessao = await exigirInterno();
+  if (!perfilPermite(sessao.perfil, "COMERCIAL")) {
+    return { ok: false, erro: "Só o comercial cancela um agendamento." };
+  }
+  if (!motivo.trim()) {
+    return { ok: false, erro: "Informe o motivo do cancelamento." };
+  }
+
   const resultado = await transicionar(pedidoId, "CANCELADO", sessao.usuarioId);
   if (resultado.ok) {
     await prisma.pedido.update({
       where: { id: pedidoId },
-      data: { canceladoEm: new Date(), motivoCancelamento: motivo || null },
+      data: { canceladoEm: new Date(), motivoCancelamento: motivo },
     });
     await prisma.mensagemWhatsapp.updateMany({
       where: { pedidoId, status: "PENDENTE" },
