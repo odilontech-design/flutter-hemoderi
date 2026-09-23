@@ -7,7 +7,7 @@ import { prisma } from "@/lib/prisma";
 import { dataDeISO, dataMinimaAgendamentoPublico, isoDeData, paraMinutos } from "@/lib/data";
 import { parametros } from "@/lib/alocacao";
 import { numeroParaWhatsapp } from "@/lib/whatsapp-link";
-import { cepValido } from "@/lib/documento";
+import { cepValido, cnpjValido, cpfValido } from "@/lib/documento";
 import { gerarSenha } from "@/lib/senha";
 import { slugLivre } from "./cadastros";
 import type { Resultado } from "./pedidos";
@@ -155,12 +155,22 @@ export async function solicitarPublico(
     if (!clinicaNomeInformado) return { ok: false, erro: "Informe o nome da clínica." };
     if (!emailNovo) return { ok: false, erro: "Informe um e-mail — é por ele que você entra no portal depois." };
 
+    // Opcional aqui como no cadastro interno (salvarClinica) — mas quando
+    // vem preenchido, tem que ser um CNPJ ou CPF de verdade: é o dado que
+    // sustenta cobrança e rastreio de inadimplência (ata de 21/09), e não dá
+    // para deixar a porta de autocadastro aceitar qualquer dígito.
+    const cnpj = String(dados.get("cnpj") ?? "").trim();
+    if (cnpj && !cnpjValido(cnpj) && !cpfValido(cnpj)) {
+      return { ok: false, erro: "CNPJ (ou CPF) inválido — confira se algum dígito ficou trocado." };
+    }
+
     try {
       const senha = gerarSenha();
       const clinica = await prisma.clinica.create({
         data: {
           nome: clinicaNomeInformado,
           slug: await slugLivre(clinicaNomeInformado),
+          cnpj: cnpj || null,
           telefone,
           email: emailNovo,
           cep,

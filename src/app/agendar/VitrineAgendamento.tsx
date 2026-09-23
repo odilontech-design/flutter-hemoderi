@@ -6,6 +6,7 @@ import { useFormState } from "react-dom";
 import { solicitarPublico } from "@/app/actions/publico";
 import { Area, Aviso, Botao, Campo, Rotulo } from "@/components/ui";
 import { CamposEndereco } from "@/components/CamposEndereco";
+import { CampoDocumento } from "@/components/CampoDocumento";
 import { formatarTelefone, linkWhatsapp, mensagemDeUrgencia } from "@/lib/whatsapp-link";
 import { dataDeISO, instanteDoAtendimento } from "@/lib/data";
 import { linkAdicionarGoogleAgenda } from "@/lib/google-calendar-link";
@@ -415,6 +416,7 @@ export function VitrineAgendamento({
                     Vira o login do portal — a senha a gente sorteia e mostra no fim.
                   </div>
                 </div>
+                <CampoDocumento tipo="cnpj" name="cnpj" rotulo="CNPJ (opcional)" />
               </div>
             )}
 

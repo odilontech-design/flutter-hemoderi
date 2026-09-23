@@ -222,7 +222,7 @@ export default async function MeusAgendamentos() {
         )}
       </Cartao>
 
-      {clinica && <CartaoDivulgacao slug={clinica.slug} nome={clinica.nome} />}
+      {clinica && <CartaoDivulgacao slug={clinica.slug} nome={clinica.nome} mostrarQrCode={false} />}
     </>
   );
 }
