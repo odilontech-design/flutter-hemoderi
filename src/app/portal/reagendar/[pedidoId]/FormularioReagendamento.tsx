@@ -13,14 +13,15 @@ export function FormularioReagendamento({
   servicoId,
   profissionalId,
   profissionalNome,
-  antecedenciaHoras,
+  dataMinima,
 }: {
   pedidoId: string;
   servicoId: string;
-  /** Nulo quando a central ainda não definiu quem vai atender. */
+  /** Nulo quando a central ainda não definiu quem vai atender, ou quando falta mais de 24h. */
   profissionalId: string | null;
   profissionalNome: string | null;
-  antecedenciaHoras: number;
+  /** ISO — regra das 18h do dia anterior, a mesma do agendamento novo. */
+  dataMinima: string;
 }) {
   const router = useRouter();
   const [estado, enviar] = useFormState(reagendarPedido, INICIAL);
@@ -72,10 +73,17 @@ export function FormularioReagendamento({
 
       <div>
         <Rotulo>Nova data</Rotulo>
-        <Campo type="date" name="data" value={data} onChange={(e) => setData(e.target.value)} required />
+        <Campo
+          type="date"
+          name="data"
+          min={dataMinima}
+          value={data}
+          onChange={(e) => setData(e.target.value)}
+          required
+        />
         <div className="text-[10px] text-gray-400 mt-1">
-          Remarcação pelo portal exige {antecedenciaHoras}h de antecedência, tanto do horário atual
-          quanto do novo.
+          Remarcação pelo portal fecha às 18h do dia anterior — a mesma regra de um agendamento
+          novo. Para menos que isso, fale com a central.
         </div>
       </div>
 

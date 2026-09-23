@@ -7,7 +7,14 @@ import { exigirClinica, exigirInterno, exigirProfissional, registrarAuditoria } 
 import { equipamentoLivre, parametros, temBloqueio, travarRecursos, verificarAlocacao } from "@/lib/alocacao";
 import { calcularRepasse } from "@/lib/repasse";
 import { podeTransicionar, STATUS_ATIVOS } from "@/lib/pedido";
-import { competenciaDe, dataDeISO, instanteDoAtendimento, isoDeData } from "@/lib/data";
+import {
+  competenciaDe,
+  dataDeISO,
+  dataMinimaAgendamentoPublico,
+  dentroDoPrazoDeCancelamento,
+  instanteDoAtendimento,
+  isoDeData,
+} from "@/lib/data";
 import { enfileirarMensagem } from "@/lib/integracoes/whatsapp";
 import { sincronizarEvento } from "@/lib/integracoes/google-agenda";
 import { criarNegocio, marcarNegocioGanho } from "@/lib/integracoes/pipedrive";
@@ -540,20 +547,6 @@ export async function registrarResultado(
 
 // ─── Portal da clínica ──────────────────────────────────────────────────────
 
-/**
- * Janela em que a clínica ainda mexe no próprio pedido sozinha.
- *
- * Vale a mesma antecedência mínima do agendamento: mais perto do que isso, o
- * profissional já se organizou para o deslocamento e o equipamento já foi
- * separado. Desmarcar em cima da hora continua possível — mas pela central,
- * falando com alguém, que é o que dá à operação a chance de remanejar.
- */
-async function dentroDaJanelaDaClinica(data: Date, horaInicio: string): Promise<boolean> {
-  const config = await parametros();
-  const limite = new Date(Date.now() + config.antecedenciaMinimaHoras * 60 * 60 * 1000);
-  return instanteDoAtendimento(data, horaInicio) >= limite;
-}
-
 async function pedidoDaClinica(pedidoId: string, clinicaId: string) {
   // O filtro por clinicaId é o que impede mexer no pedido de outra clínica
   // trocando o id na URL.
@@ -579,38 +572,39 @@ async function pedidoDaClinica(pedidoId: string, clinicaId: string) {
  * horário — trocar de profissional a cada mudança de hora seria perder o
  * combinado com quem já conhece o caso. Se ele não estiver livre, o
  * reagendamento é recusado com o motivo, e a clínica escolhe outro horário.
+ *
+ * Prazo: a mesma regra das 18h do agendamento novo (ata de 21/09) — não mais
+ * a janela corrida de `antecedenciaMinimaHoras` de antes. Desacoplado do
+ * cancelamento de propósito (esse segue `dentroDoPrazoDeCancelamento`, 30
+ * minutos): remarcar tem o custo extra de checar disponibilidade numa data
+ * nova, e por isso fecha mais cedo — o mesmo horário-limite que fecha um
+ * agendamento novo.
  */
-export async function reagendarPedido(_anterior: Resultado, dados: FormData): Promise<Resultado> {
-  const sessao = await exigirClinica();
+type PedidoParaReagendar = {
+  id: string;
+  clinicaId: string;
+  profissionalId: string | null;
+  equipamentoId: string | null;
+  duracaoMin: number;
+  data: Date;
+  horaInicio: string;
+  servico: { exigeEquipamento: boolean; tipoEquipamento: string | null };
+};
 
-  const pedidoId = String(dados.get("pedidoId") ?? "");
-  const dataISO = String(dados.get("data") ?? "");
-  const horaInicio = String(dados.get("horaInicio") ?? "");
-  if (!dataISO || !horaInicio) return { ok: false, erro: "Escolha a nova data e o novo horário." };
-
-  const pedido = await pedidoDaClinica(pedidoId, sessao.clinicaId);
-  if (!pedido) return { ok: false, erro: "Pedido não encontrado." };
-  if (!STATUS_ATIVOS.includes(pedido.status)) {
-    return { ok: false, erro: "Este atendimento já foi finalizado." };
-  }
-
-  if (!(await dentroDaJanelaDaClinica(pedido.data, pedido.horaInicio))) {
-    const config = await parametros();
-    return {
-      ok: false,
-      erro: `Faltam menos de ${config.antecedenciaMinimaHoras}h para este atendimento. Fale com a central para remarcar.`,
-    };
-  }
-
-  const novaData = dataDeISO(dataISO);
-  if (!(await dentroDaJanelaDaClinica(novaData, horaInicio))) {
-    const config = await parametros();
-    return { ok: false, erro: `O novo horário precisa de ${config.antecedenciaMinimaHoras}h de antecedência.` };
-  }
-
+/**
+ * O miolo do reagendamento — checar disponibilidade na data nova e mover o
+ * pedido — compartilhado entre o portal (com o prazo das 18h) e o painel
+ * interno (sem prazo: é o caminho que a central usa depois que o do site já
+ * fechou). O prazo é responsabilidade de quem chama, não daqui.
+ */
+async function efetuarReagendamento(
+  pedido: PedidoParaReagendar,
+  novaData: Date,
+  horaInicio: string
+): Promise<Resultado> {
   const resultado = await prisma.$transaction(async (tx) => {
     await travarRecursos(tx, {
-      clinicaId: sessao.clinicaId,
+      clinicaId: pedido.clinicaId,
       profissionalId: pedido.profissionalId,
       tipoEquipamento:
         pedido.equipamentoId && pedido.servico.exigeEquipamento ? pedido.servico.tipoEquipamento : null,
@@ -618,7 +612,7 @@ export async function reagendarPedido(_anterior: Resultado, dados: FormData): Pr
 
     const impedimentos = await verificarAlocacao(
       {
-        clinicaId: sessao.clinicaId,
+        clinicaId: pedido.clinicaId,
         profissionalId: pedido.profissionalId,
         equipamentoId: pedido.equipamentoId,
         data: novaData,
@@ -654,19 +648,96 @@ export async function reagendarPedido(_anterior: Resultado, dados: FormData): Pr
   if (pedido.profissionalId) await enfileirarMensagem(pedido.id, "ALOCACAO");
   await sincronizarEvento(pedido.id);
 
+  atualizarTelas();
+  return { ok: true };
+}
+
+export async function reagendarPedido(_anterior: Resultado, dados: FormData): Promise<Resultado> {
+  const sessao = await exigirClinica();
+
+  const pedidoId = String(dados.get("pedidoId") ?? "");
+  const dataISO = String(dados.get("data") ?? "");
+  const horaInicio = String(dados.get("horaInicio") ?? "");
+  if (!dataISO || !horaInicio) return { ok: false, erro: "Escolha a nova data e o novo horário." };
+
+  const pedido = await pedidoDaClinica(pedidoId, sessao.clinicaId);
+  if (!pedido) return { ok: false, erro: "Pedido não encontrado." };
+  if (!STATUS_ATIVOS.includes(pedido.status)) {
+    return { ok: false, erro: "Este atendimento já foi finalizado." };
+  }
+
+  const dataMinima = dataMinimaAgendamentoPublico();
+  if (isoDeData(pedido.data) < dataMinima) {
+    return {
+      ok: false,
+      erro: "Esse atendimento já está fora do prazo de remarcação pelo portal. Fale com a central.",
+    };
+  }
+  if (dataISO < dataMinima) {
+    return {
+      ok: false,
+      erro: "O novo horário está fora do prazo: o site fecha a agenda de amanhã às 18h de hoje.",
+    };
+  }
+
+  const dataAnterior = `${isoDeData(pedido.data)} ${pedido.horaInicio}`;
+  const resultado = await efetuarReagendamento(pedido, dataDeISO(dataISO), horaInicio);
+  if (!resultado.ok) return resultado;
+
   await registrarAuditoria(
     sessao.usuarioId,
     "Pedido",
     pedido.id,
     "reagendar-portal",
-    `${isoDeData(pedido.data)} ${pedido.horaInicio} → ${dataISO} ${horaInicio}`
+    `${dataAnterior} → ${dataISO} ${horaInicio}`
   );
 
-  atualizarTelas();
   return { ok: true };
 }
 
-/** Cancelamento pelo portal, na mesma janela do reagendamento. */
+/**
+ * Reagendamento pelo painel interno — exclusivo do comercial (ata de 21/09),
+ * o mesmo perfil que cancela (`cancelarPedido`). Sem o prazo das 18h do
+ * portal de propósito: é o caminho que a central usa depois que o prazo do
+ * site já fechou, ou quando quem pede é a própria clínica por telefone.
+ */
+export async function reagendarPedidoInterno(pedidoId: string, dataISO: string, horaInicio: string): Promise<Resultado> {
+  const sessao = await exigirInterno();
+  if (!perfilPermite(sessao.perfil, "COMERCIAL")) {
+    return { ok: false, erro: "Só o comercial reagenda um atendimento." };
+  }
+  if (!dataISO || !horaInicio) return { ok: false, erro: "Escolha a nova data e o novo horário." };
+
+  const pedido = await prisma.pedido.findUnique({
+    where: { id: pedidoId },
+    include: {
+      servico: { select: { exigeEquipamento: true, tipoEquipamento: true } },
+    },
+  });
+  if (!pedido) return { ok: false, erro: "Pedido não encontrado." };
+  if (!STATUS_ATIVOS.includes(pedido.status)) {
+    return { ok: false, erro: "Este atendimento já foi finalizado." };
+  }
+
+  const dataAnterior = `${isoDeData(pedido.data)} ${pedido.horaInicio}`;
+  const resultado = await efetuarReagendamento(pedido, dataDeISO(dataISO), horaInicio);
+  if (!resultado.ok) return resultado;
+
+  await registrarAuditoria(
+    sessao.usuarioId,
+    "Pedido",
+    pedido.id,
+    "reagendar-interno",
+    `${dataAnterior} → ${dataISO} ${horaInicio}`
+  );
+
+  return { ok: true };
+}
+
+/**
+ * Cancelamento pelo portal — até 30 minutos antes do atendimento (ata de
+ * 21/09), desacoplado do prazo de reagendamento. Ver `dentroDoPrazoDeCancelamento`.
+ */
 export async function cancelarPeloPortal(pedidoId: string, motivo: string): Promise<Resultado> {
   const sessao = await exigirClinica();
 
@@ -676,11 +747,10 @@ export async function cancelarPeloPortal(pedidoId: string, motivo: string): Prom
     return { ok: false, erro: "Este atendimento já foi finalizado." };
   }
 
-  if (!(await dentroDaJanelaDaClinica(pedido.data, pedido.horaInicio))) {
-    const config = await parametros();
+  if (!dentroDoPrazoDeCancelamento(pedido.data, pedido.horaInicio)) {
     return {
       ok: false,
-      erro: `Faltam menos de ${config.antecedenciaMinimaHoras}h para este atendimento. Fale com a central para cancelar.`,
+      erro: "Faltam menos de 30 minutos para este atendimento. Fale com a central para cancelar.",
     };
   }
 

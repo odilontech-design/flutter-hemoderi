@@ -2,13 +2,14 @@ import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 import { exigirClinica } from "@/lib/sessao";
 import { Cartao, Kpi, SeloStatus, Tabela, Titulo, Vazio } from "@/components/ui";
-import { formatarDataCurta, hojeUTC } from "@/lib/data";
+import { formatarDataCurta, hojeUTC, nomeDoProfissionalVisivel } from "@/lib/data";
 import { STATUS_ATIVOS } from "@/lib/pedido";
 import { AcoesClinica } from "./AcoesClinica";
 import { AvaliarAtendimento } from "./AvaliarAtendimento";
 import { ResponderNps } from "./ResponderNps";
 import { CartaoDivulgacao } from "@/components/CartaoDivulgacao";
 import { formatarMedia, mediaDeNotas } from "@/lib/avaliacao";
+import { formatarReais } from "@/lib/dinheiro";
 
 export const dynamic = "force-dynamic";
 
@@ -105,7 +106,13 @@ export default async function MeusAgendamentos() {
                 <td className="py-2 pr-3">{pedido.horaInicio}</td>
                 <td className="py-2 pr-3 text-gray-600">{pedido.servico.nome}</td>
                 <td className="py-2 pr-3 text-gray-600">
-                  {pedido.profissional?.nome ?? <span className="text-gray-400">a definir</span>}
+                  {!nomeDoProfissionalVisivel(pedido.data, pedido.horaInicio) ? (
+                    <span title="O nome de quem vai atender aparece 24h antes do atendimento.">
+                      {formatarReais(pedido.valorServicoCentavos)}
+                    </span>
+                  ) : (
+                    pedido.profissional?.nome ?? <span className="text-gray-400">a definir</span>
+                  )}
                 </td>
                 <td className="py-2 pr-3 text-gray-500">{pedido.pacienteNome ?? "—"}</td>
                 <td className="py-2 pr-3">

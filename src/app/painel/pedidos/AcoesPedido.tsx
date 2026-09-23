@@ -10,6 +10,7 @@ import {
   confirmarPedido,
   desalocarPedido,
   marcarResultadoInterno,
+  reagendarPedidoInterno,
 } from "@/app/actions/pedidos";
 
 /** Motivos padronizados de realocação (ata de 21/09) — "Outro" libera o texto. */
@@ -100,6 +101,59 @@ function AcaoComMotivo({
 }
 
 /**
+ * Nova data e horário antes de reagendar — sem checar disponibilidade no
+ * navegador (a `reagendarPedidoInterno` já confere e recusa com o motivo, o
+ * mesmo caminho que o "Novo agendamento" interno usa). Fecha sem confirmar,
+ * igual ao padrão de `AcaoComMotivo`.
+ */
+function AcaoReagendar({ disabled, onConfirmar }: { disabled?: boolean; onConfirmar: (data: string, hora: string) => void }) {
+  const [aberto, setAberto] = useState(false);
+  const [data, setData] = useState("");
+  const [hora, setHora] = useState("");
+
+  if (!aberto) {
+    return (
+      <Botao variante="secundario" disabled={disabled} onClick={() => setAberto(true)}>
+        Reagendar
+      </Botao>
+    );
+  }
+
+  return (
+    <div className="flex flex-wrap items-center gap-1.5">
+      <Campo
+        aria-label="Nova data"
+        type="date"
+        value={data}
+        onChange={(e) => setData(e.target.value)}
+        className="!w-auto !py-1.5"
+      />
+      <Campo
+        aria-label="Novo horário"
+        type="time"
+        step={900}
+        value={hora}
+        onChange={(e) => setHora(e.target.value)}
+        className="!w-auto !py-1.5"
+      />
+      <Botao
+        variante="secundario"
+        disabled={disabled || !data || !hora}
+        onClick={() => {
+          onConfirmar(data, hora);
+          setAberto(false);
+        }}
+      >
+        Confirmar
+      </Botao>
+      <Botao variante="secundario" disabled={disabled} onClick={() => setAberto(false)}>
+        Voltar
+      </Botao>
+    </div>
+  );
+}
+
+/**
  * As ações possíveis para o pedido no estado em que ele está.
  *
  * A tela só oferece o que a máquina de status permite (lib/pedido.ts). Botão
@@ -107,11 +161,11 @@ function AcaoComMotivo({
  * desconfiar do sistema — e a recusa aqui é comum: alocar esbarra em agenda,
  * sala e equipamento.
  *
- * Alocar/desalocar e cancelar também recusam por PERFIL (ata de 21/09):
- * alocação é da logística, cancelamento é do comercial. Esconder o botão de
- * quem não pode não substitui a checagem na action — é só o que evita a
- * pessoa clicar em algo que a própria action vai recusar, igual ao padrão já
- * usado no menu lateral para financeiro/acessos.
+ * Alocar/desalocar, reagendar e cancelar também recusam por PERFIL (ata de
+ * 21/09): alocação é da logística, reagendamento e cancelamento são do
+ * comercial. Esconder o botão de quem não pode não substitui a checagem na
+ * action — é só o que evita a pessoa clicar em algo que a própria action vai
+ * recusar, igual ao padrão já usado no menu lateral para financeiro/acessos.
  */
 export function AcoesPedido({
   pedidoId,
@@ -150,6 +204,9 @@ export function AcoesPedido({
 
   const podeAlocar = perfilPermite(perfil, "LOGISTICA");
   const podeCancelar = perfilPermite(perfil, "COMERCIAL");
+  // Mesmo perfil do cancelamento — ata de 21/09: é a Ana quem decide, com a
+  // clínica, se o atendimento muda de data.
+  const podeReagendar = perfilPermite(perfil, "COMERCIAL");
 
   return (
     <div className="mt-3 pt-3 border-t border-gray-100 flex flex-wrap items-center gap-2">
@@ -207,6 +264,13 @@ export function AcoesPedido({
             />
           )}
         </>
+      )}
+
+      {podeReagendar && (
+        <AcaoReagendar
+          disabled={pendente}
+          onConfirmar={(data, hora) => executar(() => reagendarPedidoInterno(pedidoId, data, hora))}
+        />
       )}
 
       {podeCancelar && (

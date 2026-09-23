@@ -165,11 +165,39 @@ export function instanteDoAtendimento(data: Date, hora: string): Date {
  * central já não tem como garantir profissional e equipamento a tempo, e a
  * data mínima pula para depois de amanhã.
  *
- * É distinta da antecedência do portal da clínica (`antecedenciaMinimaHoras`,
- * uma janela corrida de horas): aqui o corte é hora fixa do relógio, porque é
- * assim que a operação decide de fato — "fecha às 18h", não "24h antes".
+ * É distinta da antecedência do agendamento pelo portal
+ * (`antecedenciaMinimaHoras`, uma janela corrida de horas, decisão da ata de
+ * 14/09): aqui o corte é hora fixa do relógio — "fecha às 18h", não "24h
+ * antes". A mesma ata de 21/09 estendeu essa regra ao REAGENDAMENTO pelo
+ * portal (decisão "a mesma regra do agendamento", em actions/pedidos.ts),
+ * desacoplando-o do cancelamento, que segue `dentroDoPrazoDeCancelamento`.
  */
 export function dataMinimaAgendamentoPublico(agora: Date = new Date()): string {
   const dias = minutosAgora(agora) <= 18 * 60 ? 1 : 2;
   return isoDeData(somarDias(hojeUTC(agora), dias));
+}
+
+/** Cancelamento pelo portal — ata de 21/09: até 30 minutos antes do
+ * atendimento. Desacoplado do prazo de reagendamento de propósito: cancelar
+ * é mais simples de absorver operacionalmente do que remarcar (não precisa
+ * checar disponibilidade em outra data), então a janela pode ser mais curta. */
+export const MINUTOS_MINIMOS_PARA_CANCELAR_NO_PORTAL = 30;
+
+export function dentroDoPrazoDeCancelamento(data: Date, horaInicio: string, agora: Date = new Date()): boolean {
+  const faltam = instanteDoAtendimento(data, horaInicio).getTime() - agora.getTime();
+  return faltam >= MINUTOS_MINIMOS_PARA_CANCELAR_NO_PORTAL * 60 * 1000;
+}
+
+/**
+ * O nome do profissional só aparece para a clínica com 24h de antecedência
+ * (ata de 21/09) — André Assis pediu para evitar que a clínica insista em
+ * escolher sempre o mesmo profissional específico. Antes disso, quem chama
+ * `nomeDoProfissionalVisivel` mostra outra coisa no lugar (valor e serviço,
+ * que já estão na tela) — não é sobre esconder o profissional, é sobre não
+ * abrir margem para pedido de troca antes de a alocação estar praticamente
+ * definitiva.
+ */
+export function nomeDoProfissionalVisivel(data: Date, horaInicio: string, agora: Date = new Date()): boolean {
+  const faltam = instanteDoAtendimento(data, horaInicio).getTime() - agora.getTime();
+  return faltam <= 24 * 60 * 60 * 1000;
 }

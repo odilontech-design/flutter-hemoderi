@@ -1,9 +1,8 @@
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { exigirClinica } from "@/lib/sessao";
-import { parametros } from "@/lib/alocacao";
 import { Aviso, Cartao, Titulo } from "@/components/ui";
-import { formatarData } from "@/lib/data";
+import { dataMinimaAgendamentoPublico, formatarData, nomeDoProfissionalVisivel } from "@/lib/data";
 import { codigoDoPedido } from "@/lib/numeracao";
 import { STATUS_ATIVOS } from "@/lib/pedido";
 import { FormularioReagendamento } from "./FormularioReagendamento";
@@ -23,8 +22,11 @@ export default async function Reagendar({ params }: { params: { pedidoId: string
   });
   if (!pedido) notFound();
 
-  const config = await parametros();
   const finalizado = !STATUS_ATIVOS.includes(pedido.status);
+  // Mesma regra da listagem: quem vai atender só aparece com 24h de
+  // antecedência — vale também aqui, onde a clínica está prestes a mexer no
+  // horário.
+  const mostrarProfissional = nomeDoProfissionalVisivel(pedido.data, pedido.horaInicio);
 
   return (
     <>
@@ -36,7 +38,7 @@ export default async function Reagendar({ params }: { params: { pedidoId: string
           </div>
           <div className="text-xs text-gray-500 mt-1">
             Hoje marcado para {formatarData(pedido.data)} às {pedido.horaInicio}
-            {pedido.profissional ? ` com ${pedido.profissional.nome}` : ""}.
+            {mostrarProfissional && pedido.profissional ? ` com ${pedido.profissional.nome}` : ""}.
           </div>
         </div>
 
@@ -47,8 +49,8 @@ export default async function Reagendar({ params }: { params: { pedidoId: string
             pedidoId={pedido.id}
             servicoId={pedido.servico.id}
             profissionalId={pedido.profissional?.id ?? null}
-            profissionalNome={pedido.profissional?.nome ?? null}
-            antecedenciaHoras={config.antecedenciaMinimaHoras}
+            profissionalNome={mostrarProfissional ? pedido.profissional?.nome ?? null : null}
+            dataMinima={dataMinimaAgendamentoPublico()}
           />
         )}
       </Cartao>
