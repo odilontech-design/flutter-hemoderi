@@ -10,7 +10,7 @@ import { podeTransicionar, STATUS_ATIVOS } from "@/lib/pedido";
 import { competenciaDe, dataDeISO, instanteDoAtendimento, isoDeData } from "@/lib/data";
 import { enfileirarMensagem } from "@/lib/integracoes/whatsapp";
 import { sincronizarEvento } from "@/lib/integracoes/google-agenda";
-import { marcarNegocioGanho } from "@/lib/integracoes/pipedrive";
+import { criarNegocio, marcarNegocioGanho } from "@/lib/integracoes/pipedrive";
 import { condicaoValida } from "@/lib/pagamento";
 import { perfilPermite } from "@/lib/papeis";
 
@@ -189,6 +189,7 @@ export async function criarPedido(_anterior: Resultado, dados: FormData): Promis
   await enfileirarMensagem(pedido.id, "CONFIRMACAO");
   if (pedido.profissionalId) await enfileirarMensagem(pedido.id, "ALOCACAO");
   await sincronizarEvento(pedido.id);
+  await criarNegocio(pedido.id);
 
   atualizarTelas();
   return { ok: true, avisos };
@@ -286,6 +287,7 @@ export async function solicitarPedido(_anterior: Resultado, dados: FormData): Pr
     "solicitar",
     `nº ${resultado.pedido.numero}`
   );
+  await criarNegocio(resultado.pedido.id);
   atualizarTelas();
   return { ok: true };
 }
