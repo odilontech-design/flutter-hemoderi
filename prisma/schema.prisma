@@ -951,10 +951,11 @@ model Avaliacao {
   criadoPorId String?
   criadoPor   Usuario? @relation("AvaliacaoCriadaPor", fields: [criadoPorId], references: [id])
 
+  /// Definitiva — a ata de 21/09 decidiu que a clínica não corrige a própria
+  /// avaliação, para a nota não virar objeto de negociação depois do fato
+  /// (avaliarAtendimento recusa reenvio). `atualizadaEm` nunca diverge de
+  /// `criadaEm` na prática; sobra por simetria com o resto do schema.
   criadaEm     DateTime @default(now())
-  /// A clínica pode corrigir a própria avaliação — errar a estrela no celular
-  /// é comum demais para virar registro permanente. Guardar quando mudou é o
-  /// que mantém a correção honesta em vez de silenciosa.
   atualizadaEm DateTime @updatedAt
 
   @@index([profissionalId])

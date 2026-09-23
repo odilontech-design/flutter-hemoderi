@@ -13,6 +13,12 @@ import type { Resultado } from "./pedidos";
  * nota antes do atendimento é palpite, e nota de pedido alheio é o mesmo
  * furo de escopo que o resto do sistema fecha pegando a clínica da sessão em
  * vez de um campo do formulário.
+ *
+ * Definitiva, não corrigível — decisão explícita da ata de 21/09 ("os
+ * clientes não devem ter a capacidade de alterar avaliações enviadas, para
+ * evitar erros de registro"). Mesmo padrão do NPS (`responderNps`): a nota é
+ * a resposta espontânea de quem acabou de ser atendido, e deixar reabrir é
+ * abrir margem para a nota virar objeto de negociação depois do fato.
  */
 export async function avaliarAtendimento(_anterior: Resultado, dados: FormData): Promise<Resultado> {
   const sessao = await exigirClinica();
@@ -48,21 +54,21 @@ export async function avaliarAtendimento(_anterior: Resultado, dados: FormData):
     return { ok: false, erro: "Este atendimento não tem profissional registrado." };
   }
 
-  const comum = {
-    nota,
-    comentario: comentario || null,
-    profissionalId: pedido.profissionalId,
-    clinicaId: pedido.clinicaId,
-    criadoPorId: sessao.usuarioId,
-  };
-
-  // Upsert porque a clínica pode corrigir: errar a estrela no celular é
-  // comum demais para virar registro permanente. O @updatedAt do schema
-  // guarda quando mudou, então a correção fica visível para a equipe.
-  await prisma.avaliacao.upsert({
+  const jaAvaliado = await prisma.avaliacao.findUnique({
     where: { pedidoId: pedido.id },
-    create: { pedidoId: pedido.id, ...comum },
-    update: comum,
+    select: { id: true },
+  });
+  if (jaAvaliado) return { ok: false, erro: "Este atendimento já foi avaliado." };
+
+  await prisma.avaliacao.create({
+    data: {
+      pedidoId: pedido.id,
+      nota,
+      comentario: comentario || null,
+      profissionalId: pedido.profissionalId,
+      clinicaId: pedido.clinicaId,
+      criadoPorId: sessao.usuarioId,
+    },
   });
 
   await registrarAuditoria(

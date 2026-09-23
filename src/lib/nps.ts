@@ -24,6 +24,18 @@ export function elegivelParaNps(atendimentosNoPeriodo: number): boolean {
   return atendimentosNoPeriodo < LIMITE_ATENDIMENTOS_MULTIPLOS;
 }
 
+/**
+ * A primeira pesquisa é obrigatória (ata de 21/09: "aplicada obrigatoriamente
+ * após a conclusão do primeiro atendimento do cliente") — ao contrário das
+ * janelas seguintes, não espera os 60 dias fecharem nem exige baixo volume.
+ * O motivo é o ciclo de contratação trimestral/quadrimestral: se a operação
+ * esperar a janela normal fechar, corre o risco de a clínica já ter ido
+ * embora sem ninguém ter perguntado nada a ela.
+ */
+export function elegivelParaPrimeiraPesquisa(atendimentosRealizados: number): boolean {
+  return atendimentosRealizados >= 1;
+}
+
 export function notaNpsValida(valor: unknown): valor is number {
   // A escala começa em 0 — diferente da de estrelas (mínimo 1) —, então
   // `Number("")` e `Number(null)` caindo em 0 não podem passar como resposta

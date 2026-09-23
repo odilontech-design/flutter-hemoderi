@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import {
   LIMITE_ATENDIMENTOS_MULTIPLOS,
   elegivelParaNps,
+  elegivelParaPrimeiraPesquisa,
   faixaDaNota,
   notaNpsValida,
   scoreNps,
@@ -13,6 +14,12 @@ test("só quem NÃO teve múltiplos atendimentos entra na pesquisa", () => {
   assert.equal(elegivelParaNps(1), true);
   assert.equal(elegivelParaNps(LIMITE_ATENDIMENTOS_MULTIPLOS), false);
   assert.equal(elegivelParaNps(5), false);
+});
+
+test("a primeira pesquisa é obrigatória a partir de 1 atendimento — sem teto de volume", () => {
+  assert.equal(elegivelParaPrimeiraPesquisa(0), false, "nada a perguntar sem nenhum atendimento");
+  assert.equal(elegivelParaPrimeiraPesquisa(1), true);
+  assert.equal(elegivelParaPrimeiraPesquisa(5), true, "diferente de elegivelParaNps, volume alto não desqualifica");
 });
 
 test("nota aceita inteiro de 0 a 10", () => {

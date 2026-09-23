@@ -312,7 +312,9 @@ export default async function Hoje({ searchParams }: { searchParams: { servico?:
 
       <Cartao className="mt-3">
         <div className="flex flex-wrap items-baseline justify-between gap-2 mb-3">
-          <div className="font-display font-bold text-bordo text-sm">O que as clínicas disseram</div>
+          <div className="font-display font-bold text-bordo text-sm">
+            O que as clínicas disseram <span className="font-normal text-gray-400">(CESAT)</span>
+          </div>
           {mediaGeral !== null && (
             <div className="text-[11px] text-gray-500">
               Média geral: <strong className="text-bordo">{formatarMedia(mediaGeral)}</strong> em{" "}
