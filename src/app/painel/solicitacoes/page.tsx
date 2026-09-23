@@ -5,17 +5,19 @@ import { Cartao, Tabela, Titulo, Vazio } from "@/components/ui";
 import { formatarData, formatarDataCurta } from "@/lib/data";
 import { linkWhatsapp } from "@/lib/whatsapp-link";
 import { TriarSolicitacao } from "./TriarSolicitacao";
+import { ConfirmarSolicitacao } from "./ConfirmarSolicitacao";
 
 export const dynamic = "force-dynamic";
 
 /**
  * A antessala do agendamento público.
  *
- * Chega aqui quem pediu atendimento sem ter cadastro. A equipe confere e
- * decide: vincula a uma clínica existente (o telefone sugere qual) ou
- * cadastra a clínica nova e vincula depois. Só então vira agendamento na
- * esteira — a clínica é o escopo de preço, sala e fatura, e pedido sem ela é
- * pedido que a operação não consegue executar.
+ * Desde a ata de 21/09, o próprio formulário do site resolve a clínica — por
+ * login de quem já é cliente ou por cadastro novo criado na hora — então o
+ * que chega aqui já sabe "de quem é isso". A equipe confere data, horário e
+ * serviço, e confirma: aí sim vira agendamento na esteira. O seletor de
+ * clínica só volta a aparecer para solicitação de antes dessa mudança, que
+ * ainda não tinha a clínica resolvida.
  */
 export default async function Solicitacoes() {
   await exigirInterno();
@@ -112,16 +114,26 @@ export default async function Solicitacoes() {
                       {solicitacao.observacoes}
                     </div>
                   )}
+                  <div className="text-[11px] text-gray-500 mt-0.5">
+                    {solicitacao.endereco}, {solicitacao.numero ?? "s/n"}
+                    {solicitacao.complemento && ` · ${solicitacao.complemento}`} · {solicitacao.bairro} ·{" "}
+                    {solicitacao.cidade}/{solicitacao.uf} · CEP {solicitacao.cep}
+                    {solicitacao.pontoReferencia && ` · ref.: ${solicitacao.pontoReferencia}`}
+                  </div>
                   <div className="text-[10px] text-gray-400 mt-0.5">
                     recebido em {formatarData(solicitacao.criadaEm)}
                   </div>
 
                   <div className="mt-2">
-                    <TriarSolicitacao
-                      solicitacaoId={solicitacao.id}
-                      clinicas={clinicas.map(({ id, nome }) => ({ id, nome }))}
-                      sugeridaId={sugeridaId}
-                    />
+                    {solicitacao.clinicaId ? (
+                      <ConfirmarSolicitacao solicitacaoId={solicitacao.id} clinicaId={solicitacao.clinicaId} />
+                    ) : (
+                      <TriarSolicitacao
+                        solicitacaoId={solicitacao.id}
+                        clinicas={clinicas.map(({ id, nome }) => ({ id, nome }))}
+                        sugeridaId={sugeridaId}
+                      />
+                    )}
                   </div>
                 </div>
               );

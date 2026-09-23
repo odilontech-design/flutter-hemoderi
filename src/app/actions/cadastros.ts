@@ -14,7 +14,7 @@ import type { Resultado } from "./pedidos";
  * profissional consultam o próprio escopo, nunca cadastram.
  */
 
-async function slugLivre(base: string): Promise<string> {
+export async function slugLivre(base: string): Promise<string> {
   const raiz = gerarSlug(base) || "clinica";
   let candidato = raiz;
   let n = 2;

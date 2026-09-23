@@ -13,20 +13,22 @@
 
 export const FUSO_OPERACAO = "America/Sao_Paulo";
 
-function partesDeHoje() {
+/** `instante` é parâmetro (com `new Date()` como padrão) para que a regra de
+ * corte das 18h dê para testar sem depender do relógio do sistema. */
+function partesDeHoje(instante: Date = new Date()) {
   const partes = new Intl.DateTimeFormat("en-CA", {
     timeZone: FUSO_OPERACAO,
     year: "numeric",
     month: "2-digit",
     day: "2-digit",
-  }).formatToParts(new Date());
+  }).formatToParts(instante);
   const mapa = Object.fromEntries(partes.map((p) => [p.type, p.value]));
   return { ano: Number(mapa.year), mes: Number(mapa.month), dia: Number(mapa.day) };
 }
 
 /** Meia-noite UTC do dia de hoje no fuso da operação. */
-export function hojeUTC(): Date {
-  const { ano, mes, dia } = partesDeHoje();
+export function hojeUTC(instante: Date = new Date()): Date {
+  const { ano, mes, dia } = partesDeHoje(instante);
   return new Date(Date.UTC(ano, mes - 1, dia));
 }
 
@@ -37,13 +39,13 @@ export function hojeISO(): string {
 }
 
 /** Minutos desde a meia-noite, agora, no fuso da operação. */
-export function minutosAgora(): number {
+export function minutosAgora(instante: Date = new Date()): number {
   const partes = new Intl.DateTimeFormat("en-GB", {
     timeZone: FUSO_OPERACAO,
     hour: "2-digit",
     minute: "2-digit",
     hour12: false,
-  }).formatToParts(new Date());
+  }).formatToParts(instante);
   const mapa = Object.fromEntries(partes.map((p) => [p.type, p.value]));
   return Number(mapa.hour) * 60 + Number(mapa.minute);
 }
@@ -154,4 +156,20 @@ export function paraHora(minutos: number): string {
  */
 export function instanteDoAtendimento(data: Date, hora: string): Date {
   return new Date(`${isoDeData(data)}T${hora}:00-03:00`);
+}
+
+/**
+ * Data mínima que o formulário PÚBLICO (sem sessão) aceita — decisão da ata
+ * de 21/09. Nunca hoje: agendamento para o mesmo dia é emergência e vai pelo
+ * WhatsApp, não pelo site. E amanhã só até as 18h de hoje; depois disso, a
+ * central já não tem como garantir profissional e equipamento a tempo, e a
+ * data mínima pula para depois de amanhã.
+ *
+ * É distinta da antecedência do portal da clínica (`antecedenciaMinimaHoras`,
+ * uma janela corrida de horas): aqui o corte é hora fixa do relógio, porque é
+ * assim que a operação decide de fato — "fecha às 18h", não "24h antes".
+ */
+export function dataMinimaAgendamentoPublico(agora: Date = new Date()): string {
+  const dias = minutosAgora(agora) <= 18 * 60 ? 1 : 2;
+  return isoDeData(somarDias(hojeUTC(agora), dias));
 }

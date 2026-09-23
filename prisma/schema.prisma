@@ -870,10 +870,26 @@ model SolicitacaoPublica {
   pacienteNome String?
   observacoes  String?
 
+  /// Onde o atendimento acontece — obrigatório desde a ata de 21/09. Vem do
+  /// CEP, digitado no navegador de quem pede: número e complemento ficam
+  /// livres, o resto a consulta preenche. Quando a solicitação nasce um
+  /// cadastro novo (ver `clinicaId`), este é o endereço que a Clínica herda.
+  cep             String
+  endereco        String
+  numero          String?
+  complemento     String?
+  bairro          String
+  cidade          String
+  uf              String
+  pontoReferencia String?
+
   status StatusSolicitacao @default(NOVA)
 
-  /// Preenchidos quando a equipe tria: a clínica a que foi vinculada e o
-  /// agendamento que nasceu dela.
+  /// Desde a ata de 21/09, já nasce preenchido: o próprio formulário público
+  /// identifica a clínica, por login de quem já é cliente ou por cadastro
+  /// novo criado na hora (ver solicitarPublico, em actions/publico.ts).
+  /// Nulo só sobra em solicitação anterior a essa mudança — a equipe ainda
+  /// tria essas à mão. pedidoId nasce quando a solicitação vira agendamento.
   clinicaId String?
   clinica   Clinica? @relation(fields: [clinicaId], references: [id])
   pedidoId  String?  @unique

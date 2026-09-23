@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { parametros } from "@/lib/alocacao";
 import { agruparPorFamilia } from "@/lib/familia";
 import { linkWhatsapp } from "@/lib/whatsapp-link";
+import { dataMinimaAgendamentoPublico } from "@/lib/data";
 import { VitrineAgendamento } from "./VitrineAgendamento";
 
 export const dynamic = "force-dynamic";
@@ -22,7 +23,7 @@ export const metadata = {
  * onde a clínica nova desiste — a comparação que o André fez foi com pedir
  * comida: o cardápio vem antes da conta.
  */
-export default async function AgendamentoPublico() {
+export default async function AgendamentoPublico({ searchParams }: { searchParams: { servico?: string } }) {
   const [servicos, config] = await Promise.all([
     prisma.servico.findMany({
       where: { ativo: true },
@@ -80,6 +81,8 @@ export default async function AgendamentoPublico() {
           horaAbertura={config.horaAbertura}
           horaFechamento={config.horaFechamento}
           whatsapp={whatsapp}
+          dataMinima={dataMinimaAgendamentoPublico()}
+          servicoInicialId={searchParams.servico ?? null}
         />
       </main>
 

@@ -16,6 +16,20 @@ export function numeroParaWhatsapp(bruto: string | null | undefined): string | n
   return digitos.length <= 11 ? `55${digitos}` : digitos;
 }
 
+/**
+ * "(11) 99999-0000" enquanto a pessoa digita — decisão da ata de 21/09: o
+ * campo precisa chegar com DDD, em formato que o disparo automático de
+ * confirmação reconheça, e a máscara é o que deixa isso óbvio antes do envio
+ * em vez de só recusar depois.
+ */
+export function formatarTelefone(valor: string): string {
+  const d = (valor ?? "").replace(/\D/g, "").slice(0, 11);
+  if (d.length <= 2) return d.length ? `(${d}` : d;
+  if (d.length <= 6) return `(${d.slice(0, 2)}) ${d.slice(2)}`;
+  if (d.length <= 10) return `(${d.slice(0, 2)}) ${d.slice(2, 6)}-${d.slice(6)}`;
+  return `(${d.slice(0, 2)}) ${d.slice(2, 7)}-${d.slice(7)}`;
+}
+
 export function linkWhatsapp(numero: string | null | undefined, mensagem: string): string | null {
   const destino = numeroParaWhatsapp(numero);
   if (!destino) return null;
