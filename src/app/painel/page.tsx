@@ -9,6 +9,7 @@ import { estrelas, formatarMedia, mediaDeNotas } from "@/lib/avaliacao";
 import { MostrarEstrelas } from "@/components/Estrelas";
 import { falhasRecentes } from "@/lib/integracoes/google-agenda";
 import { Aviso } from "@/components/ui";
+import { FiltroProdutividade } from "./FiltroProdutividade";
 
 export const dynamic = "force-dynamic";
 
@@ -18,12 +19,13 @@ export const dynamic = "force-dynamic";
  * menos urgente e por isso vem por último — a fila de pendências é o que faz
  * a operação escalar de 400 para 1.500 atendimentos sem contratar mais gente.
  */
-export default async function Hoje() {
+export default async function Hoje({ searchParams }: { searchParams: { servico?: string } }) {
   const sessao = await exigirInterno();
 
   const hoje = hojeUTC();
   const competencia = competenciaAtual();
   const inicioMes = new Date(`${competencia}-01T00:00:00.000Z`);
+  const servicoFiltro = searchParams.servico || undefined;
 
   const [
     doDia,
@@ -34,6 +36,7 @@ export default async function Hoje() {
     aReceber,
     porProfissional,
     faltasMes,
+    servicosAtivos,
   ] = await Promise.all([
     prisma.pedido.findMany({
       where: { data: hoje, status: { notIn: ["CANCELADO"] } },
@@ -58,20 +61,33 @@ export default async function Hoje() {
     // Produtividade da competência: quem atendeu quanto. O valor gerado e a
     // participação percentual saíram na ata de 14/09 — a operação lê esta
     // tabela para saber QUEM fez O QUÊ, e o dinheiro por profissional é
-    // conversa do financeiro, não do painel do dia.
+    // conversa do financeiro, não do painel do dia. Ordem alfabética (não por
+    // volume) e filtro por serviço saíram da ata de 21/09 — a equipe usa esta
+    // tabela para achar um nome específico, não só para ver quem lidera.
     prisma.pedido.groupBy({
       by: ["profissionalId"],
-      where: { status: "REALIZADO", data: { gte: inicioMes }, profissionalId: { not: null } },
+      where: {
+        status: "REALIZADO",
+        data: { gte: inicioMes },
+        profissionalId: { not: null },
+        ...(servicoFiltro ? { servicoId: servicoFiltro } : {}),
+      },
       _count: true,
-      orderBy: { _count: { profissionalId: "desc" } },
-      take: 8,
     }),
     prisma.pedido.count({ where: { status: "FALTOU", data: { gte: inicioMes } } }),
+    prisma.servico.findMany({ where: { ativo: true }, orderBy: { nome: "asc" }, select: { id: true, nome: true } }),
   ]);
 
   const profissionais = await prisma.profissional.findMany({
     where: { id: { in: porProfissional.map((p) => p.profissionalId as string) } },
     select: { id: true, nome: true },
+    orderBy: { nome: "asc" },
+  });
+
+  const porProfissionalOrdenado = [...porProfissional].sort((a, b) => {
+    const nomeA = profissionais.find((p) => p.id === a.profissionalId)?.nome ?? "";
+    const nomeB = profissionais.find((p) => p.id === b.profissionalId)?.nome ?? "";
+    return nomeA.localeCompare(nomeB, "pt-BR");
   });
 
   // O que cada um executou, por serviço: é a leitura que substitui o valor
@@ -79,7 +95,12 @@ export default async function Hoje() {
   // que "a Ana gerou R$ 4.200".
   const servicosPorProfissional = await prisma.pedido.groupBy({
     by: ["profissionalId", "servicoId"],
-    where: { status: "REALIZADO", data: { gte: inicioMes }, profissionalId: { not: null } },
+    where: {
+      status: "REALIZADO",
+      data: { gte: inicioMes },
+      profissionalId: { not: null },
+      ...(servicoFiltro ? { servicoId: servicoFiltro } : {}),
+    },
     _count: true,
   });
 
@@ -232,13 +253,20 @@ export default async function Hoje() {
       </div>
 
       <Cartao>
-        <div className="font-display font-bold text-bordo text-sm mb-3">Produtividade do mês</div>
+        <div className="flex flex-wrap items-start justify-between gap-3 mb-3">
+          <div className="font-display font-bold text-bordo text-sm">Produtividade do mês</div>
+          <FiltroProdutividade servicoId={servicoFiltro ?? ""} servicos={servicosAtivos} />
+        </div>
 
-        {porProfissional.length === 0 ? (
-          <Vazio>Nenhum atendimento realizado neste mês ainda.</Vazio>
+        {porProfissionalOrdenado.length === 0 ? (
+          <Vazio>
+            {servicoFiltro
+              ? "Nenhum atendimento realizado neste serviço no mês ainda."
+              : "Nenhum atendimento realizado neste mês ainda."}
+          </Vazio>
         ) : (
           <Tabela cabecalho={["Profissional", "Atendimentos", "O que executou", "Avaliação"]}>
-            {porProfissional.map((linha) => {
+            {porProfissionalOrdenado.map((linha) => {
               const profissional = profissionais.find((p) => p.id === linha.profissionalId);
               const nota = notasPorProfissional.find((n) => n.profissionalId === linha.profissionalId);
               const media = nota?._avg.nota != null ? Math.round(nota._avg.nota * 10) / 10 : null;

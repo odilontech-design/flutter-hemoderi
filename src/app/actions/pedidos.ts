@@ -67,7 +67,7 @@ async function repasseDoPedido(profissionalId: string, servicoId: string, valorS
     }),
     prisma.profissional.findUnique({
       where: { id: profissionalId },
-      select: { repassePercentPadrao: true },
+      select: { repassePercentPadrao: true, grupoRepasse: { select: { percent: true, fixoCentavos: true } } },
     }),
     parametros(),
   ]);
@@ -77,6 +77,7 @@ async function repasseDoPedido(profissionalId: string, servicoId: string, valorS
     regra,
     servico,
     profissional,
+    grupo: profissional?.grupoRepasse,
     percentPadrao: config.repassePercentPadrao,
   });
 }

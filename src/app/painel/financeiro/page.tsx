@@ -6,6 +6,7 @@ import { BotaoAcao } from "@/components/BotaoAcao";
 import { baixarFatura, fecharFatura, pagarRepasses } from "@/app/actions/financeiro";
 import { competenciaAtual, competenciaPorExtenso, formatarData } from "@/lib/data";
 import { formatarReais } from "@/lib/dinheiro";
+import { GruposRepasse } from "./GruposRepasse";
 
 export const dynamic = "force-dynamic";
 
@@ -29,7 +30,7 @@ export default async function Financeiro({ searchParams }: { searchParams: { com
   const inicio = new Date(Date.UTC(ano, mes - 1, 1));
   const fim = new Date(Date.UTC(ano, mes, 1));
 
-  const [realizados, faturas, repasses, aFaturar] = await Promise.all([
+  const [realizados, faturas, repasses, aFaturar, gruposRepasse] = await Promise.all([
     prisma.pedido.aggregate({
       where: { status: "REALIZADO", data: { gte: inicio, lt: fim } },
       _count: true,
@@ -53,6 +54,10 @@ export default async function Financeiro({ searchParams }: { searchParams: { com
       where: { status: "REALIZADO", faturaId: null, data: { gte: inicio, lt: fim } },
       _sum: { valorServicoCentavos: true },
       _count: true,
+    }),
+    prisma.grupoRepasse.findMany({
+      orderBy: { nome: "asc" },
+      include: { _count: { select: { profissionais: true } } },
     }),
   ]);
 
@@ -233,6 +238,10 @@ export default async function Financeiro({ searchParams }: { searchParams: { com
             automático.
           </div>
         </Cartao>
+      </div>
+
+      <div className="mt-3">
+        <GruposRepasse grupos={gruposRepasse} />
       </div>
     </>
   );

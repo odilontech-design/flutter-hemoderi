@@ -430,6 +430,22 @@ model Profissional {
   /// antigo continue legível quando alguém for conferir um mês fechado.
   repasseFixoCentavos Int?
 
+  /// Onde o profissional atende de fato — não o endereço de cadastro, a
+  /// praça que decide a régua de repasse. A ata de 21/09 citou exatamente
+  /// isso: "os repasses variam entre o estado de São Paulo e demais
+  /// estados". Sigla (SP, RJ...), sem validação rígida de lista — a
+  /// operação lida com estado nenhum quando não sabe ainda.
+  uf String?
+
+  /// O grupo que decide o repasse quando o profissional não tem um acerto
+  /// próprio (RegraRepasse) nem valor/percentual individual — ver
+  /// lib/repasse.ts. Existe separado de `uf` porque a ata pediu grupos
+  /// PARA CATEGORIZAÇÃO, não uma regra fixa amarrada ao estado: São Paulo
+  /// hoje, tempo de experiência amanhã, sem precisar de coluna nova a cada
+  /// critério novo — só um grupo novo.
+  grupoRepasseId String?
+  grupoRepasse   GrupoRepasse? @relation(fields: [grupoRepasseId], references: [id], onDelete: SetNull)
+
   ativo        Boolean   @default(true)
   criadoEm     DateTime  @default(now())
   atualizadoEm DateTime  @updatedAt
@@ -446,6 +462,7 @@ model Profissional {
   recusas          RecusaAtendimento[]
 
   @@index([ativo])
+  @@index([grupoRepasseId])
 }
 
 /// Repasse combinado para um profissional em um serviço específico. É a
@@ -467,6 +484,28 @@ model RegraRepasse {
 
   @@unique([profissionalId, servicoId])
   @@index([profissionalId])
+}
+
+/// Um degrau de repasse compartilhado por vários profissionais — a ata de
+/// 21/09 pediu "múltiplos grupos e categorizações", começando por região
+/// (São Paulo paga diferente dos demais estados). Fica ENTRE o profissional
+/// e o padrão da operação na cadeia de lib/repasse.ts: mais específico que
+/// "toda a operação", mais genérico que "este profissional".
+///
+/// Um grupo por nome, não uma coluna de UF na regra: assim o próximo
+/// critério (tempo de experiência, por exemplo) é só outro grupo, sem
+/// mexer no schema de novo.
+model GrupoRepasse {
+  id   String @id @default(cuid())
+  nome String @unique
+
+  percent      Float?
+  fixoCentavos Int?
+
+  criadoEm     DateTime @default(now())
+  atualizadoEm DateTime @updatedAt
+
+  profissionais Profissional[]
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

@@ -89,3 +89,57 @@ test("a regra do serviço ainda vence o valor fixo do profissional", () => {
   assert.equal(r.valorCentavos, 5_000);
   assert.equal(r.origem, "SERVICO");
 });
+
+// ── Grupo de repasse (ata de 21/09) ─────────────────────────────────────────
+
+test("grupo de repasse vence o padrão da operação", () => {
+  const r = calcularRepasse({
+    valorServicoCentavos: VALOR,
+    grupo: { percent: 65, fixoCentavos: null },
+    percentPadrao: 60,
+  });
+  assert.equal(r.valorCentavos, 13_000);
+  assert.equal(r.origem, "GRUPO");
+});
+
+test("valor fixo do grupo vence o percentual do grupo", () => {
+  const r = calcularRepasse({
+    valorServicoCentavos: VALOR,
+    grupo: { percent: 65, fixoCentavos: 11_000 },
+    percentPadrao: 60,
+  });
+  assert.equal(r.valorCentavos, 11_000);
+  assert.equal(r.origem, "GRUPO");
+  assert.equal(r.percent, null);
+});
+
+test("o profissional é sempre a exceção — vence o grupo dele", () => {
+  const r = calcularRepasse({
+    valorServicoCentavos: VALOR,
+    profissional: { repassePercentPadrao: 80 },
+    grupo: { percent: 65, fixoCentavos: null },
+    percentPadrao: 60,
+  });
+  assert.equal(r.valorCentavos, 16_000);
+  assert.equal(r.origem, "PROFISSIONAL");
+});
+
+test("a regra do serviço ainda vence o grupo", () => {
+  const r = calcularRepasse({
+    valorServicoCentavos: VALOR,
+    servico: { repassePercent: 40, repasseFixoCentavos: null },
+    grupo: { percent: 65, fixoCentavos: null },
+    percentPadrao: 60,
+  });
+  assert.equal(r.valorCentavos, 8_000);
+  assert.equal(r.origem, "SERVICO");
+});
+
+test("grupo vazio não conta como grupo", () => {
+  const r = calcularRepasse({
+    valorServicoCentavos: VALOR,
+    grupo: { percent: null, fixoCentavos: null },
+    percentPadrao: 60,
+  });
+  assert.equal(r.origem, "PADRAO");
+});

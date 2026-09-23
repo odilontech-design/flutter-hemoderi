@@ -16,7 +16,11 @@
  *      valor fechado por atendimento em vez de fatia do que a clínica paga —
  *      então o fixo vence o percentual do mesmo profissional.
  *   4. Percentual padrão do profissional.
- *   5. Percentual padrão da operação (Parametros).
+ *   5. Grupo de repasse do profissional (ata de 21/09) — região hoje, outro
+ *      critério amanhã. Só entra quando o profissional não tem acerto
+ *      próprio: o grupo é o degrau coletivo, o profissional é sempre a
+ *      exceção que vale mais.
+ *   6. Percentual padrão da operação (Parametros).
  *
  * A primeira regra que responder decide, e a função devolve QUAL respondeu:
  * quando o profissional questiona o valor, a resposta precisa ser "veio da
@@ -25,13 +29,14 @@
 
 import { aplicarPercent } from "@/lib/dinheiro";
 
-export type OrigemRepasse = "REGRA_ESPECIFICA" | "SERVICO" | "PROFISSIONAL" | "PADRAO";
+export type OrigemRepasse = "REGRA_ESPECIFICA" | "SERVICO" | "PROFISSIONAL" | "GRUPO" | "PADRAO";
 
 export type EntradaRepasse = {
   valorServicoCentavos: number;
   regra?: { percent: number | null; fixoCentavos: number | null } | null;
   servico?: { repassePercent: number | null; repasseFixoCentavos: number | null } | null;
   profissional?: { repassePercentPadrao: number | null; repasseFixoCentavos?: number | null } | null;
+  grupo?: { percent: number | null; fixoCentavos: number | null } | null;
   percentPadrao: number;
 };
 
@@ -43,7 +48,7 @@ export type ResultadoRepasse = {
 };
 
 export function calcularRepasse(entrada: EntradaRepasse): ResultadoRepasse {
-  const { valorServicoCentavos, regra, servico, profissional, percentPadrao } = entrada;
+  const { valorServicoCentavos, regra, servico, profissional, grupo, percentPadrao } = entrada;
 
   if (regra) {
     if (regra.fixoCentavos != null) {
@@ -86,6 +91,19 @@ export function calcularRepasse(entrada: EntradaRepasse): ResultadoRepasse {
     };
   }
 
+  if (grupo) {
+    if (grupo.fixoCentavos != null) {
+      return { valorCentavos: grupo.fixoCentavos, origem: "GRUPO", percent: null };
+    }
+    if (grupo.percent != null) {
+      return {
+        valorCentavos: aplicarPercent(valorServicoCentavos, grupo.percent),
+        origem: "GRUPO",
+        percent: grupo.percent,
+      };
+    }
+  }
+
   return {
     valorCentavos: aplicarPercent(valorServicoCentavos, percentPadrao),
     origem: "PADRAO",
@@ -97,6 +115,7 @@ export const ROTULO_ORIGEM_REPASSE: Record<OrigemRepasse, string> = {
   REGRA_ESPECIFICA: "acerto específico deste profissional neste serviço",
   SERVICO: "regra do serviço",
   PROFISSIONAL: "percentual do profissional",
+  GRUPO: "grupo de repasse do profissional",
   PADRAO: "percentual padrão da operação",
 };
 

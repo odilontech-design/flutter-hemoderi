@@ -1,14 +1,11 @@
 import { prisma } from "@/lib/prisma";
 import { exigirInterno } from "@/lib/sessao";
-import { Campo, Cartao, OCULTO_MOVEL, Rotulo, Tabela, Titulo, Vazio } from "@/components/ui";
+import { Campo, Cartao, Rotulo, Selecao, Tabela, Titulo, Vazio } from "@/components/ui";
 import { FormularioAcao } from "@/components/FormularioAcao";
-import { BotaoAcao } from "@/components/BotaoAcao";
-import { AcoesDeAcesso, SituacaoAcesso } from "@/components/AcessoDoCadastro";
-import { alternarProfissional, salvarProfissional } from "@/app/actions/cadastros";
-import { formatarPercent, formatarReais } from "@/lib/dinheiro";
-import { estrelas, formatarMedia } from "@/lib/avaliacao";
+import { salvarProfissional } from "@/app/actions/cadastros";
 import { CampoDocumento } from "@/components/CampoDocumento";
 import { ImportarProfissionais } from "./ImportarProfissionais";
+import { EditarProfissional } from "./EditarProfissional";
 
 export const dynamic = "force-dynamic";
 
@@ -24,19 +21,22 @@ export default async function Profissionais() {
     _count: true,
   });
 
-  const profissionais = await prisma.profissional.findMany({
-    orderBy: [{ ativo: "desc" }, { nome: "asc" }],
-    include: {
-      _count: { select: { pedidos: true, disponibilidades: true } },
-      // O acesso ao portal faz parte do cadastro, não de outra tela: a
-      // pergunta "esse profissional já consegue ver a agenda dele?" nasce
-      // aqui, olhando a lista.
-      usuarios: {
-        select: { id: true, desativadoEm: true, senhaProvisoria: true },
-        orderBy: { criadoEm: "asc" },
+  const [profissionais, gruposRepasse] = await Promise.all([
+    prisma.profissional.findMany({
+      orderBy: [{ ativo: "desc" }, { nome: "asc" }],
+      include: {
+        _count: { select: { pedidos: true, disponibilidades: true } },
+        // O acesso ao portal faz parte do cadastro, não de outra tela: a
+        // pergunta "esse profissional já consegue ver a agenda dele?" nasce
+        // aqui, olhando a lista.
+        usuarios: {
+          select: { id: true, desativadoEm: true, senhaProvisoria: true },
+          orderBy: { criadoEm: "asc" },
+        },
       },
-    },
-  });
+    }),
+    prisma.grupoRepasse.findMany({ orderBy: { nome: "asc" }, select: { id: true, nome: true } }),
+  ]);
 
   return (
     <>
@@ -62,79 +62,13 @@ export default async function Profissionais() {
                 const nota = notas.find((n) => n.profissionalId === profissional.id);
                 const media = nota?._avg.nota != null ? Math.round(nota._avg.nota * 10) / 10 : null;
                 return (
-                <tr key={profissional.id} className="border-b border-gray-100 last:border-0 align-top">
-                  <td className="py-2 pr-3">
-                    <div className="font-semibold text-bordo">{profissional.nome}</div>
-                    <div className="text-[10px] text-gray-400">
-                      {profissional.especialidade ?? profissional.telefone ?? "—"}
-                    </div>
-                  </td>
-                  <td className={`py-2 pr-3 text-gray-500 ${OCULTO_MOVEL}`}>
-                    {profissional.conselho ? `${profissional.conselho} ${profissional.registro ?? ""}` : "—"}
-                  </td>
-                  <td className={`py-2 pr-3 whitespace-nowrap ${OCULTO_MOVEL}`}>
-                    {profissional.repasseFixoCentavos != null ? (
-                      formatarReais(profissional.repasseFixoCentavos)
-                    ) : profissional.repassePercentPadrao != null ? (
-                      formatarPercent(profissional.repassePercentPadrao)
-                    ) : (
-                      <span className="text-gray-400">padrão</span>
-                    )}
-                  </td>
-                  <td className={`py-2 pr-3 whitespace-nowrap ${OCULTO_MOVEL}`}>
-                    {media === null ? (
-                      <span className="text-gray-300">sem avaliação</span>
-                    ) : (
-                      <>
-                        <span className="text-amber-500">{estrelas(media)}</span>
-                        <div className="text-[10px] text-gray-400">
-                          {formatarMedia(media)} em {nota?._count}
-                        </div>
-                      </>
-                    )}
-                  </td>
-                  <td className={`py-2 pr-3 ${OCULTO_MOVEL}`}>
-                    {profissional._count.disponibilidades === 0 ? (
-                      <span className="text-red-600 font-semibold">não declarada</span>
-                    ) : (
-                      `${profissional._count.disponibilidades} janela(s)`
-                    )}
-                  </td>
-                  <td className="py-2 pr-3 whitespace-nowrap">
-                    <SituacaoAcesso acessos={profissional.usuarios} />
-                    <div className="text-[10px] text-gray-400">{profissional._count.pedidos} atendimento(s)</div>
-                    <div className="text-[10px]">
-                      {profissional.googleAgendaId ? (
-                        <span className="text-green-700" title={profissional.googleAgendaId}>
-                          Google Agenda ✓
-                        </span>
-                      ) : (
-                        <span className="text-gray-400">sem Google Agenda</span>
-                      )}
-                    </div>
-                  </td>
-                  <td className="py-2">
-                    <div className="flex flex-wrap gap-1.5 whitespace-nowrap">
-                      <AcoesDeAcesso
-                        tipo="profissional"
-                        cadastroId={profissional.id}
-                        nome={profissional.nome}
-                        acessos={profissional.usuarios}
-                      />
-                      <BotaoAcao
-                        acao={alternarProfissional.bind(null, profissional.id, !profissional.ativo)}
-                        variante={profissional.ativo ? "perigo" : "secundario"}
-                        confirmar={
-                          profissional.ativo
-                            ? `Desativar ${profissional.nome}? O portal dele para na hora e ele sai das telas de alocação; a agenda e o histórico continuam.`
-                            : undefined
-                        }
-                      >
-                        {profissional.ativo ? "Desativar" : "Reativar"}
-                      </BotaoAcao>
-                    </div>
-                  </td>
-                </tr>
+                  <EditarProfissional
+                    key={profissional.id}
+                    profissional={profissional}
+                    notaMedia={media}
+                    notaQtd={nota?._count ?? 0}
+                    gruposRepasse={gruposRepasse}
+                  />
                 );
               })}
             </Tabela>
@@ -193,6 +127,23 @@ export default async function Profissionais() {
               <div>
                 <Rotulo>Repasse por atendimento (R$)</Rotulo>
                 <Campo name="repasseFixoCentavos" placeholder="150,00" inputMode="decimal" />
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <Rotulo>UF</Rotulo>
+                <Campo name="uf" placeholder="SP" maxLength={2} />
+              </div>
+              <div>
+                <Rotulo>Grupo de repasse</Rotulo>
+                <Selecao name="grupoRepasseId" defaultValue="">
+                  <option value="">Nenhum</option>
+                  {gruposRepasse.map((g) => (
+                    <option key={g.id} value={g.id}>
+                      {g.nome}
+                    </option>
+                  ))}
+                </Selecao>
               </div>
             </div>
             <div className="text-[10px] text-gray-400 leading-relaxed">

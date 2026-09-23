@@ -113,6 +113,10 @@ export async function salvarProfissional(_anterior: Resultado, dados: FormData):
     // por WhatsApp), mas quem conecta de verdade é ele: compartilhar a agenda
     // com a conta de serviço só acontece dentro da conta Google dele.
     googleAgendaId: String(dados.get("googleAgendaId") ?? "").toLowerCase().trim() || null,
+    // Praça onde atende de fato (ata de 21/09 — repasse varia por estado) e o
+    // grupo que decide o repasse dele quando não há acerto individual.
+    uf: String(dados.get("uf") ?? "").toUpperCase().trim().slice(0, 2) || null,
+    grupoRepasseId: String(dados.get("grupoRepasseId") ?? "") || null,
   };
 
   if (id) {

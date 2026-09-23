@@ -7,6 +7,7 @@ import { parametros } from "@/lib/alocacao";
 import { competenciaPorExtenso } from "@/lib/data";
 import { perfilPermite } from "@/lib/papeis";
 import { ITENS_VALIDACAO, type ItemValidacao } from "@/lib/relatorio";
+import { lerCentavos } from "@/lib/dinheiro";
 import type { Resultado } from "./pedidos";
 
 /**
@@ -247,5 +248,56 @@ export async function aprovarRelatorio(pedidoId: string): Promise<Resultado> {
 
   revalidatePath("/painel/financeiro");
   revalidatePath("/profissional/ganhos");
+  return { ok: true };
+}
+
+// ─── Grupos de repasse ──────────────────────────────────────────────────────
+
+/**
+ * Um degrau de repasse compartilhado por vários profissionais (ata de
+ * 21/09) — região hoje ("São Paulo" vs. "Demais estados"), outro critério
+ * amanhã. Fica só entre percentual do profissional e padrão da operação em
+ * lib/repasse.ts: o profissional é sempre a exceção que vence o grupo dele.
+ */
+export async function salvarGrupoRepasse(_anterior: Resultado, dados: FormData): Promise<Resultado> {
+  await exigirResponsavel();
+
+  const id = String(dados.get("id") ?? "");
+  const nome = String(dados.get("nome") ?? "").trim();
+  if (!nome) return { ok: false, erro: "Informe o nome do grupo." };
+
+  const percentTexto = String(dados.get("percent") ?? "").replace(",", ".");
+  const fixoTexto = String(dados.get("fixoCentavos") ?? "").trim();
+
+  const comum = {
+    nome,
+    percent: percentTexto ? Number(percentTexto) : null,
+    fixoCentavos: fixoTexto ? lerCentavos(fixoTexto) : null,
+  };
+
+  try {
+    if (id) {
+      await prisma.grupoRepasse.update({ where: { id }, data: comum });
+    } else {
+      await prisma.grupoRepasse.create({ data: comum });
+    }
+  } catch {
+    // @@unique(nome): dois grupos com o mesmo nome confundiriam quem está
+    // escolhendo um na hora de cadastrar o profissional.
+    return { ok: false, erro: "Já existe um grupo com esse nome." };
+  }
+
+  revalidatePath("/painel/financeiro");
+  revalidatePath("/painel/profissionais");
+  return { ok: true };
+}
+
+export async function excluirGrupoRepasse(id: string): Promise<Resultado> {
+  await exigirResponsavel();
+  // onDelete: SetNull no Profissional — excluir o grupo não desliga ninguém
+  // do sistema, só devolve esses profissionais para o padrão da operação.
+  await prisma.grupoRepasse.delete({ where: { id } });
+  revalidatePath("/painel/financeiro");
+  revalidatePath("/painel/profissionais");
   return { ok: true };
 }
