@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { exigirProfissional } from "@/lib/sessao";
+import { ajudaCustoEmCentavos, camposClinicosEmBranco, CAMPOS_CLINICOS } from "@/lib/relatorio";
 import { registrarResultado, type Resultado } from "./pedidos";
 
 /**
@@ -46,6 +47,29 @@ export async function enviarRelatorio(_anterior: Resultado, dados: FormData): Pr
     return { ok: false, erro: "Este atendimento já foi finalizado." };
   }
 
+  // Campos clínicos: obrigatórios, mas "não se aplica" conta como resposta
+  // (ata de 21/09). Só são exigidos quando houve atendimento — num "não
+  // compareceu" não existe sinal vital para medir.
+  const clinicos = Object.fromEntries(
+    CAMPOS_CLINICOS.map((campo) => [campo.nome, String(dados.get(campo.nome) ?? "").trim() || null])
+  ) as Record<string, string | null>;
+
+  if (compareceu) {
+    const faltando = camposClinicosEmBranco(clinicos);
+    if (faltando.length > 0) {
+      const nomes = faltando.map((c) => c.rotulo).join(", ");
+      return {
+        ok: false,
+        erro: `Falta preencher: ${nomes}. Use "não se aplica" no que não foi medido neste atendimento.`,
+      };
+    }
+  }
+
+  const ajudaCustoCentavos = ajudaCustoEmCentavos(String(dados.get("ajudaCusto") ?? ""));
+  if (ajudaCustoCentavos === undefined) {
+    return { ok: false, erro: "Ajuda de custo: use só números, como 150,00." };
+  }
+
   const quantidade = Number(dados.get("quantidade") ?? 1);
 
   // Vem do navegador, no momento do envio — pode faltar (permissão negada,
@@ -67,6 +91,12 @@ export async function enviarRelatorio(_anterior: Resultado, dados: FormData): Pr
     quantidade: Number.isFinite(quantidade) && quantidade > 0 ? Math.trunc(quantidade) : 1,
     intercorrencia: String(dados.get("intercorrencia") ?? "") === "sim",
     observacoes: String(dados.get("observacoes") ?? "") || null,
+    ...clinicos,
+    // O que a pessoa executou além do contratado — a membrana que virou
+    // stickybone. Declarado aqui, validado pelo pós-venda na aprovação.
+    servicosAdicionais: String(dados.get("servicosAdicionais") ?? "").trim() || null,
+    ajudaCustoCentavos,
+    ajudaCustoJustificativa: String(dados.get("ajudaCustoJustificativa") ?? "").trim() || null,
     // A chave confirmada no ato pode ser diferente da do cadastro (conta
     // nova, chave trocada). É a que vale para ESTE repasse: conferir agora
     // evita o pagamento devolvido três dias depois.
@@ -77,7 +107,18 @@ export async function enviarRelatorio(_anterior: Resultado, dados: FormData): Pr
     where: { pedidoId: pedido.id },
     // Update de verdade, não vazio: reenviar é corrigir, e um upsert que
     // ignora a correção devolve "salvo" sem ter salvo nada.
-    update: { ...conteudo, ...localizacao },
+    //
+    // A correção derruba as conferências que o pós-venda já tinha feito: o
+    // que foi validado era o texto anterior. Manter o "serviço conferido" em
+    // cima de um serviço reescrito é pior que não ter conferência nenhuma,
+    // porque parece conferido.
+    update: {
+      ...conteudo,
+      ...localizacao,
+      servicoValidadoEm: null,
+      valorValidadoEm: null,
+      ajudaCustoValidadaEm: null,
+    },
     create: { pedidoId: pedido.id, profissionalId: sessao.profissionalId, ...conteudo, ...localizacao },
   });
 

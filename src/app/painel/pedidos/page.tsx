@@ -10,8 +10,7 @@ import { STATUS_PENDENTES } from "@/lib/pedido";
 import { profissionaisIndisponiveis } from "@/lib/alocacao";
 import { AcoesPedido } from "./AcoesPedido";
 import { CondicaoPagamento } from "./CondicaoPagamento";
-import { BotaoAcao } from "@/components/BotaoAcao";
-import { aprovarRelatorio } from "@/app/actions/financeiro";
+import { ConferenciaRelatorio } from "./ConferenciaRelatorio";
 import { perfilPermite } from "@/lib/papeis";
 
 export const dynamic = "force-dynamic";
@@ -43,7 +42,19 @@ export default async function Esteira({ searchParams }: { searchParams: { filtro
         clinica: { select: { nome: true } },
         servico: { select: { nome: true } },
         profissional: { select: { nome: true } },
-        relatorio: { select: { latitude: true, longitude: true, aprovadoEm: true } },
+        relatorio: {
+          select: {
+            latitude: true,
+            longitude: true,
+            aprovadoEm: true,
+            servicosAdicionais: true,
+            ajudaCustoCentavos: true,
+            ajudaCustoJustificativa: true,
+            servicoValidadoEm: true,
+            valorValidadoEm: true,
+            ajudaCustoValidadaEm: true,
+          },
+        },
       },
     }),
     prisma.profissional.findMany({
@@ -131,24 +142,64 @@ export default async function Esteira({ searchParams }: { searchParams: { filtro
                     {pedido.doutorNome && <> · Dr(a). {pedido.doutorNome}</>}
                     {pedido.pacienteNome && <> · paciente {pedido.pacienteNome}</>}
                   </div>
+                  {/* Alocado não quer dizer que alguém assumiu: desde a ata
+                      de 21/09 o profissional confirma, e a esteira precisa
+                      mostrar quem ainda não respondeu — é o pedido que corre
+                      risco de chegar na véspera sem ninguém. */}
+                  {pedido.status === "ALOCADO" && (
+                    <div className="text-[10px] mt-0.5 flex flex-wrap items-center gap-x-2">
+                      {pedido.aceitoEm ? (
+                        <span className="font-semibold text-green-700">aceito pelo profissional</span>
+                      ) : (
+                        <span className="font-semibold text-amber-700">aguardando aceite</span>
+                      )}
+                      {pedido.checkinEm &&
+                        (pedido.checkinLatitude != null && pedido.checkinLongitude != null ? (
+                          <a
+                            href={`https://www.google.com/maps?q=${pedido.checkinLatitude},${pedido.checkinLongitude}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="font-semibold text-green-700 hover:underline"
+                          >
+                            📍 chegada registrada
+                          </a>
+                        ) : (
+                          <span className="font-semibold text-green-700">chegada registrada</span>
+                        ))}
+                    </div>
+                  )}
                   <div className="mt-1.5">
                     <CondicaoPagamento pedidoId={pedido.id} atual={pedido.condicaoPagamento} />
                   </div>
                   {pedido.observacoes && (
                     <div className="text-[11px] text-gray-400 mt-1">{pedido.observacoes}</div>
                   )}
+                  {/* O que a pessoa declarou a mais é o que o pós-venda vai
+                      conferir — precisa estar à vista, não escondido atrás
+                      de um clique. */}
+                  {pedido.relatorio?.servicosAdicionais && (
+                    <div className="text-[11px] text-amber-800 mt-1">
+                      <strong>Além do contratado:</strong> {pedido.relatorio.servicosAdicionais}
+                    </div>
+                  )}
+                  {pedido.relatorio?.ajudaCustoCentavos != null && (
+                    <div className="text-[11px] text-amber-800">
+                      <strong>Ajuda de custo:</strong>{" "}
+                      {formatarReais(pedido.relatorio.ajudaCustoCentavos)}
+                      {pedido.relatorio.ajudaCustoJustificativa
+                        ? ` · ${pedido.relatorio.ajudaCustoJustificativa}`
+                        : ""}
+                    </div>
+                  )}
                   {pedido.relatorio &&
                     !pedido.relatorio.aprovadoEm &&
                     perfilPermite(sessao.perfil, "POS_VENDA") && (
-                      <div className="mt-1.5">
-                        <BotaoAcao
-                          acao={aprovarRelatorio.bind(null, pedido.id)}
-                          variante="primario"
-                          confirmar="Conferiu o relatório? Aprovar libera o repasse deste atendimento para pagamento."
-                        >
-                          Aprovar relatório e liberar repasse
-                        </BotaoAcao>
-                      </div>
+                      <ConferenciaRelatorio
+                        pedidoId={pedido.id}
+                        servicoValidado={pedido.relatorio.servicoValidadoEm != null}
+                        valorValidado={pedido.relatorio.valorValidadoEm != null}
+                        ajudaCustoValidada={pedido.relatorio.ajudaCustoValidadaEm != null}
+                      />
                     )}
                   {pedido.relatorio?.aprovadoEm && (
                     <div className="text-[10px] font-semibold text-green-700 mt-1">

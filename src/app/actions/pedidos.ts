@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import type { Prisma, StatusPedido } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
-import { exigirClinica, exigirInterno, registrarAuditoria } from "@/lib/sessao";
+import { exigirClinica, exigirInterno, exigirProfissional, registrarAuditoria } from "@/lib/sessao";
 import { equipamentoLivre, parametros, temBloqueio, travarRecursos, verificarAlocacao } from "@/lib/alocacao";
 import { calcularRepasse } from "@/lib/repasse";
 import { podeTransicionar, STATUS_ATIVOS } from "@/lib/pedido";
@@ -428,7 +428,9 @@ export async function desalocarPedido(pedidoId: string, motivo: string): Promise
   if (resultado.ok) {
     await prisma.pedido.update({
       where: { id: pedidoId },
-      data: { profissionalId: null, equipamentoId: null, valorRepasseCentavos: 0 },
+      // aceitoEm volta a nulo: o próximo profissional tem de confirmar de
+      // novo, e não herdar o "sim" de quem saiu do caso.
+      data: { profissionalId: null, equipamentoId: null, valorRepasseCentavos: 0, aceitoEm: null },
     });
     // A mensagem de alocação é apagada para que o próximo profissional
     // alocado receba a dele — a unicidade é por pedido × tipo.
@@ -734,6 +736,128 @@ export async function definirCondicaoPagamento(pedidoId: string, condicao: strin
     pedidoId,
     "condicao-pagamento",
     valor || "(em branco)"
+  );
+
+  atualizarTelas();
+  return { ok: true };
+}
+
+// ─── Portal do profissional ─────────────────────────────────────────────────
+
+/**
+ * O profissional confirma que assume o atendimento.
+ *
+ * A ata de 21/09 separou alocar de aceitar. A logística indica quem vai; a
+ * pessoa confirma que vai. Antes disso o atendimento está prometido à
+ * clínica mas não a ninguém — e é essa diferença que a esteira precisa
+ * mostrar para a equipe não descobrir na véspera que ninguém assumiu.
+ *
+ * Depois do aceite não existe recusa pelo portal: sair do caso passa a ser
+ * decisão da logística (`desalocarPedido`), que é quem consegue remanejar.
+ */
+export async function aceitarAlocacao(pedidoId: string): Promise<Resultado> {
+  const sessao = await exigirProfissional();
+
+  const pedido = await prisma.pedido.findFirst({
+    where: { id: pedidoId, profissionalId: sessao.profissionalId },
+    select: { id: true, status: true, aceitoEm: true },
+  });
+  if (!pedido) return { ok: false, erro: "Atendimento não encontrado na sua agenda." };
+  if (pedido.status !== "ALOCADO") return { ok: false, erro: "Este atendimento não está mais aberto para aceite." };
+  if (pedido.aceitoEm) return { ok: true };
+
+  await prisma.pedido.update({ where: { id: pedido.id }, data: { aceitoEm: new Date() } });
+  await registrarAuditoria(sessao.usuarioId, "Pedido", pedido.id, "aceitar-alocacao");
+
+  atualizarTelas();
+  return { ok: true };
+}
+
+/**
+ * Recusa — só ANTES do aceite.
+ *
+ * Devolve o atendimento à fila da logística e guarda a recusa numa linha
+ * própria (RecusaAtendimento): o pedido vai ser alocado de novo, e é a série
+ * de aceites e recusas que a ata pediu para acompanhar, não o estado final.
+ */
+export async function recusarAlocacao(pedidoId: string, motivo: string): Promise<Resultado> {
+  const sessao = await exigirProfissional();
+
+  if (!motivo.trim()) return { ok: false, erro: "Diga o motivo da recusa para a logística remanejar." };
+
+  const pedido = await prisma.pedido.findFirst({
+    where: { id: pedidoId, profissionalId: sessao.profissionalId },
+    select: { id: true, status: true, aceitoEm: true },
+  });
+  if (!pedido) return { ok: false, erro: "Atendimento não encontrado na sua agenda." };
+  if (pedido.status !== "ALOCADO") return { ok: false, erro: "Este atendimento não está mais aberto para recusa." };
+  if (pedido.aceitoEm) {
+    return {
+      ok: false,
+      erro: "Você já aceitou este atendimento. Fale com a logística — só ela consegue remanejar agora.",
+    };
+  }
+
+  const resultado = await transicionar(pedido.id, "CONFIRMADO", sessao.usuarioId);
+  if (!resultado.ok) return resultado;
+
+  await prisma.recusaAtendimento.create({
+    data: { pedidoId: pedido.id, profissionalId: sessao.profissionalId, motivo: motivo.trim() },
+  });
+  await prisma.pedido.update({
+    where: { id: pedido.id },
+    data: { profissionalId: null, equipamentoId: null, valorRepasseCentavos: 0, aceitoEm: null },
+  });
+  // Mesma limpeza do desalocar pela logística: a mensagem de alocação é
+  // apagada para o próximo profissional receber a dele, e o evento sai da
+  // agenda de quem recusou.
+  await prisma.mensagemWhatsapp
+    .delete({ where: { pedidoId_tipo: { pedidoId: pedido.id, tipo: "ALOCACAO" } } })
+    .catch(() => undefined);
+  await sincronizarEvento(pedido.id);
+  await registrarAuditoria(sessao.usuarioId, "Pedido", pedido.id, "recusar-alocacao", motivo.trim());
+
+  atualizarTelas();
+  return { ok: true };
+}
+
+/**
+ * Check-in de chegada ao local.
+ *
+ * Separado da localização do relatório: o relatório sai no fim do dia, às
+ * vezes já em casa, e "cheguei no endereço na hora" é outra pergunta. A
+ * coordenada é opcional pelo mesmo motivo de sempre — sem permissão ou sem
+ * sinal, o check-in ainda vale como "cheguei", só sem prova de onde.
+ */
+export async function registrarCheckin(
+  pedidoId: string,
+  local: { latitude: number; longitude: number; precisaoMetros: number } | null
+): Promise<Resultado> {
+  const sessao = await exigirProfissional();
+
+  const pedido = await prisma.pedido.findFirst({
+    where: { id: pedidoId, profissionalId: sessao.profissionalId },
+    select: { id: true, status: true, checkinEm: true },
+  });
+  if (!pedido) return { ok: false, erro: "Atendimento não encontrado na sua agenda." };
+  if (pedido.status !== "ALOCADO") return { ok: false, erro: "Este atendimento já foi finalizado." };
+  if (pedido.checkinEm) return { ok: true };
+
+  await prisma.pedido.update({
+    where: { id: pedido.id },
+    data: {
+      checkinEm: new Date(),
+      checkinLatitude: local?.latitude ?? null,
+      checkinLongitude: local?.longitude ?? null,
+      checkinPrecisaoMetros: local?.precisaoMetros ?? null,
+    },
+  });
+  await registrarAuditoria(
+    sessao.usuarioId,
+    "Pedido",
+    pedido.id,
+    "checkin",
+    local ? `${local.latitude},${local.longitude}` : "sem localização"
   );
 
   atualizarTelas();

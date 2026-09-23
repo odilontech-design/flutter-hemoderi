@@ -443,6 +443,7 @@ model Profissional {
   relatorios       RelatorioAtendimento[]
   repasses         Repasse[]
   avaliacoes       Avaliacao[]
+  recusas          RecusaAtendimento[]
 
   @@index([ativo])
 }
@@ -621,17 +622,61 @@ model Pedido {
   canceladoEm        DateTime?
   motivoCancelamento String?
 
+  /// Quando o profissional confirmou que assume ESTE atendimento.
+  ///
+  /// A ata de 21/09 separou alocar de aceitar: a logística indica, a pessoa
+  /// confirma. Depois de confirmado ela não recusa mais sozinha — tirar do
+  /// caso passa a ser exclusividade da logística (`desalocarPedido`), que
+  /// zera este campo para o próximo profissional ter de confirmar de novo.
+  /// Nulo em pedido alocado = esperando resposta de quem vai atender.
+  aceitoEm DateTime?
+
+  /// Chegada ao local, registrada pelo profissional no botão de check-in.
+  ///
+  /// Separado da localização do RELATÓRIO de propósito: o relatório é
+  /// enviado no fim (às vezes já no carro, às vezes em casa), e "estava no
+  /// endereço na hora marcada" é outra pergunta. Nulo é normal — sem
+  /// permissão de GPS o check-in ainda acontece, só sem coordenada.
+  checkinEm             DateTime?
+  checkinLatitude       Float?
+  checkinLongitude      Float?
+  checkinPrecisaoMetros Float?
+
   relatorio   RelatorioAtendimento?
   repasse     Repasse?
   avaliacao   Avaliacao?
   solicitacao SolicitacaoPublica?
   mensagens   MensagemWhatsapp[]
+  recusas     RecusaAtendimento[]
 
   @@index([data, status])
   @@index([clinicaId, data])
   @@index([profissionalId, data])
   @@index([status])
   @@index([faturaId])
+}
+
+/// Recusa de uma alocação, ANTES do aceite.
+///
+/// Fica numa tabela própria em vez de um campo no pedido porque o pedido
+/// volta para a fila e é alocado de novo: guardar no próprio pedido
+/// apagaria a recusa anterior a cada rodada, e é justamente a série
+/// ("quantos aceitou, quantos recusou, por quê") que a ata de 21/09 pediu
+/// para acompanhar.
+model RecusaAtendimento {
+  id String @id @default(cuid())
+
+  pedidoId String
+  pedido   Pedido @relation(fields: [pedidoId], references: [id], onDelete: Cascade)
+
+  profissionalId String
+  profissional   Profissional @relation(fields: [profissionalId], references: [id], onDelete: Cascade)
+
+  motivo   String
+  criadaEm DateTime @default(now())
+
+  @@index([profissionalId, criadaEm])
+  @@index([pedidoId])
 }
 
 /// O relatório que o profissional preenche depois do atendimento. É o
@@ -661,6 +706,40 @@ model RelatorioAtendimento {
   intercorrencia Boolean @default(false)
   observacoes    String?
 
+  /// Sinais vitais do modelo de relatório que o André mandou na reunião de
+  /// 21/09. São TEXTO, não número: a decisão da reunião foi campo obrigatório
+  /// com botão "não se aplica" (ver lib/relatorio.ts), e "não se aplica" não
+  /// cabe num Int. Também evita fingir precisão — "12/8" e "120x80" são a
+  /// mesma pressão escrita de dois jeitos, e normalizar isso sozinho seria
+  /// inventar dado clínico.
+  ///
+  /// ATENÇÃO, LGPD: até aqui o sistema não guardava dado de saúde — só
+  /// identificação mínima do paciente (ver Pedido.pacienteNome). Estes
+  /// campos mudam isso, a pedido da operação. A Hemoderi é a controladora
+  /// (Cláusula 8) e o prazo de retenção continua em aberto (pergunta 37 do
+  /// questionário técnico): enquanto não houver resposta, não há rotina de
+  /// expurgo e o dado fica.
+  frequenciaCardiaca String?
+  saturacaoOxigenio  String?
+  pressaoArterial    String?
+  glicemia           String?
+  /// Óxido nitroso e oxigênio — só fazem sentido em sedação, e é para esses
+  /// que o "não se aplica" existe na maior parte dos atendimentos.
+  oxidoNitroso String?
+  oxigenio     String?
+
+  /// O que foi executado além (ou no lugar) do serviço contratado — a
+  /// membrana que virou stickybone. Quem declara é quem atendeu; quem
+  /// valida é o pós-venda, e é por isso que a aprovação tem uma validação
+  /// separada só para serviço.
+  servicosAdicionais String?
+
+  /// Deslocamento. Não é tabelado: a régua é até 150km, mas varia por
+  /// quilometragem excedente e por tipo de transporte (moto x carro), então
+  /// entra caso a caso e passa por validação própria na aprovação.
+  ajudaCustoCentavos      Int?
+  ajudaCustoJustificativa String?
+
   /// Onde o navegador do profissional estava ao enviar o relatório — pedida
   /// no momento do envio, nunca antes. Confirma presença no local sem
   /// travar o relatório: sem permissão, sem GPS, sem sinal, o relatório
@@ -683,6 +762,16 @@ model RelatorioAtendimento {
   /// clínica ainda vai contestar.
   aprovadoEm    DateTime?
   aprovadoPorId String?
+
+  /// As três conferências que a aprovação geral exige (ata de 21/09).
+  ///
+  /// Separadas porque é isso que o pós-venda realmente faz: bate o serviço
+  /// executado contra o contratado, bate o valor, e decide a ajuda de custo
+  /// — três perguntas com respostas independentes. Um botão só de "aprovar"
+  /// transformaria as três num clique que ninguém lê.
+  servicoValidadoEm    DateTime?
+  valorValidadoEm      DateTime?
+  ajudaCustoValidadaEm DateTime?
 
   @@index([profissionalId])
   @@index([aprovadoEm])

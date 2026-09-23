@@ -22,6 +22,7 @@
     "fumaca:avaliacao": "node scripts/fumaca-avaliacao.mjs",
     "fumaca:agenda": "dotenv -e .env -- tsx scripts/fumaca-agenda.ts",
     "fumaca:ata": "node scripts/fumaca-ata.mjs",
+    "fumaca:aceite": "dotenv -e .env -- node scripts/fumaca-aceite.mjs",
     "fumaca:publico": "node scripts/fumaca-publico.mjs",
     "fumaca:nps": "dotenv -e .env -- node scripts/fumaca-nps.mjs"
   },

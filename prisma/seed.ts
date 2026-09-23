@@ -51,6 +51,23 @@ async function main() {
     },
   });
 
+  // As quatro funções nomeadas na reunião de 21/09. Existem no seed porque
+  // não dá para testar nada restrito por perfil sem uma conta de cada: quem
+  // aloca, quem confere relatório, quem cancela e quem acompanha a equipe.
+  const perfis = [
+    { nome: "Joyce (logística)", email: "logistica@hemoderi.com.br", perfil: "LOGISTICA" as const },
+    { nome: "Stephanie (pós-venda)", email: "posvenda@hemoderi.com.br", perfil: "POS_VENDA" as const },
+    { nome: "Ana (comercial)", email: "comercial@hemoderi.com.br", perfil: "COMERCIAL" as const },
+    { nome: "Ingrid (gestão)", email: "gestao@hemoderi.com.br", perfil: "GESTAO" as const },
+  ];
+  for (const { nome, email, perfil } of perfis) {
+    await prisma.usuario.upsert({
+      where: { email },
+      update: {},
+      create: { nome, email, senhaHash, papel: "INTERNO", perfilInterno: perfil },
+    });
+  }
+
   // ── Clínicas ──────────────────────────────────────────────────────────────
   // Daqui para baixo é só para navegar em desenvolvimento — nunca dado real.
   // Por isso o seed inteiro não pode rodar contra produção: /api/setup chama

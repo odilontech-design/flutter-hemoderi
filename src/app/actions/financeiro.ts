@@ -6,6 +6,7 @@ import { exigirInterno, exigirResponsavel, registrarAuditoria } from "@/lib/sess
 import { parametros } from "@/lib/alocacao";
 import { competenciaPorExtenso } from "@/lib/data";
 import { perfilPermite } from "@/lib/papeis";
+import { ITENS_VALIDACAO, type ItemValidacao } from "@/lib/relatorio";
 import type { Resultado } from "./pedidos";
 
 /**
@@ -151,6 +152,50 @@ export async function pagarRepasses(profissionalId: string, competencia: string)
  * `exigirInterno` em vez de `exigirResponsavel` aqui, com a checagem de
  * perfil logo abaixo.
  */
+/**
+ * Marca (ou desmarca) uma das três conferências do relatório.
+ *
+ * Desmarcar existe porque conferir é trabalho humano e humano erra o clique
+ * — travar a primeira marcação obrigaria a pedir socorro para desfazer algo
+ * que ainda não virou pagamento.
+ */
+export async function validarItemRelatorio(
+  pedidoId: string,
+  item: ItemValidacao,
+  validado: boolean
+): Promise<Resultado> {
+  const sessao = await exigirInterno();
+  if (!perfilPermite(sessao.perfil, "POS_VENDA")) {
+    return { ok: false, erro: "Só o pós-venda confere relatório." };
+  }
+
+  const definicao = ITENS_VALIDACAO[item];
+  if (!definicao) return { ok: false, erro: "Item de conferência desconhecido." };
+
+  const relatorio = await prisma.relatorioAtendimento.findUnique({
+    where: { pedidoId },
+    select: { id: true, aprovadoEm: true },
+  });
+  if (!relatorio) return { ok: false, erro: "Este atendimento ainda não tem relatório." };
+  if (relatorio.aprovadoEm) return { ok: false, erro: "Relatório já aprovado — a conferência está fechada." };
+
+  await prisma.relatorioAtendimento.update({
+    where: { id: relatorio.id },
+    data: { [definicao.campo]: validado ? new Date() : null },
+  });
+
+  await registrarAuditoria(
+    sessao.usuarioId,
+    "Pedido",
+    pedidoId,
+    validado ? "conferir" : "desfazer-conferencia",
+    definicao.rotulo
+  );
+
+  revalidatePath("/painel/pedidos");
+  return { ok: true };
+}
+
 export async function aprovarRelatorio(pedidoId: string): Promise<Resultado> {
   const sessao = await exigirInterno();
   if (!perfilPermite(sessao.perfil, "POS_VENDA")) {
@@ -159,10 +204,28 @@ export async function aprovarRelatorio(pedidoId: string): Promise<Resultado> {
 
   const relatorio = await prisma.relatorioAtendimento.findUnique({
     where: { pedidoId },
-    select: { id: true, aprovadoEm: true, compareceu: true },
+    select: {
+      id: true,
+      aprovadoEm: true,
+      compareceu: true,
+      servicoValidadoEm: true,
+      valorValidadoEm: true,
+      ajudaCustoValidadaEm: true,
+    },
   });
   if (!relatorio) return { ok: false, erro: "Este atendimento ainda não tem relatório." };
   if (relatorio.aprovadoEm) return { ok: false, erro: "Relatório já aprovado." };
+
+  // A aprovação geral é a soma das três conferências, nunca um atalho por
+  // cima delas: é o que a ata de 21/09 pediu para o "aprovado" significar
+  // que alguém olhou serviço, valor e ajuda de custo separadamente.
+  const pendentes = (Object.keys(ITENS_VALIDACAO) as ItemValidacao[]).filter(
+    (item) => relatorio[ITENS_VALIDACAO[item].campo] == null
+  );
+  if (pendentes.length > 0) {
+    const nomes = pendentes.map((item) => ITENS_VALIDACAO[item].rotulo).join(", ");
+    return { ok: false, erro: `Falta conferir: ${nomes}.` };
+  }
 
   await prisma.$transaction(async (tx) => {
     await tx.relatorioAtendimento.update({

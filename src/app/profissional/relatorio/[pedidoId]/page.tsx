@@ -20,10 +20,32 @@ export default async function Relatorio({ params }: { params: { pedidoId: string
       clinica: { select: { nome: true, endereco: true } },
       servico: { select: { nome: true } },
       profissional: { select: { chavePix: true } },
-      relatorio: { select: { chavePixConfirmada: true, aprovadoEm: true } },
+      relatorio: true,
     },
   });
   if (!pedido) notFound();
+
+  // O formulário é controlado por texto (o "N/A" preenche o campo), então os
+  // valores já enviados chegam como string — inclusive os que no banco são
+  // número ou booleano.
+  const r = pedido.relatorio;
+  const valores: Record<string, string> = {
+    compareceu: r ? (r.compareceu ? "sim" : "nao") : "",
+    inicioReal: r?.inicioReal ?? "",
+    fimReal: r?.fimReal ?? "",
+    quantidade: r ? String(r.quantidade) : "",
+    intercorrencia: r ? (r.intercorrencia ? "sim" : "nao") : "",
+    observacoes: r?.observacoes ?? "",
+    frequenciaCardiaca: r?.frequenciaCardiaca ?? "",
+    saturacaoOxigenio: r?.saturacaoOxigenio ?? "",
+    pressaoArterial: r?.pressaoArterial ?? "",
+    glicemia: r?.glicemia ?? "",
+    oxidoNitroso: r?.oxidoNitroso ?? "",
+    oxigenio: r?.oxigenio ?? "",
+    servicosAdicionais: r?.servicosAdicionais ?? "",
+    ajudaCusto: r?.ajudaCustoCentavos != null ? (r.ajudaCustoCentavos / 100).toFixed(2).replace(".", ",") : "",
+    ajudaCustoJustificativa: r?.ajudaCustoJustificativa ?? "",
+  };
 
   return (
     <>
@@ -51,6 +73,7 @@ export default async function Relatorio({ params }: { params: { pedidoId: string
             horaPrevista={pedido.horaInicio}
             chavePixCadastro={pedido.relatorio?.chavePixConfirmada ?? pedido.profissional?.chavePix ?? null}
             jaEnviado={pedido.relatorio != null}
+            valores={valores}
           />
         )}
       </Cartao>
