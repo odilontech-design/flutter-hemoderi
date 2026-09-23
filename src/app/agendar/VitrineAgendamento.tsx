@@ -7,6 +7,8 @@ import { solicitarPublico } from "@/app/actions/publico";
 import { Area, Aviso, Botao, Campo, Rotulo } from "@/components/ui";
 import { CamposEndereco } from "@/components/CamposEndereco";
 import { formatarTelefone, linkWhatsapp, mensagemDeUrgencia } from "@/lib/whatsapp-link";
+import { dataDeISO, instanteDoAtendimento } from "@/lib/data";
+import { linkAdicionarGoogleAgenda } from "@/lib/google-calendar-link";
 import type { ResultadoSolicitacaoPublica } from "@/app/actions/publico";
 
 const INICIAL: ResultadoSolicitacaoPublica = { ok: false };
@@ -118,20 +120,34 @@ export function VitrineAgendamento({
   );
 
   if (estado.ok) {
+    // Preferência da pessoa, a mesma que foi enviada — não é o compromisso
+    // oficial (esse só nasce quando a central confirma), por isso o convite
+    // de calendário é o link público de "adicionar rápido", não a
+    // sincronização de verdade (essa é para depois de CONFIRMADO, ver
+    // deveTerEvento em integracoes/google-evento.ts).
+    const linkCalendario =
+      servico && data && horario
+        ? linkAdicionarGoogleAgenda({
+            titulo: `${servico.nome} — Hemoderi (a confirmar)`,
+            detalhes: "Pedido enviado pelo site da Hemoderi. A central confirma o horário e quem atende.",
+            inicio: instanteDoAtendimento(dataDeISO(data), horario),
+            duracaoMin: servico.duracaoMin,
+          })
+        : null;
+
     return (
       <div className="mt-8 bg-white border border-green-200 rounded-2xl p-6 sm:p-8 max-w-2xl">
-        <div className="font-display font-extrabold text-bordo text-xl mb-2">Pedido recebido.</div>
+        <div className="font-display font-extrabold text-bordo text-xl mb-2">Recebemos seu agendamento.</div>
         <p className="text-sm text-gray-600 leading-relaxed">
-          A central vai confirmar o horário e quem vai atender, e entra em contato pelo telefone que
-          você informou.
+          Para acessar seus agendamentos e relatórios, entre no nosso sistema usando este mesmo
+          e-mail.
         </p>
 
         {estado.credencial && (
           <div className="mt-4 bg-bege rounded-xl p-4">
-            <div className="text-xs font-semibold text-bordo mb-1">Seu acesso ao portal foi criado</div>
+            <div className="text-xs font-semibold text-bordo mb-1">Sua área do cliente foi criada</div>
             <div className="text-xs text-gray-600 mb-2">
-              Anote — é assim que você entra da próxima vez para acompanhar seus pedidos, sem
-              preencher tudo de novo.
+              Anote — é assim que você entra da próxima vez, sem preencher tudo de novo.
             </div>
             <div className="text-sm font-mono bg-white border border-gray-200 rounded-lg px-3 py-2">
               {estado.credencial.email} · {estado.credencial.senha}
@@ -139,16 +155,44 @@ export function VitrineAgendamento({
           </div>
         )}
 
-        {whatsapp && (
-          <a
-            href={whatsapp}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="mt-4 inline-flex items-center gap-2 bg-[#1EA952] text-white text-sm font-semibold px-4 py-2.5 rounded-lg hover:bg-[#178943]"
+        <div className="mt-4">
+          <Link
+            href="/login"
+            className="inline-flex items-center gap-2 border border-gray-300 text-bordo text-sm font-semibold px-4 py-2.5 rounded-lg hover:bg-gray-50"
           >
-            Falar com a central no WhatsApp
-          </a>
-        )}
+            Entrar na minha área →
+          </Link>
+        </div>
+
+        <div className="mt-4">
+          <Aviso tom="info">
+            Você receberá uma mensagem com a confirmação do agendamento 1 dia antes do seu
+            atendimento, com o nome do profissional que vai te atender. Confira todos os dados.
+          </Aviso>
+        </div>
+
+        <div className="mt-4 flex flex-wrap gap-2">
+          {linkCalendario && (
+            <a
+              href={linkCalendario}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-2 border border-gray-300 text-bordo text-sm font-semibold px-4 py-2.5 rounded-lg hover:bg-gray-50"
+            >
+              Adicionar ao Google Agenda
+            </a>
+          )}
+          {whatsapp && (
+            <a
+              href={whatsapp}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-2 bg-[#1EA952] text-white text-sm font-semibold px-4 py-2.5 rounded-lg hover:bg-[#178943]"
+            >
+              Falar com a central no WhatsApp
+            </a>
+          )}
+        </div>
       </div>
     );
   }
