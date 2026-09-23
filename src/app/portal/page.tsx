@@ -2,7 +2,7 @@ import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 import { exigirClinica } from "@/lib/sessao";
 import { Cartao, Kpi, SeloStatus, Tabela, Titulo, Vazio } from "@/components/ui";
-import { formatarDataCurta, hojeUTC, nomeDoProfissionalVisivel } from "@/lib/data";
+import { formatarDataCurta, hojeUTC, instanteDoAtendimento, nomeDoProfissionalVisivel } from "@/lib/data";
 import { STATUS_ATIVOS } from "@/lib/pedido";
 import { AcoesClinica } from "./AcoesClinica";
 import { AvaliarAtendimento } from "./AvaliarAtendimento";
@@ -10,6 +10,7 @@ import { ResponderNps } from "./ResponderNps";
 import { CartaoDivulgacao } from "@/components/CartaoDivulgacao";
 import { formatarMedia, mediaDeNotas } from "@/lib/avaliacao";
 import { formatarReais } from "@/lib/dinheiro";
+import { linkAdicionarGoogleAgenda } from "@/lib/google-calendar-link";
 
 export const dynamic = "force-dynamic";
 
@@ -26,7 +27,10 @@ export default async function MeusAgendamentos() {
     prisma.pedido.findMany({
       where: { clinicaId: sessao.clinicaId, data: { gte: hoje }, status: { in: STATUS_ATIVOS } },
       orderBy: [{ data: "asc" }, { horaInicio: "asc" }],
-      include: { servico: { select: { nome: true } }, profissional: { select: { nome: true } } },
+      include: {
+        servico: { select: { nome: true, duracaoMin: true } },
+        profissional: { select: { nome: true } },
+      },
     }),
     prisma.pedido.findMany({
       where: { clinicaId: sessao.clinicaId, status: { in: ["REALIZADO", "FALTOU", "CANCELADO"] } },
@@ -119,7 +123,23 @@ export default async function MeusAgendamentos() {
                   <SeloStatus status={pedido.status} />
                 </td>
                 <td className="py-2">
-                  <AcoesClinica pedidoId={pedido.id} />
+                  <div className="flex flex-wrap items-center gap-2">
+                    <AcoesClinica pedidoId={pedido.id} />
+                    {pedido.status !== "SOLICITADO" && (
+                      <a
+                        href={linkAdicionarGoogleAgenda({
+                          titulo: `${pedido.servico.nome} — Hemoderi`,
+                          inicio: instanteDoAtendimento(pedido.data, pedido.horaInicio),
+                          duracaoMin: pedido.servico.duracaoMin,
+                        })}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-[11px] font-semibold text-bordo hover:underline whitespace-nowrap"
+                      >
+                        + Google Agenda
+                      </a>
+                    )}
+                  </div>
                 </td>
               </tr>
             ))}

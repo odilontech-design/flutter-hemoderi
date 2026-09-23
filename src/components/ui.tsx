@@ -4,11 +4,13 @@ import { COR_STATUS, ROTULO_STATUS } from "@/lib/pedido";
 export function Cartao({
   children,
   className = "",
+  id,
 }: {
   children: React.ReactNode;
   className?: string;
+  id?: string;
 }) {
-  return <div className={`bg-white border border-gray-200 rounded-2xl p-5 ${className}`}>{children}</div>;
+  return <div id={id} className={`bg-white border border-gray-200 rounded-2xl p-5 ${className}`}>{children}</div>;
 }
 
 export function Titulo({ children, acao }: { children: React.ReactNode; acao?: React.ReactNode }) {

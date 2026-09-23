@@ -84,6 +84,46 @@ export function somarDias(data: Date, dias: number): Date {
 }
 
 /**
+ * Os próximos `dias` dias a partir de hoje (hoje incluso), no fuso da
+ * operação — a grade que "Minha Semana" usa (ata de 21/09: "destacar os
+ * próximos 7 dias de disponibilidade", em vez do dia-da-semana abstrato).
+ */
+export function proximosDias(dias: number, agora: Date = new Date()): Date[] {
+  const inicio = hojeUTC(agora);
+  return Array.from({ length: dias }, (_, i) => somarDias(inicio, i));
+}
+
+/**
+ * Todo dia entre `inicio` e `fim`, incluindo as pontas — usado para marcar
+ * ausência por PERÍODO (férias, mestrado; ata de 21/09) sem precisar de um
+ * campo de intervalo no banco: cada dia vira o mesmo `Bloqueio` de sempre.
+ * `null` quando o intervalo é inválido (fim antes do início) ou maior que um
+ * ano — período tão longo é sinal de erro de digitação, não de férias.
+ */
+export function diasDoIntervalo(inicio: Date, fim: Date): Date[] | null {
+  if (fim < inicio) return null;
+  const dias: Date[] = [];
+  for (let d = inicio; d <= fim; d = somarDias(d, 1)) {
+    dias.push(d);
+    if (dias.length > 366) return null;
+  }
+  return dias;
+}
+
+/**
+ * "Segunda, 22/09" — nome do dia por extenso (sem o "-feira", que só
+ * alonga) mais a data curta. Formato pedido nominalmente pela ata, distinto
+ * de `formatarDataCurta` ("22/09 (seg)"), que é abreviado de propósito para
+ * caber em tabela.
+ */
+export function formatarDiaEData(data: Date): string {
+  const diaSemana = data.toLocaleDateString("pt-BR", { timeZone: "UTC", weekday: "long" });
+  const nome = diaSemana.charAt(0).toUpperCase() + diaSemana.slice(1).replace("-feira", "");
+  const curta = data.toLocaleDateString("pt-BR", { timeZone: "UTC", day: "2-digit", month: "2-digit" });
+  return `${nome}, ${curta}`;
+}
+
+/**
  * Meia-noite UTC do dia calendário de `data` — usado para ancorar contagens
  * de dias a partir de um timestamp qualquer (`criadaEm`, por exemplo), que ao
  * contrário de `Pedido.data` não nasce já truncado. A imprecisão de algumas
@@ -100,6 +140,24 @@ export function inicioDoMesUTC(data: Date = hojeUTC()): Date {
 
 export function fimDoMesUTC(data: Date = hojeUTC()): Date {
   return new Date(Date.UTC(data.getUTCFullYear(), data.getUTCMonth() + 1, 0));
+}
+
+/**
+ * Semanas completas (domingo a sábado) cobrindo o mês "YYYY-MM" — a agenda
+ * mensal que a ata de 21/09 pediu ao lado dos próximos 7 dias. Dia fora do
+ * mês vem como `null`, só para a grade fechar a semana; quem desenha decide
+ * o que fazer com a célula vazia.
+ */
+export function gradeDoMes(competencia: string): (Date | null)[] {
+  const [ano, mes] = competencia.split("-").map(Number);
+  const primeiro = new Date(Date.UTC(ano, mes - 1, 1));
+  const ultimo = new Date(Date.UTC(ano, mes, 0));
+
+  const celulas: (Date | null)[] = [];
+  for (let i = 0; i < primeiro.getUTCDay(); i++) celulas.push(null);
+  for (let dia = primeiro; dia <= ultimo; dia = somarDias(dia, 1)) celulas.push(dia);
+  while (celulas.length % 7 !== 0) celulas.push(null);
+  return celulas;
 }
 
 /** Competência "YYYY-MM" do dia do atendimento. */

@@ -2,11 +2,44 @@ import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 import { exigirProfissional } from "@/lib/sessao";
 import { Cartao, SeloStatus, Titulo, Vazio } from "@/components/ui";
-import { formatarDataCurta, hojeUTC } from "@/lib/data";
+import { formatarDataCurta, hojeUTC, instanteDoAtendimento } from "@/lib/data";
 import { formatarReais } from "@/lib/dinheiro";
 import { parametros } from "@/lib/alocacao";
 import { LOCAL_FECHADO, localRevelado } from "@/lib/sigilo";
+import { linkAdicionarGoogleAgenda } from "@/lib/google-calendar-link";
 import { AceiteAlocacao, BotaoCheckin } from "./AcoesAtendimento";
+
+type PedidoParaCalendario = {
+  data: Date;
+  horaInicio: string;
+  servico: { nome: string; duracaoMin: number };
+  clinica: { nome: string; endereco: string | null; numero: string | null; bairro: string | null; cidade: string | null };
+};
+
+/**
+ * O convite de calendário respeita o mesmo sigilo do endereço (lib/sigilo.ts,
+ * ata de 14/09): antes da janela de revelação, nem o nome da clínica nem o
+ * endereço entram no evento — só "quando", que é o que o profissional
+ * precisa para reservar a data antes de saber onde é.
+ */
+function linkCalendarioDoPedido(pedido: PedidoParaCalendario, revelado: boolean): string {
+  const local = revelado
+    ? [
+        [pedido.clinica.endereco, pedido.clinica.numero].filter(Boolean).join(", "),
+        pedido.clinica.bairro,
+        pedido.clinica.cidade,
+      ]
+        .filter(Boolean)
+        .join(" — ")
+    : undefined;
+
+  return linkAdicionarGoogleAgenda({
+    titulo: revelado ? `${pedido.servico.nome} — ${pedido.clinica.nome}` : `${pedido.servico.nome} — Hemoderi`,
+    local: local || undefined,
+    inicio: instanteDoAtendimento(pedido.data, pedido.horaInicio),
+    duracaoMin: pedido.servico.duracaoMin,
+  });
+}
 
 export const dynamic = "force-dynamic";
 
@@ -27,8 +60,8 @@ export default async function MinhaAgenda() {
 
   const meus = { profissionalId: sessao.profissionalId, status: "ALOCADO" as const };
   const dadosDoPedido = {
-    clinica: { select: { nome: true } },
-    servico: { select: { nome: true } },
+    clinica: { select: { nome: true, endereco: true, numero: true, bairro: true, cidade: true } },
+    servico: { select: { nome: true, duracaoMin: true } },
   };
 
   const [config, aguardandoAceite, deHoje, atrasados, proximos] = await Promise.all([
@@ -113,6 +146,17 @@ export default async function MinhaAgenda() {
                   ) : (
                     <BotaoCheckin pedidoId={pedido.id} />
                   )}
+                  <a
+                    href={linkCalendarioDoPedido(
+                      pedido,
+                      localRevelado(pedido.data, pedido.horaInicio, config.horasRevelarLocal)
+                    )}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-[11px] font-semibold text-bordo hover:underline"
+                  >
+                    + Google Agenda
+                  </a>
                   {pedido.relatorio ? (
                     <Link
                       href={`/profissional/relatorio/${pedido.id}`}
@@ -196,6 +240,17 @@ export default async function MinhaAgenda() {
                     )}{" "}
                     · {pedido.servico.nome}
                   </div>
+                  <a
+                    href={linkCalendarioDoPedido(
+                      pedido,
+                      localRevelado(pedido.data, pedido.horaInicio, config.horasRevelarLocal)
+                    )}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-[11px] font-semibold text-bordo hover:underline"
+                  >
+                    + Google Agenda
+                  </a>
                 </div>
                 <div className="text-right">
                   <div className="font-semibold">{formatarReais(pedido.valorRepasseCentavos)}</div>
