@@ -210,13 +210,20 @@ export async function POST(requisicao: Request) {
     <h1>Demonstração pronta</h1>
     ${tabelaResumo(resumo)}
 
-    <h2>Acessos para mostrar os três perfis</h2>
+    <h2>Acessos para a simulação ao vivo</h2>
     <div class="credencial">
-      <strong>Equipe:</strong> equipe@demo.hemoderi.com.br<br />
+      <strong>Equipe (todos os perfis):</strong> equipe@demo.hemoderi.com.br<br />
+      <strong>Logística — Joyce aloca:</strong> logistica@demo.hemoderi.com.br<br />
+      <strong>Pós-venda — Stephanie aprova:</strong> posvenda@demo.hemoderi.com.br<br />
       <strong>Clínica:</strong> clinica@demo.hemoderi.com.br<br />
-      <strong>Profissional:</strong> profissional@demo.hemoderi.com.br<br />
-      <strong>Senha das três:</strong> <code>${SENHA_DEMO}</code>
+      <strong>Profissional — aceita o roteiro B:</strong> profissional@demo.hemoderi.com.br<br />
+      <strong>Senha de todas:</strong> <code>${SENHA_DEMO}</code>
     </div>
+    <p style="margin-top:.75rem;">Três pedidos de hoje ficam prontos para o roteiro da ata de 21/09:
+    um <strong>Confirmado sem profissional</strong> (Joyce aloca), um <strong>Alocado aguardando aceite</strong>
+    do profissional de demonstração (aceita pelo portal do profissional), e um <strong>Realizado com
+    relatório pendente</strong> (Stephanie confere e aprova na esteira). Procure por "Roteiro A/B/C" no
+    nome do paciente.</p>
     <p style="margin-top:.75rem;">Seu acesso real continua funcionando normalmente,
     e enxerga tudo — inclusive a demonstração.</p>
 

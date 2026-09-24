@@ -34,6 +34,10 @@ export function CamposEndereco({ inicial }: { inicial?: Endereco }) {
   const [erro, setErro] = useState("");
   // Endereço já carregado (ou vindo do cadastro) libera número e complemento.
   const [encontrado, setEncontrado] = useState(Boolean(inicial?.endereco));
+  // Sem resposta do serviço de CEP: os campos deixam de vir bloqueados da
+  // consulta e passam a aceitar digitação — travá-los vazios e travados
+  // prenderia o cadastro por causa de um serviço de terceiro fora do ar.
+  const [manual, setManual] = useState(false);
 
   async function buscar(valor: string) {
     const limpo = valor.replace(/\D/g, "");
@@ -47,6 +51,7 @@ export function CamposEndereco({ inicial }: { inicial?: Endereco }) {
       if (dados.erro) {
         setErro("CEP não encontrado. Confira o número.");
         setEncontrado(false);
+        setManual(false);
         return;
       }
       setLogradouro(dados.logradouro ?? "");
@@ -54,11 +59,13 @@ export function CamposEndereco({ inicial }: { inicial?: Endereco }) {
       setCidade(dados.localidade ?? "");
       setUf(dados.uf ?? "");
       setEncontrado(true);
+      setManual(false);
     } catch {
       // Sem rede ou serviço fora: liberar a digitação é melhor que travar o
       // cadastro inteiro por causa de um serviço de terceiro.
       setErro("Não deu para consultar o CEP agora. Preencha o endereço à mão.");
       setEncontrado(true);
+      setManual(true);
     } finally {
       setBuscando(false);
     }
@@ -85,7 +92,13 @@ export function CamposEndereco({ inicial }: { inicial?: Endereco }) {
         </div>
         <div className="sm:col-span-2">
           <Rotulo>Logradouro</Rotulo>
-          <Campo name="endereco" value={logradouro} readOnly required onChange={() => undefined} />
+          <Campo
+            name="endereco"
+            value={logradouro}
+            readOnly={!manual}
+            required
+            onChange={(e) => manual && setLogradouro(e.target.value)}
+          />
         </div>
       </div>
 
@@ -102,16 +115,32 @@ export function CamposEndereco({ inicial }: { inicial?: Endereco }) {
         </div>
         <div>
           <Rotulo>Bairro</Rotulo>
-          <Campo name="bairro" value={bairro} readOnly onChange={() => undefined} />
+          <Campo
+            name="bairro"
+            value={bairro}
+            readOnly={!manual}
+            onChange={(e) => manual && setBairro(e.target.value)}
+          />
         </div>
         <div className="grid grid-cols-3 gap-2">
           <div className="col-span-2">
             <Rotulo>Cidade</Rotulo>
-            <Campo name="cidade" value={cidade} readOnly onChange={() => undefined} />
+            <Campo
+              name="cidade"
+              value={cidade}
+              readOnly={!manual}
+              onChange={(e) => manual && setCidade(e.target.value)}
+            />
           </div>
           <div>
             <Rotulo>UF</Rotulo>
-            <Campo name="uf" value={uf} readOnly onChange={() => undefined} />
+            <Campo
+              name="uf"
+              value={uf}
+              readOnly={!manual}
+              maxLength={2}
+              onChange={(e) => manual && setUf(e.target.value.toUpperCase())}
+            />
           </div>
         </div>
       </div>

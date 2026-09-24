@@ -81,8 +81,11 @@ try {
   const temSolicitado = await page.locator("text=Solicitado").count();
   temSolicitado > 0 ? ok("pedido nasceu como Solicitado no portal") : falha("pedido não apareceu como Solicitado");
 
+  // Itens rápidos (pós-ata de 21/09): QR Code saiu da página do cliente —
+  // só a equipe interna (/painel/clinicas/[id]) ainda precisa dele para
+  // imprimir. Ausência aqui é o comportamento correto, não uma falha.
   const temQr = await page.locator('img[alt*="QR Code"]').count();
-  temQr > 0 ? ok("QR Code de divulgação renderizou no portal") : falha("QR Code não renderizou");
+  temQr === 0 ? ok("QR Code não aparece mais no portal do cliente") : falha("QR Code ainda aparece no portal");
 
   // ── 1b. Clínica remarca o próprio pedido ─────────────────────────────────
   const linhaDoPedido = page.locator("tbody tr", { hasText: PACIENTE }).first();

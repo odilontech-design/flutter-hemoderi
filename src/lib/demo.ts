@@ -21,6 +21,8 @@
 import type { PrismaClient } from "@prisma/client";
 import bcrypt from "bcryptjs";
 import { hojeUTC, isoDeData, somarDias } from "./data";
+import { NAO_SE_APLICA } from "./relatorio";
+import { CONDICOES_PAGAMENTO } from "./pagamento";
 
 const PREFIXO = "demo-";
 
@@ -234,6 +236,35 @@ function comentarioPara(nota: number, i: number): string {
 }
 
 /**
+ * Os seis campos clínicos do relatório (ata de 21/09) — sempre preenchidos,
+ * nunca em branco, porque em branco não é um estado que o formulário real
+ * permite. A maior parte volta "não se aplica" (é a resposta mais comum na
+ * operação real); uma fração mostra números plausíveis, e só essa fração
+ * preenche óxido nitroso/oxigênio, que só fazem sentido em sedação.
+ */
+function valoresClinicos(aleatorio: () => number) {
+  if (aleatorio() >= 0.35) {
+    return {
+      frequenciaCardiaca: NAO_SE_APLICA,
+      saturacaoOxigenio: NAO_SE_APLICA,
+      pressaoArterial: NAO_SE_APLICA,
+      glicemia: NAO_SE_APLICA,
+      oxidoNitroso: NAO_SE_APLICA,
+      oxigenio: NAO_SE_APLICA,
+    };
+  }
+  const sedacao = aleatorio() < 0.3;
+  return {
+    frequenciaCardiaca: `${62 + Math.floor(aleatorio() * 30)} bpm`,
+    saturacaoOxigenio: `${95 + Math.floor(aleatorio() * 5)}%`,
+    pressaoArterial: `${105 + Math.floor(aleatorio() * 30)}x${65 + Math.floor(aleatorio() * 20)}`,
+    glicemia: `${80 + Math.floor(aleatorio() * 40)} mg/dL`,
+    oxidoNitroso: sedacao ? `${30 + Math.floor(aleatorio() * 20)}%` : NAO_SE_APLICA,
+    oxigenio: sedacao ? `${50 + Math.floor(aleatorio() * 20)}%` : NAO_SE_APLICA,
+  };
+}
+
+/**
  * Monta a demonstração do zero. Limpa a anterior antes, para poder rodar de
  * novo sem duplicar e para que o resultado seja sempre o mesmo.
  */
@@ -366,6 +397,9 @@ export async function montarDemo(prisma: PrismaClient): Promise<ResumoDemo> {
     valorRepasseCentavos: number;
     pacienteNome: string;
     observacoes?: string;
+    /// Nulo = ainda esperando resposta do profissional (ata de 21/09).
+    aceitoEm: Date | null;
+    condicaoPagamento: string | null;
   };
 
   const pedidos: NovoPedido[] = [];
@@ -413,6 +447,22 @@ export async function montarDemo(prisma: PrismaClient): Promise<ResumoDemo> {
       const repassePercent = PROFISSIONAIS[pi].repasse ?? 60;
       const alocado = !semProfissional;
 
+      // Quem já foi realizado ou faltou necessariamente já tinha sido
+      // aceito pelo profissional; quem ainda está alocado é uma mistura —
+      // a esteira real sempre tem alguma coisa esperando resposta, e a
+      // demonstração precisa mostrar essa fila sem depender só do roteiro.
+      let aceitoEm: Date | null = null;
+      if (alocado && (status === "REALIZADO" || status === "FALTOU")) {
+        aceitoEm = somarDias(hoje, -(1 + Math.floor(aleatorio() * 3)));
+      } else if (alocado && status === "ALOCADO") {
+        aceitoEm = aleatorio() < 0.75 ? somarDias(hoje, -(1 + Math.floor(aleatorio() * 3))) : null;
+      }
+
+      // Uma fração fica sem condição definida ("a definir"), como acontece
+      // de verdade antes de alguém da equipe preencher.
+      const condicaoPagamento =
+        aleatorio() < 0.85 ? CONDICOES_PAGAMENTO[Math.floor(aleatorio() * CONDICOES_PAGAMENTO.length)] : null;
+
       pedidos.push({
         id: `${PREFIXO}pedido-${numero}`,
         numero: numero++,
@@ -428,19 +478,122 @@ export async function montarDemo(prisma: PrismaClient): Promise<ResumoDemo> {
         valorRepasseCentavos:
           alocado && status !== "SOLICITADO" ? Math.round((valor * repassePercent) / 100) : 0,
         pacienteNome: PACIENTES[Math.floor(aleatorio() * PACIENTES.length)],
+        aceitoEm,
+        condicaoPagamento,
       });
     }
   }
+
+  // ── Roteiro da simulação ao vivo (ata de 21/09) ───────────────────────────
+  // Três pedidos fixos, hoje, cada um parado exatamente um passo antes do que
+  // a demonstração precisa mostrar ao vivo: Joyce aloca, o profissional
+  // aceita, Stephanie aprova. Reservados depois do sorteio para não
+  // dependerem da semente nem correrem risco de sair com outro status.
+  const roteiro: NovoPedido[] = [
+    {
+      id: `${PREFIXO}roteiro-alocar`,
+      numero: numero++,
+      clinicaId: `${PREFIXO}clinica-0`,
+      servicoId: servicos[0].id,
+      profissionalId: null,
+      data: hoje,
+      horaInicio: "16:00",
+      duracaoMin: servicos[0].duracaoMin,
+      status: "CONFIRMADO",
+      origem: "PORTAL_CLINICA",
+      valorServicoCentavos: precoDe.get(`${PREFIXO}clinica-0|${servicos[0].id}`) ?? 45000,
+      valorRepasseCentavos: 0,
+      pacienteNome: "Roteiro A.",
+      observacoes: "Simulação: Joyce aloca um profissional aqui.",
+      aceitoEm: null,
+      condicaoPagamento: "Faturado no mês",
+    },
+    {
+      id: `${PREFIXO}roteiro-aceitar`,
+      numero: numero++,
+      clinicaId: `${PREFIXO}clinica-1`,
+      servicoId: servicos[Math.min(1, servicos.length - 1)].id,
+      profissionalId: `${PREFIXO}prof-0`,
+      data: hoje,
+      horaInicio: "17:00",
+      duracaoMin: servicos[Math.min(1, servicos.length - 1)].duracaoMin,
+      status: "ALOCADO",
+      origem: "INTERNO",
+      valorServicoCentavos:
+        precoDe.get(`${PREFIXO}clinica-1|${servicos[Math.min(1, servicos.length - 1)].id}`) ?? 45000,
+      valorRepasseCentavos: Math.round(
+        (precoDe.get(`${PREFIXO}clinica-1|${servicos[Math.min(1, servicos.length - 1)].id}`) ?? 45000) *
+          ((PROFISSIONAIS[0].repasse ?? 60) / 100)
+      ),
+      pacienteNome: "Roteiro B.",
+      observacoes: "Simulação: entre no portal do profissional (prof-0) e aceite este atendimento.",
+      aceitoEm: null,
+      condicaoPagamento: "No ato do atendimento",
+    },
+    {
+      id: `${PREFIXO}roteiro-aprovar`,
+      numero: numero++,
+      clinicaId: `${PREFIXO}clinica-2`,
+      servicoId: servicos[Math.min(2, servicos.length - 1)].id,
+      profissionalId: `${PREFIXO}prof-1`,
+      data: hoje,
+      horaInicio: "08:00",
+      duracaoMin: servicos[Math.min(2, servicos.length - 1)].duracaoMin,
+      status: "REALIZADO",
+      origem: "INTERNO",
+      valorServicoCentavos:
+        precoDe.get(`${PREFIXO}clinica-2|${servicos[Math.min(2, servicos.length - 1)].id}`) ?? 45000,
+      valorRepasseCentavos: Math.round(
+        (precoDe.get(`${PREFIXO}clinica-2|${servicos[Math.min(2, servicos.length - 1)].id}`) ?? 45000) *
+          ((PROFISSIONAIS[1].repasse ?? 60) / 100)
+      ),
+      pacienteNome: "Roteiro C.",
+      observacoes: "Simulação: relatório já chegou — vá para a esteira e aprove como Stephanie.",
+      aceitoEm: somarDias(hoje, -1),
+      condicaoPagamento: "Antecipado",
+    },
+  ];
+  pedidos.push(...roteiro);
+
   await prisma.pedido.createMany({ data: pedidos });
 
   // ── Relatórios dos atendimentos fechados ──────────────────────────────────
-  // Parte deles com coordenada: é o que faz o selo "local confirmado"
-  // aparecer na esteira.
+  // Cada relatório carrega os seis campos clínicos (ata de 21/09, nunca em
+  // branco) e, para uma parte deles, já passou pelas três conferências do
+  // pós-venda. Mês fechado sai sempre aprovado (senão não teria sido pago);
+  // mês corrente fica dividido em aprovado, "pronto mas sem o clique final" e
+  // ainda intocado — é a fila que a Stephanie da demonstração encontra.
+  //
+  // A decisão de aprovação é tomada UMA vez por pedido, aqui, e reaproveitada
+  // no bloco de repasse logo abaixo — nunca recalculada, porque duas rodadas
+  // de sorteio independentes divergem e produziriam relatório aprovado com
+  // repasse ainda "aguardando aprovação" (ou o oposto), o que não existe na
+  // operação real.
+  const competenciaAtual = isoDeData(hoje).slice(0, 7);
   const fechados = pedidos.filter((p) => p.status === "REALIZADO" || p.status === "FALTOU");
-  await prisma.relatorioAtendimento.createMany({
-    data: fechados.map((p, i) => {
-      const comLocal = i % 3 !== 0;
-      return {
+  const dadosRelatorio = fechados.map((p, i) => {
+    const comLocal = i % 3 !== 0;
+    const competencia = isoDeData(p.data).slice(0, 7);
+    const mesFechado = competencia < competenciaAtual;
+
+    // O roteiro de aprovação fica de fora do sorteio: precisa chegar
+    // exatamente intocado, para a demonstração aprovar ao vivo.
+    const roteiroAprovar = p.id === `${PREFIXO}roteiro-aprovar`;
+    const nivel = roteiroAprovar ? 1 : aleatorio();
+    const aprovado = !roteiroAprovar && (mesFechado || nivel < 0.5);
+    const parcial = !roteiroAprovar && !aprovado && nivel < 0.7;
+
+    const enviadoEm = new Date(p.data.getTime() + (8 + Math.floor(aleatorio() * 10)) * 3600 * 1000);
+    const validadoEm = aprovado || parcial ? new Date(enviadoEm.getTime() + 2 * 3600 * 1000) : null;
+
+    const pi = p.profissionalId ? Number(p.profissionalId.split("-").pop()) : null;
+    const chavePix = pi != null ? `${PROFISSIONAIS[pi].nome.split(" ")[0].toLowerCase()}.${pi}@demo.hemoderi.com.br` : null;
+
+    return {
+      pedido: p,
+      mesFechado,
+      aprovado,
+      relatorio: {
         id: `${PREFIXO}relatorio-${p.numero}`,
         pedidoId: p.id,
         profissionalId: p.profissionalId!,
@@ -448,31 +601,45 @@ export async function montarDemo(prisma: PrismaClient): Promise<ResumoDemo> {
         inicioReal: p.horaInicio,
         quantidade: 1,
         intercorrencia: i % 17 === 0,
+        chavePixConfirmada: p.status === "REALIZADO" && aleatorio() < 0.7 ? chavePix : null,
+        enviadoEm,
+        ...valoresClinicos(aleatorio),
         // Coordenadas espalhadas pela zona sul de São Paulo, perto de onde as
         // clínicas da demonstração ficam.
         latitude: comLocal ? -23.58 - (i % 7) * 0.004 : null,
         longitude: comLocal ? -46.66 - (i % 5) * 0.005 : null,
         precisaoMetros: comLocal ? 12 + (i % 9) : null,
-      };
-    }),
+        // As três conferências independentes (ata de 21/09): "parcial" só
+        // acerta 1 ou 2, nunca as 3 — as 3 juntas sem aprovadoEm também
+        // aparece (fica pronto para o clique final), então aqui cobrimos o
+        // caso intermediário de verdade.
+        servicoValidadoEm: parcial ? (aleatorio() < 0.66 ? validadoEm : null) : validadoEm,
+        valorValidadoEm: parcial ? (aleatorio() < 0.5 ? validadoEm : null) : validadoEm,
+        ajudaCustoValidadaEm: validadoEm,
+        aprovadoEm: aprovado ? new Date(validadoEm!.getTime() + 3600 * 1000) : null,
+      },
+    };
   });
+  await prisma.relatorioAtendimento.createMany({ data: dadosRelatorio.map((d) => d.relatorio) });
 
   // ── Repasses dos realizados ───────────────────────────────────────────────
-  const realizados = pedidos.filter((p) => p.status === "REALIZADO" && p.profissionalId);
+  // Sempre nasce a partir do mesmo relatório calculado acima: mês fechado e
+  // aprovado vira PAGO, mês corrente aprovado vira PENDENTE, e sem aprovação
+  // fica AGUARDANDO_APROVACAO — o mesmo estado inicial que `registrarResultado`
+  // cria de verdade, sem repasse liberado antes de alguém conferir.
+  const realizados = dadosRelatorio.filter((d) => d.pedido.status === "REALIZADO" && d.pedido.profissionalId);
   await prisma.repasse.createMany({
-    data: realizados.map((p) => {
+    data: realizados.map(({ pedido: p, mesFechado, aprovado }) => {
       const competencia = isoDeData(p.data).slice(0, 7);
-      const mesPassado = competencia < isoDeData(hoje).slice(0, 7);
+      const status = !aprovado ? "AGUARDANDO_APROVACAO" : mesFechado ? "PAGO" : "PENDENTE";
       return {
         id: `${PREFIXO}repasse-${p.numero}`,
         pedidoId: p.id,
         profissionalId: p.profissionalId!,
         competencia,
         valorCentavos: p.valorRepasseCentavos,
-        // O mês fechado já foi pago; o mês corrente ainda está pendente — é
-        // a diferença que a tela "a pagar" mostra.
-        status: mesPassado ? "PAGO" : "PENDENTE",
-        pagoEm: mesPassado ? somarDias(hoje, -5) : null,
+        status: status as "AGUARDANDO_APROVACAO" | "PAGO" | "PENDENTE",
+        pagoEm: status === "PAGO" ? somarDias(hoje, -5) : null,
       };
     }),
   });
@@ -482,7 +649,7 @@ export async function montarDemo(prisma: PrismaClient): Promise<ResumoDemo> {
   // demonstração em que 100% tem nota esconde justamente a fila de pendentes
   // que o portal da clínica mostra. Nota alta na maioria, com algumas médias e
   // uma ruim — a média que só tem cinco estrelas não informa nada.
-  const avaliaveis = realizados.filter(() => aleatorio() < 0.7);
+  const avaliaveis = realizados.map((d) => d.pedido).filter(() => aleatorio() < 0.7);
   await prisma.avaliacao.createMany({
     data: avaliaveis.map((p, i) => {
       const sorte = aleatorio();
@@ -544,7 +711,11 @@ export async function montarDemo(prisma: PrismaClient): Promise<ResumoDemo> {
     }
   }
 
-  // ── Acessos para mostrar os três portais ao vivo ──────────────────────────
+  // ── Acessos para mostrar os perfis ao vivo ────────────────────────────────
+  // Além da conta genérica "equipe" (RESPONSAVEL — enxerga tudo, útil para
+  // navegar), duas contas com PERFIL PRÓPRIO: é o que a simulação da ata de
+  // 21/09 pede — a alocação PELA Joyce, a aprovação PELA Stephanie, não por
+  // uma conta que já podia fazer tudo antes da Fase 1 existir.
   await prisma.usuario.createMany({
     data: [
       {
@@ -569,6 +740,22 @@ export async function montarDemo(prisma: PrismaClient): Promise<ResumoDemo> {
         email: "equipe@demo.hemoderi.com.br",
         senhaHash,
         papel: "INTERNO",
+      },
+      {
+        id: `${PREFIXO}user-logistica`,
+        nome: "Joyce (demonstração)",
+        email: "logistica@demo.hemoderi.com.br",
+        senhaHash,
+        papel: "INTERNO",
+        perfilInterno: "LOGISTICA",
+      },
+      {
+        id: `${PREFIXO}user-posvenda`,
+        nome: "Stephanie (demonstração)",
+        email: "posvenda@demo.hemoderi.com.br",
+        senhaHash,
+        papel: "INTERNO",
+        perfilInterno: "POS_VENDA",
       },
     ],
   });
