@@ -11,7 +11,9 @@ import { profissionaisIndisponiveis } from "@/lib/alocacao";
 import { AcoesPedido } from "./AcoesPedido";
 import { CondicaoPagamento } from "./CondicaoPagamento";
 import { ConferenciaRelatorio } from "./ConferenciaRelatorio";
+import { FiltroPagamento } from "./FiltroPagamento";
 import { perfilPermite } from "@/lib/papeis";
+import { condicaoValida } from "@/lib/pagamento";
 
 export const dynamic = "force-dynamic";
 
@@ -28,14 +30,22 @@ const FILTROS: { chave: string; rotulo: string; status?: StatusPedido[] }[] = [
  * parado — não na lista completa: com 1.500 atendimentos por mês, uma lista
  * ordenada por data é um arquivo, não uma fila de trabalho.
  */
-export default async function Esteira({ searchParams }: { searchParams: { filtro?: string } }) {
+export default async function Esteira({
+  searchParams,
+}: {
+  searchParams: { filtro?: string; pagamento?: string };
+}) {
   const sessao = await exigirInterno();
 
   const filtro = FILTROS.find((f) => f.chave === searchParams.filtro) ?? FILTROS[0];
+  const pagamento = condicaoValida(searchParams.pagamento ?? "") ? searchParams.pagamento! : "";
 
   const [pedidos, profissionais] = await Promise.all([
     prisma.pedido.findMany({
-      where: filtro.status ? { status: { in: filtro.status } } : {},
+      where: {
+        ...(filtro.status ? { status: { in: filtro.status } } : {}),
+        ...(pagamento ? { condicaoPagamento: pagamento } : {}),
+      },
       orderBy: [{ data: "asc" }, { horaInicio: "asc" }],
       take: 200,
       include: {
@@ -94,11 +104,11 @@ export default async function Esteira({ searchParams }: { searchParams: { filtro
         Esteira de agendamentos
       </Titulo>
 
-      <div className="flex flex-wrap gap-2 mb-4">
+      <div className="flex flex-wrap items-center gap-2 mb-4">
         {FILTROS.map((f) => (
           <Link
             key={f.chave}
-            href={`/painel/pedidos?filtro=${f.chave}`}
+            href={`/painel/pedidos?filtro=${f.chave}${pagamento ? `&pagamento=${encodeURIComponent(pagamento)}` : ""}`}
             className={`text-[11px] font-semibold px-3 py-2.5 sm:py-1.5 rounded-full border ${
               f.chave === filtro.chave
                 ? "bg-bordo text-white border-bordo"
@@ -108,11 +118,15 @@ export default async function Esteira({ searchParams }: { searchParams: { filtro
             {f.rotulo}
           </Link>
         ))}
+        <FiltroPagamento filtroStatus={filtro.chave} pagamento={pagamento} />
       </div>
 
       {pedidos.length === 0 ? (
         <Cartao>
-          <Vazio>Nada em {filtro.rotulo.toLowerCase()}.</Vazio>
+          <Vazio>
+            Nada em {filtro.rotulo.toLowerCase()}
+            {pagamento ? ` com pagamento "${pagamento}"` : ""}.
+          </Vazio>
         </Cartao>
       ) : (
         <div className="space-y-2">
@@ -121,9 +135,13 @@ export default async function Esteira({ searchParams }: { searchParams: { filtro
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div className="min-w-0">
                   <div className="flex items-center gap-2 mb-1">
-                    <span className="font-display font-bold text-bordo text-sm">
+                    <Link
+                      href={`/painel/pedidos/${pedido.id}`}
+                      className="font-display font-bold text-bordo text-sm hover:underline"
+                      title="Ver relatório detalhado"
+                    >
                       {codigoDoPedido(pedido.numero, pedido.clinica.nome, pedido.data)}
-                    </span>
+                    </Link>
                     <SeloStatus status={pedido.status} />
                     {pedido.origem === "PORTAL_CLINICA" && (
                       <span className="text-[9px] uppercase tracking-wide text-gray-400">portal</span>
