@@ -3,6 +3,7 @@
 import { useEffect, useRef } from "react";
 import { useFormState } from "react-dom";
 import { Aviso, Botao } from "@/components/ui";
+import { useFecharFormularioRecolhivel } from "@/components/FormularioRecolhivel";
 import type { Resultado } from "@/app/actions/pedidos";
 
 const INICIAL: Resultado = { ok: false };
@@ -21,18 +22,28 @@ export function FormularioAcao({
   children,
   className = "",
   limparAoSalvar = true,
+  aoSalvar,
 }: {
   acao: (anterior: Resultado, dados: FormData) => Promise<Resultado>;
   botao?: string;
   children: React.ReactNode;
   className?: string;
   limparAoSalvar?: boolean;
+  /** Chamado quando a ação volta `ok` — usado, por exemplo, para fechar um formulário recolhível depois de salvar. */
+  aoSalvar?: () => void;
 }) {
   const [estado, enviar] = useFormState(acao, INICIAL);
   const formulario = useRef<HTMLFormElement>(null);
+  // null fora de um FormularioRecolhivel — não recolhe nada, e este formulário
+  // continua funcionando exatamente igual em qualquer outra tela.
+  const fecharRecolhivel = useFecharFormularioRecolhivel();
 
   useEffect(() => {
-    if (estado.ok && limparAoSalvar) formulario.current?.reset();
+    if (!estado.ok) return;
+    if (limparAoSalvar) formulario.current?.reset();
+    aoSalvar?.();
+    fecharRecolhivel?.();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- aoSalvar/fecharRecolhivel só disparam na mudança de `estado`, não a cada nova identidade de função.
   }, [estado, limparAoSalvar]);
 
   return (

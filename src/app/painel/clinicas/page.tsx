@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { exigirInterno } from "@/lib/sessao";
 import { Campo, Cartao, Rotulo, Tabela, Titulo, Vazio } from "@/components/ui";
 import { FormularioAcao } from "@/components/FormularioAcao";
+import { FormularioRecolhivel } from "@/components/FormularioRecolhivel";
 import { BotaoAcao } from "@/components/BotaoAcao";
 import { AcoesDeAcesso, SituacaoAcesso } from "@/components/AcessoDoCadastro";
 import { CamposEndereco } from "@/components/CamposEndereco";
@@ -95,8 +96,7 @@ export default async function Clinicas() {
           )}
         </Cartao>
 
-        <Cartao>
-          <div className="font-display font-bold text-bordo text-sm mb-3">Nova clínica</div>
+        <FormularioRecolhivel titulo="Nova clínica">
           <FormularioAcao acao={salvarClinica} botao="Cadastrar clínica">
             <div>
               <Rotulo>Nome</Rotulo>
@@ -129,7 +129,7 @@ export default async function Clinicas() {
               para você repassar.
             </div>
           </FormularioAcao>
-        </Cartao>
+        </FormularioRecolhivel>
       </div>
     </>
   );

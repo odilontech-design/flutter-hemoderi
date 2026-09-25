@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 import { exigirResponsavel } from "@/lib/sessao";
-import { Cartao, Kpi, Tabela, Titulo, Vazio } from "@/components/ui";
+import { Cartao, Kpi, OCULTO_MOVEL, Tabela, Titulo, Vazio } from "@/components/ui";
 import { BotaoAcao } from "@/components/BotaoAcao";
 import { baixarFatura, fecharFatura, pagarRepasses } from "@/app/actions/financeiro";
 import { competenciaAtual, competenciaPorExtenso, formatarData } from "@/lib/data";
@@ -160,12 +160,21 @@ export default async function Financeiro({ searchParams }: { searchParams: { com
           {faturas.length === 0 ? (
             <Vazio>Nenhuma fatura fechada.</Vazio>
           ) : (
-            <Tabela cabecalho={["Nº", "Clínica", "Vencimento", "Valor", "Status", ""]}>
+            <Tabela
+              cabecalho={[
+                { texto: "Nº", ocultoMovel: true },
+                "Clínica",
+                { texto: "Vencimento", ocultoMovel: true },
+                "Valor",
+                "Status",
+                "",
+              ]}
+            >
               {faturas.map((fatura) => (
                 <tr key={fatura.id} className="border-b border-gray-100 last:border-0">
-                  <td className="py-2 pr-3 font-semibold">{fatura.numero}</td>
+                  <td className={`py-2 pr-3 font-semibold ${OCULTO_MOVEL}`}>{fatura.numero}</td>
                   <td className="py-2 pr-3">{fatura.clinica.nome}</td>
-                  <td className="py-2 pr-3 text-gray-500">{formatarData(fatura.vencimento)}</td>
+                  <td className={`py-2 pr-3 text-gray-500 ${OCULTO_MOVEL}`}>{formatarData(fatura.vencimento)}</td>
                   <td className="py-2 pr-3">{formatarReais(fatura.valorCentavos)}</td>
                   <td className="py-2 pr-3">
                     {fatura.status === "PAGA" ? (
@@ -190,14 +199,22 @@ export default async function Financeiro({ searchParams }: { searchParams: { com
           {porProfissional.length === 0 ? (
             <Vazio>Nenhum repasse nesta competência.</Vazio>
           ) : (
-            <Tabela cabecalho={["Profissional", "Aguardando conferência", "Liberado", "Já pago", ""]}>
+            <Tabela
+              cabecalho={[
+                "Profissional",
+                { texto: "Aguardando conferência", ocultoMovel: true },
+                "Liberado",
+                { texto: "Já pago", ocultoMovel: true },
+                "",
+              ]}
+            >
               {porProfissional.map((profissional) => (
                 <tr key={profissional.id} className="border-b border-gray-100 last:border-0">
                   <td className="py-2 pr-3">
                     <div className="font-semibold text-bordo">{profissional.nome}</div>
                     <div className="text-[10px] text-gray-400">{profissional.chavePix ?? "sem chave PIX"}</div>
                   </td>
-                  <td className="py-2 pr-3 whitespace-nowrap">
+                  <td className={`py-2 pr-3 whitespace-nowrap ${OCULTO_MOVEL}`}>
                     {profissional.aguardandoCentavos > 0 ? (
                       <>
                         <span className="text-amber-700 font-semibold">
@@ -217,7 +234,7 @@ export default async function Financeiro({ searchParams }: { searchParams: { com
                       <span className="text-[10px] text-gray-400"> · {profissional.pendenteQtd} atend.</span>
                     )}
                   </td>
-                  <td className="py-2 pr-3 text-gray-500">{formatarReais(profissional.pagoCentavos)}</td>
+                  <td className={`py-2 pr-3 text-gray-500 ${OCULTO_MOVEL}`}>{formatarReais(profissional.pagoCentavos)}</td>
                   <td className="py-2">
                     {profissional.pendenteCentavos > 0 && (
                       <BotaoAcao

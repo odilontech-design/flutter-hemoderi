@@ -1,20 +1,31 @@
 import { MenuLateral } from "@/components/MenuLateral";
 import { Provedores } from "@/components/Provedores";
 import { exigirInterno } from "@/lib/sessao";
+import {
+  IconeAcessos,
+  IconeAgenda,
+  IconeAgendamentos,
+  IconeCatalogo,
+  IconeClinicas,
+  IconeFinanceiro,
+  IconeHoje,
+  IconePedidosSite,
+  IconeProfissionais,
+} from "@/components/icones/MenuIcones";
 
 // Tudo aqui depende da sessão e do banco: nada pode ser pré-renderizado.
 export const dynamic = "force-dynamic";
 
 const ITENS = [
-  { href: "/painel", icone: "◈", rotulo: "Hoje" },
-  { href: "/painel/pedidos", icone: "◉", rotulo: "Agendamentos" },
-  { href: "/painel/solicitacoes", icone: "✉", rotulo: "Pedidos do site" },
-  { href: "/painel/agenda", icone: "📅", rotulo: "Agenda" },
-  { href: "/painel/clinicas", icone: "🏥", rotulo: "Clínicas" },
-  { href: "/painel/profissionais", icone: "👤", rotulo: "Profissionais" },
-  { href: "/painel/catalogo", icone: "📦", rotulo: "Serviços e equipamentos" },
-  { href: "/painel/financeiro", icone: "◐", rotulo: "Financeiro" },
-  { href: "/painel/acessos", icone: "🔑", rotulo: "Acessos" },
+  { href: "/painel", icone: <IconeHoje />, rotulo: "Hoje" },
+  { href: "/painel/pedidos", icone: <IconeAgendamentos />, rotulo: "Agendamentos" },
+  { href: "/painel/solicitacoes", icone: <IconePedidosSite />, rotulo: "Pedidos do site" },
+  { href: "/painel/agenda", icone: <IconeAgenda />, rotulo: "Agenda" },
+  { href: "/painel/clinicas", icone: <IconeClinicas />, rotulo: "Clínicas" },
+  { href: "/painel/profissionais", icone: <IconeProfissionais />, rotulo: "Profissionais" },
+  { href: "/painel/catalogo", icone: <IconeCatalogo />, rotulo: "Serviços e equipamentos" },
+  { href: "/painel/financeiro", icone: <IconeFinanceiro />, rotulo: "Financeiro" },
+  { href: "/painel/acessos", icone: <IconeAcessos />, rotulo: "Acessos" },
 ];
 
 // As duas telas que expõem repasse por profissional e gestão de acesso —

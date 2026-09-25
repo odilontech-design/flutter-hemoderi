@@ -6,6 +6,7 @@ import { BotaoCredencial } from "@/components/BotaoCredencial";
 import { alternarAcesso, redefinirSenha } from "@/app/actions/acessos";
 import { ROTULO_PAPEL, perfilEfetivo } from "@/lib/papeis";
 import { formatarData } from "@/lib/data";
+import { FormularioRecolhivel } from "@/components/FormularioRecolhivel";
 import { NovoAcesso, type Vinculo } from "./NovoAcesso";
 import { SeletorPerfil } from "./SeletorPerfil";
 
@@ -180,10 +181,9 @@ export default async function Acessos() {
           )}
         </Cartao>
 
-        <Cartao>
-          <div className="font-display font-bold text-bordo text-sm mb-3">Novo acesso</div>
+        <FormularioRecolhivel titulo="Novo acesso">
           <NovoAcesso clinicas={listaClinicas} profissionais={listaProfissionais} />
-        </Cartao>
+        </FormularioRecolhivel>
       </div>
     </>
   );

@@ -2,12 +2,13 @@ import { MenuLateral } from "@/components/MenuLateral";
 import { Provedores } from "@/components/Provedores";
 import { exigirClinica } from "@/lib/sessao";
 import { BotaoWhatsapp } from "@/components/BotaoWhatsapp";
+import { IconeAgenda, IconeAgendamentos } from "@/components/icones/MenuIcones";
 
 export const dynamic = "force-dynamic";
 
 const ITENS = [
-  { href: "/portal", icone: "◉", rotulo: "Meus agendamentos" },
-  { href: "/portal/agendar", icone: "📅", rotulo: "Agendar" },
+  { href: "/portal", icone: <IconeAgendamentos />, rotulo: "Meus agendamentos" },
+  { href: "/portal/agendar", icone: <IconeAgenda />, rotulo: "Agendar" },
 ];
 
 export default async function LayoutPortal({ children }: { children: React.ReactNode }) {

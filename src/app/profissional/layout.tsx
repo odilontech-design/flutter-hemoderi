@@ -2,13 +2,14 @@ import { MenuLateral } from "@/components/MenuLateral";
 import { Provedores } from "@/components/Provedores";
 import { exigirProfissional } from "@/lib/sessao";
 import { BotaoWhatsapp } from "@/components/BotaoWhatsapp";
+import { IconeAgenda, IconeDisponibilidade, IconeFinanceiro } from "@/components/icones/MenuIcones";
 
 export const dynamic = "force-dynamic";
 
 const ITENS = [
-  { href: "/profissional", icone: "📅", rotulo: "Minha agenda" },
-  { href: "/profissional/disponibilidade", icone: "⏱", rotulo: "Disponibilidade" },
-  { href: "/profissional/ganhos", icone: "◐", rotulo: "Meus ganhos" },
+  { href: "/profissional", icone: <IconeAgenda />, rotulo: "Minha agenda" },
+  { href: "/profissional/disponibilidade", icone: <IconeDisponibilidade />, rotulo: "Disponibilidade" },
+  { href: "/profissional/ganhos", icone: <IconeFinanceiro />, rotulo: "Meus ganhos" },
 ];
 
 export default async function LayoutProfissional({ children }: { children: React.ReactNode }) {

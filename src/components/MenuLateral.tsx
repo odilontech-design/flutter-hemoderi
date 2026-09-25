@@ -6,7 +6,7 @@ import { usePathname } from "next/navigation";
 import { signOut } from "next-auth/react";
 import { version as versaoDoSistema } from "../../package.json";
 
-export type ItemMenu = { href: string; icone: string; rotulo: string };
+export type ItemMenu = { href: string; icone: React.ReactNode; rotulo: string };
 
 const CHAVE_RECOLHIDO = "hemoderi:menu-recolhido";
 
