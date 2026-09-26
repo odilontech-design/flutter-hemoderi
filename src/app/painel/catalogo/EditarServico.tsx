@@ -97,7 +97,7 @@ export function EditarServico({
           )}
         </td>
         <td className="py-2">
-          <div className="flex flex-wrap gap-1.5 whitespace-nowrap">
+          <div className="flex flex-nowrap gap-1.5 whitespace-nowrap">
             <Botao variante="secundario" onClick={() => setAberto((v) => !v)}>
               {aberto ? "Fechar" : "Editar"}
             </Botao>
