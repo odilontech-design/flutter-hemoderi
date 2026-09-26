@@ -71,9 +71,10 @@ ok("equipe entra e cai no painel", url.includes("/painel"), url);
 // 2. cadastra profissional novo
 await pagina.goto(`${BASE}/painel/profissionais`);
 await pagina.waitForTimeout(500);
-// O formulário começa fechado atrás de um botão (UX: lista em primeiro
-// lugar, cadastro sob um clique) — abrir antes de preencher.
-await pagina.locator('button:has-text("Novo profissional")').click();
+// O cadastro é uma página própria (UX: lista em primeiro lugar, sem painel
+// lateral ocupando espaço) — navegar até ela antes de preencher.
+await pagina.locator('a:has-text("Novo profissional")').click();
+await pagina.waitForURL(/\/painel\/profissionais\/novo/);
 await pagina.waitForTimeout(300);
 const form = pagina.locator('form:has(button:text("Cadastrar profissional"))');
 await form.locator('input[name="nome"]').fill(NOVO_NOME);

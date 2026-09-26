@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 import { exigirResponsavel } from "@/lib/sessao";
 import { Cartao, Kpi, OCULTO_MOVEL, Tabela, Titulo, Vazio } from "@/components/ui";
@@ -6,8 +7,7 @@ import { BotaoCredencial } from "@/components/BotaoCredencial";
 import { alternarAcesso, redefinirSenha } from "@/app/actions/acessos";
 import { ROTULO_PAPEL, perfilEfetivo } from "@/lib/papeis";
 import { formatarData } from "@/lib/data";
-import { FormularioRecolhivel } from "@/components/FormularioRecolhivel";
-import { NovoAcesso, type Vinculo } from "./NovoAcesso";
+import { type Vinculo } from "./NovoAcesso";
 import { SeletorPerfil } from "./SeletorPerfil";
 
 export const dynamic = "force-dynamic";
@@ -61,7 +61,18 @@ export default async function Acessos() {
 
   return (
     <>
-      <Titulo>Acessos</Titulo>
+      <Titulo
+        acao={
+          <Link
+            href="/painel/acessos/novo"
+            className="bg-bordo text-white text-xs font-semibold px-3 py-2 min-h-[40px] sm:min-h-0 inline-flex items-center rounded-lg hover:bg-bordoEscuro"
+          >
+            + Novo acesso
+          </Link>
+        }
+      >
+        Acessos
+      </Titulo>
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-3">
         <Kpi rotulo="Acessos ativos" valor={String(ativos.length)} />
@@ -78,9 +89,8 @@ export default async function Acessos() {
         />
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
-        <Cartao className="lg:col-span-2">
-          {usuarios.length === 0 ? (
+      <Cartao>
+        {usuarios.length === 0 ? (
             <Vazio>Nenhum acesso criado.</Vazio>
           ) : (
             <Tabela
@@ -179,12 +189,7 @@ export default async function Acessos() {
               })}
             </Tabela>
           )}
-        </Cartao>
-
-        <FormularioRecolhivel titulo="Novo acesso">
-          <NovoAcesso clinicas={listaClinicas} profissionais={listaProfissionais} />
-        </FormularioRecolhivel>
-      </div>
+      </Cartao>
     </>
   );
 }

@@ -78,9 +78,10 @@ if (await seletor.count()) {
 // ── Cadastro de clínica: CEP e CNPJ ─────────────────────────────────────────
 await p.goto(`${BASE}/painel/clinicas`);
 await p.waitForTimeout(1200);
-// O formulário começa fechado atrás de um botão (UX: lista em primeiro
-// lugar, cadastro sob um clique) — abrir antes de conferir os campos.
-await p.locator('button:has-text("Nova clínica")').click();
+// O cadastro é uma página própria (UX: lista em primeiro lugar, sem painel
+// lateral ocupando espaço) — navegar até ela antes de conferir os campos.
+await p.locator('a:has-text("Nova clínica")').click();
+await p.waitForURL(/\/painel\/clinicas\/novo/);
 await p.waitForTimeout(300);
 ok("campo de CEP obrigatório", (await p.locator('input[name="cep"]').count()) > 0);
 ok("número do endereço começa bloqueado", await p.locator('input[name="numero"]').isDisabled());

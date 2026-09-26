@@ -20,6 +20,7 @@ import { sincronizarEvento } from "@/lib/integracoes/google-agenda";
 import { criarNegocio, marcarNegocioGanho } from "@/lib/integracoes/pipedrive";
 import { condicaoValida } from "@/lib/pagamento";
 import { perfilPermite } from "@/lib/papeis";
+import { formatarReais, lerCentavos } from "@/lib/dinheiro";
 
 export type Resultado = { ok: boolean; erro?: string; avisos?: string[] };
 
@@ -810,6 +811,49 @@ export async function definirCondicaoPagamento(pedidoId: string, condicao: strin
     "condicao-pagamento",
     valor || "(em branco)"
   );
+
+  atualizarTelas();
+  return { ok: true };
+}
+
+/**
+ * Corrige o valor do serviço quando o preço de tabela nasceu "a negociar"
+ * (sem PrecoClinica nem valorPadrao — ver `valorDoServico`) e o pedido saiu
+ * com R$ 0,00. Sem isso a equipe não tinha onde consertar: nem na alocação,
+ * nem depois dela.
+ *
+ * Do comercial (ata de 21/09: "preços" é COMERCIAL) — não da logística, que
+ * aloca sem tocar em dinheiro.
+ *
+ * Se o profissional já está alocado, o repasse — congelado com o valor
+ * antigo — é recalculado com o valor corrigido: senão a correção do preço
+ * "esquece" de corrigir o que se deve a quem atendeu.
+ */
+export async function definirValorServico(pedidoId: string, valorTexto: string): Promise<Resultado> {
+  const sessao = await exigirInterno();
+  if (!perfilPermite(sessao.perfil, "COMERCIAL")) {
+    return { ok: false, erro: "Só o comercial ajusta o valor do serviço." };
+  }
+
+  const valorServicoCentavos = lerCentavos(valorTexto);
+  if (valorServicoCentavos <= 0) return { ok: false, erro: "Informe um valor maior que zero." };
+
+  const pedido = await prisma.pedido.findUnique({
+    where: { id: pedidoId },
+    select: { numero: true, servicoId: true, profissionalId: true, status: true },
+  });
+  if (!pedido) return { ok: false, erro: "Agendamento não encontrado." };
+  if (pedido.status === "CANCELADO") return { ok: false, erro: "Pedido cancelado não tem valor para ajustar." };
+
+  const dados: Prisma.PedidoUpdateInput = { valorServicoCentavos };
+  if (pedido.profissionalId) {
+    const repasse = await repasseDoPedido(pedido.profissionalId, pedido.servicoId, valorServicoCentavos);
+    dados.valorRepasseCentavos = repasse.valorCentavos;
+  }
+
+  await prisma.pedido.update({ where: { id: pedidoId }, data: dados });
+
+  await registrarAuditoria(sessao.usuarioId, "Pedido", pedidoId, "valor-servico", formatarReais(valorServicoCentavos));
 
   atualizarTelas();
   return { ok: true };

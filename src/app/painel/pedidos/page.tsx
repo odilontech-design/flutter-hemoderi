@@ -12,6 +12,7 @@ import { AcoesPedido } from "./AcoesPedido";
 import { CondicaoPagamento } from "./CondicaoPagamento";
 import { ConferenciaRelatorio } from "./ConferenciaRelatorio";
 import { FiltroPagamento } from "./FiltroPagamento";
+import { ValorServico } from "./ValorServico";
 import { perfilPermite } from "@/lib/papeis";
 import { condicaoValida } from "@/lib/pagamento";
 
@@ -237,9 +238,17 @@ export default async function Esteira({
                 </div>
 
                 <div className="text-right shrink-0">
-                  <div className="text-xs font-semibold text-bordo">
-                    {formatarReais(pedido.valorServicoCentavos)}
-                  </div>
+                  {perfilPermite(sessao.perfil, "COMERCIAL") && pedido.status !== "CANCELADO" ? (
+                    <ValorServico pedidoId={pedido.id} valorCentavos={pedido.valorServicoCentavos} />
+                  ) : (
+                    <div
+                      className={`text-xs font-semibold ${
+                        pedido.valorServicoCentavos > 0 ? "text-bordo" : "text-amber-700"
+                      }`}
+                    >
+                      {formatarReais(pedido.valorServicoCentavos)}
+                    </div>
+                  )}
                   {pedido.valorRepasseCentavos > 0 && (
                     <div className="text-[10px] text-gray-400">
                       repasse {formatarReais(pedido.valorRepasseCentavos)}

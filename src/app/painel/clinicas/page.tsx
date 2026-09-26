@@ -1,14 +1,10 @@
 import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 import { exigirInterno } from "@/lib/sessao";
-import { Campo, Cartao, Rotulo, Tabela, Titulo, Vazio } from "@/components/ui";
-import { FormularioAcao } from "@/components/FormularioAcao";
-import { FormularioRecolhivel } from "@/components/FormularioRecolhivel";
+import { Cartao, Tabela, Titulo, Vazio } from "@/components/ui";
 import { BotaoAcao } from "@/components/BotaoAcao";
 import { AcoesDeAcesso, SituacaoAcesso } from "@/components/AcessoDoCadastro";
-import { CamposEndereco } from "@/components/CamposEndereco";
-import { CampoDocumento } from "@/components/CampoDocumento";
-import { alternarClinica, salvarClinica } from "@/app/actions/cadastros";
+import { alternarClinica } from "@/app/actions/cadastros";
 
 export const dynamic = "force-dynamic";
 
@@ -30,11 +26,21 @@ export default async function Clinicas() {
 
   return (
     <>
-      <Titulo>Clínicas contratantes</Titulo>
+      <Titulo
+        acao={
+          <Link
+            href="/painel/clinicas/novo"
+            className="bg-bordo text-white text-xs font-semibold px-3 py-2 min-h-[40px] sm:min-h-0 inline-flex items-center rounded-lg hover:bg-bordoEscuro"
+          >
+            + Nova clínica
+          </Link>
+        }
+      >
+        Clínicas contratantes
+      </Titulo>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
-        <Cartao className="lg:col-span-2">
-          {clinicas.length === 0 ? (
+      <Cartao>
+        {clinicas.length === 0 ? (
             <Vazio>Nenhuma clínica cadastrada.</Vazio>
           ) : (
             <Tabela cabecalho={["Clínica", "Cidade", "Pedidos", "Link do portal", "Acesso ao portal", "Ações"]}>
@@ -94,43 +100,7 @@ export default async function Clinicas() {
               ))}
             </Tabela>
           )}
-        </Cartao>
-
-        <FormularioRecolhivel titulo="Nova clínica">
-          <FormularioAcao acao={salvarClinica} botao="Cadastrar clínica">
-            <div>
-              <Rotulo>Nome</Rotulo>
-              <Campo name="nome" required />
-            </div>
-            <div className="grid grid-cols-2 gap-2">
-              <CampoDocumento tipo="cnpj" name="cnpj" rotulo="CNPJ" />
-              <div>
-                <Rotulo>Telefone</Rotulo>
-                <Campo name="telefone" placeholder="(11) 99999-0000" />
-              </div>
-            </div>
-            <div>
-              <Rotulo>E-mail</Rotulo>
-              <Campo name="email" type="email" />
-            </div>
-
-            <CamposEndereco />
-            <div>
-              <Rotulo>Salas de atendimento simultâneo</Rotulo>
-              <Campo name="salas" type="number" min={1} defaultValue={1} />
-              <div className="text-[10px] text-gray-400 mt-1">
-                Quantos atendimentos cabem ao mesmo tempo no endereço. É o que permite alocar
-                dois profissionais no mesmo horário sem que o sistema veja conflito.
-              </div>
-            </div>
-            <div className="text-[10px] text-gray-400 leading-relaxed">
-              Com o e-mail preenchido, o acesso ao portal sai em um clique na própria lista
-              (<strong>Gerar acesso</strong>) — a senha é sorteada pelo sistema e aparece na tela
-              para você repassar.
-            </div>
-          </FormularioAcao>
-        </FormularioRecolhivel>
-      </div>
+      </Cartao>
     </>
   );
 }
