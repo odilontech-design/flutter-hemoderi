@@ -1,4 +1,5 @@
 import Link from "next/link";
+import type { PapelUsuario } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { exigirResponsavel } from "@/lib/sessao";
 import { Cartao, Kpi, OCULTO_MOVEL, Tabela, Titulo, Vazio } from "@/components/ui";
@@ -12,6 +13,13 @@ import { SeletorPerfil } from "./SeletorPerfil";
 
 export const dynamic = "force-dynamic";
 
+const NIVEIS: { chave: string; rotulo: string; papel?: PapelUsuario }[] = [
+  { chave: "todos", rotulo: "Todos" },
+  { chave: "interno", rotulo: ROTULO_PAPEL.INTERNO, papel: "INTERNO" },
+  { chave: "clinica", rotulo: ROTULO_PAPEL.CLINICA, papel: "CLINICA" },
+  { chave: "profissional", rotulo: ROTULO_PAPEL.PROFISSIONAL, papel: "PROFISSIONAL" },
+];
+
 /**
  * Gestão de acesso da operação.
  *
@@ -20,9 +28,18 @@ export const dynamic = "force-dynamic";
  * cadastros existem sem nenhum acesso — que é o buraco silencioso, o
  * profissional cadastrado há duas semanas que nunca conseguiu ver a agenda
  * dele.
+ *
+ * O filtro por nível existe porque a lista mistura três públicos bem
+ * diferentes (equipe, clínica, profissional) na mesma tabela — em uma
+ * operação com dezenas de clínicas e profissionais, achar as poucas contas
+ * da equipe interna no meio delas vira busca visual. Os KPIs do topo ficam
+ * de fora do filtro de propósito: são visão geral da operação, não do
+ * recorte que a pessoa está olhando agora.
  */
-export default async function Acessos() {
+export default async function Acessos({ searchParams }: { searchParams: { nivel?: string } }) {
   const sessao = await exigirResponsavel();
+
+  const nivel = NIVEIS.find((n) => n.chave === searchParams.nivel) ?? NIVEIS[0];
 
   const [usuarios, clinicas, profissionais] = await Promise.all([
     prisma.usuario.findMany({
@@ -59,6 +76,8 @@ export default async function Acessos() {
   const semAcesso =
     listaClinicas.filter((c) => !c.temAcesso).length + listaProfissionais.filter((p) => !p.temAcesso).length;
 
+  const usuariosFiltrados = nivel.papel ? usuarios.filter((u) => u.papel === nivel.papel) : usuarios;
+
   return (
     <>
       <Titulo
@@ -89,9 +108,30 @@ export default async function Acessos() {
         />
       </div>
 
+      <div className="flex flex-wrap items-center gap-2 mb-3">
+        {NIVEIS.map((n) => {
+          const quantos = n.papel ? usuarios.filter((u) => u.papel === n.papel).length : usuarios.length;
+          return (
+            <Link
+              key={n.chave}
+              href={`/painel/acessos?nivel=${n.chave}`}
+              className={`text-[11px] font-semibold px-3 py-2.5 sm:py-1.5 rounded-full border ${
+                n.chave === nivel.chave
+                  ? "bg-bordo text-white border-bordo"
+                  : "bg-white text-gray-600 border-gray-300 hover:bg-gray-50"
+              }`}
+            >
+              {n.rotulo} · {quantos}
+            </Link>
+          );
+        })}
+      </div>
+
       <Cartao>
-        {usuarios.length === 0 ? (
-            <Vazio>Nenhum acesso criado.</Vazio>
+        {usuariosFiltrados.length === 0 ? (
+            <Vazio>
+              {usuarios.length === 0 ? "Nenhum acesso criado." : `Nenhum acesso em ${nivel.rotulo.toLowerCase()}.`}
+            </Vazio>
           ) : (
             <Tabela
               cabecalho={[
@@ -104,7 +144,7 @@ export default async function Acessos() {
                 "Ações",
               ]}
             >
-              {usuarios.map((usuario) => {
+              {usuariosFiltrados.map((usuario) => {
                 const ativo = !usuario.desativadoEm;
                 const souEu = usuario.id === sessao.usuarioId;
                 // Vínculo desativado corta o login mesmo com o acesso ativo:
@@ -162,7 +202,7 @@ export default async function Acessos() {
                       )}
                     </td>
                     <td className="py-2">
-                      <div className="flex flex-wrap gap-1.5 whitespace-nowrap">
+                      <div className="flex flex-nowrap gap-1.5 whitespace-nowrap">
                         <BotaoCredencial
                           acao={redefinirSenha.bind(null, usuario.id)}
                           confirmar={`Gerar uma senha nova para ${usuario.nome}? A senha atual para de funcionar imediatamente.`}
