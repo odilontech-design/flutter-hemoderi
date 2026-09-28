@@ -65,7 +65,12 @@ try {
   url.includes("/portal") ? ok(`clínica entrou e caiu em ${new URL(url).pathname}`) : falha(`clínica foi para ${url}`);
 
   await page.goto(`${BASE}/portal/agendar`);
-  await page.selectOption('select[name="servicoId"]', { index: 1 });
+  // Mesma vitrine por equipamento da página pública: abre a família antes de
+  // escolher o procedimento dentro dela (lib/familia.ts).
+  await page.locator('button[aria-expanded]:has-text("PRF")').first().click();
+  await page.waitForTimeout(400);
+  await page.locator('button:has-text("Membranas")').first().click();
+  await page.waitForTimeout(400);
   // A clínica não escolhe mais o profissional (decisão da reunião de 14/09):
   // quem atende é definido na alocação, pela equipe.
   await page.fill('input[name="data"]', DATA_ALVO);

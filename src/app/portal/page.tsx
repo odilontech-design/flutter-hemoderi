@@ -7,7 +7,6 @@ import { STATUS_ATIVOS } from "@/lib/pedido";
 import { AcoesClinica } from "./AcoesClinica";
 import { AvaliarAtendimento } from "./AvaliarAtendimento";
 import { ResponderNps } from "./ResponderNps";
-import { CartaoDivulgacao } from "@/components/CartaoDivulgacao";
 import { formatarMedia, mediaDeNotas } from "@/lib/avaliacao";
 import { formatarReais } from "@/lib/dinheiro";
 import { linkAdicionarGoogleAgenda } from "@/lib/google-calendar-link";
@@ -23,7 +22,7 @@ export default async function MeusAgendamentos() {
   const sessao = await exigirClinica();
   const hoje = hojeUTC();
 
-  const [proximos, historico, total, clinica, aAvaliar, notasDadas, npsPendente] = await Promise.all([
+  const [proximos, historico, total, aAvaliar, notasDadas, npsPendente] = await Promise.all([
     prisma.pedido.findMany({
       where: { clinicaId: sessao.clinicaId, data: { gte: hoje }, status: { in: STATUS_ATIVOS } },
       orderBy: [{ data: "asc" }, { horaInicio: "asc" }],
@@ -43,7 +42,6 @@ export default async function MeusAgendamentos() {
       },
     }),
     prisma.pedido.count({ where: { clinicaId: sessao.clinicaId, status: "REALIZADO" } }),
-    prisma.clinica.findUnique({ where: { id: sessao.clinicaId }, select: { slug: true, nome: true } }),
     // A fila de avaliação é o atendimento realizado que ainda não tem nota.
     // Fica limitada aos cinco mais recentes: a clínica que voltou depois de um
     // mês não pode ser recebida por trinta formulários abertos.
@@ -221,8 +219,6 @@ export default async function MeusAgendamentos() {
           </Tabela>
         )}
       </Cartao>
-
-      {clinica && <CartaoDivulgacao slug={clinica.slug} nome={clinica.nome} mostrarQrCode={false} />}
     </>
   );
 }

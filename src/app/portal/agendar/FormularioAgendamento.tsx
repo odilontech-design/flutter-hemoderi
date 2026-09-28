@@ -3,35 +3,35 @@
 import { useEffect, useState } from "react";
 import { useFormState } from "react-dom";
 import { useRouter } from "next/navigation";
-import { Area, Aviso, Botao, Campo, Rotulo, Selecao } from "@/components/ui";
+import { Area, Aviso, Botao, Campo, Rotulo } from "@/components/ui";
 import { solicitarPedido, type Resultado } from "@/app/actions/pedidos";
 import { linkWhatsapp, mensagemDeUrgencia } from "@/lib/whatsapp-link";
 
 const INICIAL: Resultado = { ok: false };
 
+type Servico = { id: string; nome: string; duracaoMin: number };
+type Grupo = { familia: string; servicos: Servico[] };
+
 /**
- * O agendamento em três escolhas: serviço, data e horário — a mesma ordem da
- * conversa que hoje acontece no WhatsApp.
+ * O agendamento pelo portal, na mesma vitrine por equipamento da página
+ * pública — equipamento primeiro, procedimento em seguida — em vez da lista
+ * alfabética achatada que a clínica já conhecida tinha antes.
  *
- * Os horários vêm do servidor já filtrados pela agenda dos profissionais,
- * pelas salas da clínica e pela antecedência mínima. A tela não oferece nada
- * que a operação não consiga cumprir; é o que impede a solicitação nascer
- * para ser recusada.
+ * A diferença para a vitrine pública fica só no que o sistema já sabe: aqui
+ * a clínica já está identificada, então o passo "quem é você" não existe e o
+ * horário mostrado é disponibilidade real (checada contra agenda, sala e
+ * equipamento pelo `/api/horarios`), não uma preferência a confirmar depois.
  *
- * A escolha de profissional saiu da tela (ata de 14/09): quem decide quem
- * atende é a central, e escolher preferência vai voltar como serviço com
- * acréscimo, em fase própria. O campo continua no formulário, vazio, para
- * que reativá-lo seja tirar um `hidden` — não refazer a tela.
+ * A escolha de profissional continua fora da tela (ata de 14/09): quem
+ * decide quem atende é a central.
  */
 export function FormularioAgendamento({
-  servicos,
-  profissionais,
+  grupos,
   antecedenciaHoras,
   clinicaNome,
   whatsappCentral,
 }: {
-  servicos: { id: string; nome: string; duracaoMin: number }[];
-  profissionais: { id: string; nome: string; especialidade: string | null }[];
+  grupos: Grupo[];
   antecedenciaHoras: number;
   clinicaNome: string;
   whatsappCentral: string | null;
@@ -39,11 +39,8 @@ export function FormularioAgendamento({
   const router = useRouter();
   const [estado, enviar] = useFormState(solicitarPedido, INICIAL);
 
-  const [servicoId, setServicoId] = useState("");
-  // Sem seleção na tela: fica vazio e o servidor escolhe entre quem está
-  // disponível. `profissionais` continua na assinatura para a fase em que a
-  // preferência volta.
-  const [profissionalId, setProfissionalId] = useState("");
+  const [familiaAberta, setFamiliaAberta] = useState<string | null>(null);
+  const [servico, setServico] = useState<Servico | null>(null);
   const [data, setData] = useState("");
   const [doutorNome, setDoutorNome] = useState("");
   const [pacienteNome, setPacienteNome] = useState("");
@@ -51,15 +48,20 @@ export function FormularioAgendamento({
   const [horarios, setHorarios] = useState<string[]>([]);
   const [buscando, setBuscando] = useState(false);
 
+  // Ao escolher o serviço, leva para o passo seguinte sem exigir rolagem —
+  // mesmo comportamento da vitrine pública.
   useEffect(() => {
-    if (!servicoId || !data) {
+    if (servico) document.getElementById("passo-quando")?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }, [servico]);
+
+  useEffect(() => {
+    if (!servico || !data) {
       setHorarios([]);
       return;
     }
     let cancelado = false;
     setBuscando(true);
-    const parametros = new URLSearchParams({ servicoId, data });
-    if (profissionalId) parametros.set("profissionalId", profissionalId);
+    const parametros = new URLSearchParams({ servicoId: servico.id, data });
     fetch(`/api/horarios?${parametros}`)
       .then((r) => r.json())
       .then((json) => {
@@ -73,7 +75,7 @@ export function FormularioAgendamento({
     return () => {
       cancelado = true;
     };
-  }, [servicoId, profissionalId, data]);
+  }, [servico, data]);
 
   useEffect(() => {
     if (estado.ok) router.push("/portal");
@@ -93,7 +95,7 @@ export function FormularioAgendamento({
         whatsappCentral,
         mensagemDeUrgencia({
           clinica: clinicaNome,
-          servico: servicos.find((s) => s.id === servicoId)?.nome ?? null,
+          servico: servico?.nome ?? null,
           data: data ? data.split("-").reverse().join("/") : null,
           doutor: doutorNome || null,
           paciente: pacienteNome || null,
@@ -103,107 +105,163 @@ export function FormularioAgendamento({
     : null;
 
   return (
-    <form action={enviar} className="space-y-4">
-      <div>
-        <Rotulo>Serviço</Rotulo>
-        <Selecao name="servicoId" required value={servicoId} onChange={(e) => setServicoId(e.target.value)}>
-          <option value="">Selecione…</option>
-          {servicos.map((s) => (
-            <option key={s.id} value={s.id}>
-              {s.nome} ({s.duracaoMin} min)
-            </option>
-          ))}
-        </Selecao>
-      </div>
+    <div className="space-y-8">
+      {/* ── 1. Equipamento ───────────────────────────────────────────────── */}
+      <section>
+        <h2 className="font-display font-bold text-bordo text-sm mb-1">1 · Qual equipamento você precisa</h2>
+        <p className="text-[11px] text-gray-500 mb-4">
+          Escolha o tipo — os procedimentos aparecem em seguida.
+        </p>
 
-      {/* Oculto por decisão da operação, não removido: a preferência por
-          profissional volta como serviço com acréscimo. */}
-      <input type="hidden" name="profissionalId" value={profissionalId} />
-
-      <div>
-        <Rotulo>Data</Rotulo>
-        <Campo type="date" value={data} onChange={(e) => setData(e.target.value)} required name="data" />
-        <div className="text-[10px] text-gray-400 mt-1">
-          O portal agenda com {antecedenciaHoras}h de antecedência. Para antes disso, a central
-          resolve pelo WhatsApp.
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2">
+          {grupos.map((grupo) => {
+            const aberta = familiaAberta === grupo.familia;
+            return (
+              <button
+                key={grupo.familia}
+                type="button"
+                onClick={() => setFamiliaAberta(aberta ? null : grupo.familia)}
+                aria-expanded={aberta}
+                className={`text-left rounded-xl border p-3 transition-colors min-h-[72px]
+                  ${aberta ? "border-bordo bg-bordo text-white" : "border-gray-200 bg-white hover:border-bordo/40"}`}
+              >
+                <div className="text-xs font-semibold">{grupo.familia}</div>
+                <div className={`text-[10px] mt-1 ${aberta ? "text-white/70" : "text-gray-400"}`}>
+                  {grupo.servicos.length} opç{grupo.servicos.length === 1 ? "ão" : "ões"}
+                </div>
+              </button>
+            );
+          })}
         </div>
-      </div>
 
-      {urgente && (
-        <Aviso tom="alerta">
-          <div className="font-semibold mb-1">Isso é para menos de {antecedenciaHoras}h.</div>
-          Urgência a central trata direto, para conseguir remanejar quem já está em rota.
-          {linkUrgencia ? (
-            <a
-              href={linkUrgencia}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="mt-2 inline-flex items-center gap-1.5 bg-[#1EA952] text-white text-xs font-semibold px-3 py-2 rounded-lg hover:bg-[#178943]"
-            >
-              Falar com a central no WhatsApp →
-            </a>
-          ) : (
-            <div className="mt-1">Fale com a central — o número não está configurado no sistema.</div>
-          )}
-        </Aviso>
-      )}
-
-      <div>
-        <Rotulo>Horário</Rotulo>
-        {!servicoId || !data ? (
-          <div className="text-xs text-gray-400 py-2">Escolha o serviço e a data.</div>
-        ) : buscando ? (
-          <div className="text-xs text-gray-400 py-2">Buscando horários…</div>
-        ) : horarios.length === 0 ? (
-          <Aviso tom="alerta">
-            Nenhum horário livre nesse dia. Tente outra data — ou fale com a central pelo WhatsApp.
-          </Aviso>
-        ) : (
-          <div className="flex flex-wrap gap-2">
-            {horarios.map((hora) => (
-              <label key={hora} className="cursor-pointer">
-                <input type="radio" name="horaInicio" value={hora} required className="peer sr-only" />
-                <span className="block text-xs font-semibold px-3.5 py-2.5 rounded-lg border border-gray-300 peer-checked:bg-bordo peer-checked:text-white peer-checked:border-bordo">
-                  {hora}
-                </span>
-              </label>
-            ))}
+        {familiaAberta && (
+          <div className="mt-4 bg-bege rounded-xl p-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+              {grupos
+                .find((g) => g.familia === familiaAberta)!
+                .servicos.map((item) => {
+                  const escolhido = servico?.id === item.id;
+                  return (
+                    <button
+                      key={item.id}
+                      type="button"
+                      onClick={() => setServico(item)}
+                      className={`text-left rounded-xl border p-3 transition-colors
+                        ${escolhido ? "border-bordo bg-bordo text-white" : "border-gray-200 bg-white hover:border-bordo/40"}`}
+                    >
+                      <div className="text-xs font-semibold">{item.nome}</div>
+                      <div className={`text-[10px] mt-1 ${escolhido ? "text-white/70" : "text-gray-400"}`}>
+                        {item.duracaoMin} min
+                      </div>
+                    </button>
+                  );
+                })}
+            </div>
           </div>
         )}
-      </div>
+      </section>
 
-      <div>
-        <Rotulo>Doutor(a) responsável</Rotulo>
-        <Campo name="doutorNome" required value={doutorNome} onChange={(e) => setDoutorNome(e.target.value)} />
-        <div className="text-[10px] text-gray-400 mt-1">
-          Quem responde pelo caso na clínica. É por este nome que a central pergunta.
-        </div>
-      </div>
+      {/* ── 2. Quando e detalhes ────────────────────────────────────────── */}
+      {servico && (
+        <section id="passo-quando" className="scroll-mt-4">
+          <h2 className="font-display font-bold text-bordo text-sm mb-1">2 · Quando</h2>
+          <p className="text-[11px] text-gray-500 mb-4">
+            <strong className="text-bordo">{servico.nome}</strong> · {servico.duracaoMin} min
+          </p>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-        <div>
-          <Rotulo>Paciente (opcional)</Rotulo>
-          <Campo name="pacienteNome" value={pacienteNome} onChange={(e) => setPacienteNome(e.target.value)} />
-        </div>
-        <div>
-          <Rotulo>Contato (opcional)</Rotulo>
-          <Campo name="pacienteContato" />
-        </div>
-      </div>
+          <form action={enviar} className="bg-white border border-gray-200 rounded-2xl p-4 max-w-2xl space-y-4">
+            <input type="hidden" name="servicoId" value={servico.id} />
+            {/* Oculto por decisão da operação, não removido: a preferência
+                por profissional volta como serviço com acréscimo. */}
+            <input type="hidden" name="profissionalId" value="" />
 
-      <div>
-        <Rotulo>Observações do procedimento</Rotulo>
-        <Area name="observacoes" rows={2} value={observacoes} onChange={(e) => setObservacoes(e.target.value)} />
-      </div>
+            <div>
+              <Rotulo>Data</Rotulo>
+              <Campo type="date" value={data} onChange={(e) => setData(e.target.value)} required name="data" />
+              <div className="text-[10px] text-gray-400 mt-1">
+                O portal agenda com {antecedenciaHoras}h de antecedência. Para antes disso, a central
+                resolve pelo WhatsApp.
+              </div>
+            </div>
 
-      {estado.erro && <Aviso tom="erro">{estado.erro}</Aviso>}
+            {urgente && (
+              <Aviso tom="alerta">
+                <div className="font-semibold mb-1">Isso é para menos de {antecedenciaHoras}h.</div>
+                Urgência a central trata direto, para conseguir remanejar quem já está em rota.
+                {linkUrgencia ? (
+                  <a
+                    href={linkUrgencia}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="mt-2 inline-flex items-center gap-1.5 bg-[#1EA952] text-white text-xs font-semibold px-3 py-2 rounded-lg hover:bg-[#178943]"
+                  >
+                    Falar com a central no WhatsApp →
+                  </a>
+                ) : (
+                  <div className="mt-1">Fale com a central — o número não está configurado no sistema.</div>
+                )}
+              </Aviso>
+            )}
 
-      <Botao type="submit" disabled={horarios.length === 0}>
-        Solicitar agendamento
-      </Botao>
-      <div className="text-[10px] text-gray-400">
-        A central confirma a solicitação e avisa pelo WhatsApp.
-      </div>
-    </form>
+            <div>
+              <Rotulo>Horário</Rotulo>
+              {!data ? (
+                <div className="text-xs text-gray-400 py-2">Escolha a data.</div>
+              ) : buscando ? (
+                <div className="text-xs text-gray-400 py-2">Buscando horários…</div>
+              ) : horarios.length === 0 ? (
+                <Aviso tom="alerta">
+                  Nenhum horário livre nesse dia. Tente outra data — ou fale com a central pelo WhatsApp.
+                </Aviso>
+              ) : (
+                <div className="flex flex-wrap gap-2">
+                  {horarios.map((hora) => (
+                    <label key={hora} className="cursor-pointer">
+                      <input type="radio" name="horaInicio" value={hora} required className="peer sr-only" />
+                      <span className="block text-xs font-semibold px-3.5 py-2.5 rounded-lg border border-gray-300 peer-checked:bg-bordo peer-checked:text-white peer-checked:border-bordo">
+                        {hora}
+                      </span>
+                    </label>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <div>
+              <Rotulo>Doutor(a) responsável</Rotulo>
+              <Campo name="doutorNome" required value={doutorNome} onChange={(e) => setDoutorNome(e.target.value)} />
+              <div className="text-[10px] text-gray-400 mt-1">
+                Quem responde pelo caso na clínica. É por este nome que a central pergunta.
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <Rotulo>Paciente (opcional)</Rotulo>
+                <Campo name="pacienteNome" value={pacienteNome} onChange={(e) => setPacienteNome(e.target.value)} />
+              </div>
+              <div>
+                <Rotulo>Contato (opcional)</Rotulo>
+                <Campo name="pacienteContato" />
+              </div>
+            </div>
+
+            <div>
+              <Rotulo>Observações do procedimento</Rotulo>
+              <Area name="observacoes" rows={2} value={observacoes} onChange={(e) => setObservacoes(e.target.value)} />
+            </div>
+
+            {estado.erro && <Aviso tom="erro">{estado.erro}</Aviso>}
+
+            <Botao type="submit" disabled={horarios.length === 0}>
+              Solicitar agendamento
+            </Botao>
+            <div className="text-[10px] text-gray-400">
+              A central confirma a solicitação e avisa pelo WhatsApp.
+            </div>
+          </form>
+        </section>
+      )}
+    </div>
   );
 }

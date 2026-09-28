@@ -126,6 +126,13 @@ await ctx.clearCookies();
 await entrar(p, "clinica-santa-rita@exemplo.com.br");
 await p.goto(`${BASE}/portal/agendar`);
 await p.waitForTimeout(1500);
+// Mesma vitrine por equipamento da página pública: abre a família antes de
+// escolher o procedimento dentro dela (lib/familia.ts) — os campos do passo
+// "Quando" só existem depois disso.
+await p.locator('button[aria-expanded]:has-text("PRF")').first().click();
+await p.waitForTimeout(400);
+await p.locator('button:has-text("Membranas")').first().click();
+await p.waitForTimeout(400);
 ok("seleção de profissional está oculta", (await p.locator('select[name="profissionalId"]').count()) === 0);
 ok("campo do doutor é obrigatório", (await p.locator('input[name="doutorNome"][required]').count()) > 0);
 
