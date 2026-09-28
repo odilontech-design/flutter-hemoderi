@@ -413,12 +413,18 @@ export type ResultadoImportacao = Resultado & {
  * ao resto do sistema. Acesso criado um a um (`criarAcesso`,
  * `gerarAcessoDoCadastro`) continua com senha individual sorteada — aqui o
  * volume é que muda a decisão, não uma mudança de política geral.
+ *
+ * A caixa "também criar acesso" é opcional: existe operação que só quer o
+ * cadastro (a agenda, o repasse, o histórico) sem abrir login para o lote
+ * inteiro de uma vez — a mesma planilha colada vira só `Profissional`, sem
+ * `Usuario` nem senha nenhuma sorteada.
  */
 export async function importarProfissionais(
   _anterior: ResultadoImportacao,
   dados: FormData
 ): Promise<ResultadoImportacao> {
   const sessao = await exigirResponsavel();
+  const criarAcesso = dados.get("criarAcesso") === "on";
 
   const { lerPlanilha } = await import("@/lib/importacao");
   const { validos, problemas } = lerPlanilha(String(dados.get("planilha") ?? ""));
@@ -446,9 +452,9 @@ export async function importarProfissionais(
 
   // Uma senha para o lote inteiro (ver o comentário da função) — sorteada
   // aqui fora do laço, uma vez só, mesmo formato ditável da senha
-  // individual.
-  const senhaPadrao = gerarSenha();
-  const senhaHash = await bcrypt.hash(senhaPadrao, 10);
+  // individual. Só nasce se o lote for mesmo abrir acesso.
+  const senhaPadrao = criarAcesso ? gerarSenha() : undefined;
+  const senhaHash = senhaPadrao ? await bcrypt.hash(senhaPadrao, 10) : undefined;
 
   for (const { nome, email } of validos) {
     if (jaExistem.has(email)) {
@@ -461,16 +467,18 @@ export async function importarProfissionais(
     // certo — quem reprocessa a planilha inteira acaba criando duplicata.
     try {
       const profissional = await prisma.profissional.create({ data: { nome, email } });
-      await prisma.usuario.create({
-        data: {
-          nome,
-          email,
-          senhaHash,
-          papel: "PROFISSIONAL",
-          profissionalId: profissional.id,
-          senhaProvisoria: true,
-        },
-      });
+      if (senhaHash) {
+        await prisma.usuario.create({
+          data: {
+            nome,
+            email,
+            senhaHash,
+            papel: "PROFISSIONAL",
+            profissionalId: profissional.id,
+            senhaProvisoria: true,
+          },
+        });
+      }
       await registrarAuditoria(sessao.usuarioId, "Profissional", profissional.id, "IMPORTADO", email);
       importados.push({ nome, email });
     } catch (erro) {

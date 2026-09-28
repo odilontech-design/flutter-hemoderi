@@ -21,11 +21,16 @@ const INICIAL: ResultadoImportacao = { ok: false };
  * credenciais para copiar uma a uma, é um aviso único que a equipe manda
  * para todo mundo de uma vez, e a lista abaixo é só para conferir quem
  * entrou.
+ *
+ * A caixa "também criar acesso" fica marcada por padrão, mas dá para
+ * desmarcar: quem só quer cadastrar (sem abrir login para o lote inteiro de
+ * uma vez) cola a mesma planilha e sai sem nenhuma senha sorteada.
  */
 export function ImportarProfissionais() {
   const [estado, enviar] = useFormState(importarProfissionais, INICIAL);
   const [aberto, setAberto] = useState(false);
   const [copiado, setCopiado] = useState(false);
+  const [criarAcesso, setCriarAcesso] = useState(true);
 
   if (!aberto) {
     return (
@@ -60,30 +65,35 @@ export function ImportarProfissionais() {
 
   return (
     <div className="space-y-3">
-      {estado.senhaPadrao && estado.importados && estado.importados.length > 0 && (
+      {estado.importados && estado.importados.length > 0 && (
         <div className="border border-green-300 bg-green-50 rounded-xl p-4 space-y-3">
           <div className="text-xs font-semibold text-green-800">
-            {estado.importados.length} profissional(is) importado(s) — mesma senha para todos
+            {estado.importados.length} profissional(is) importado(s)
+            {estado.senhaPadrao ? " — mesma senha para todos" : " — só cadastro, sem acesso ao portal"}
           </div>
 
-          <div className="bg-white border border-green-200 rounded-lg px-3 py-2.5 text-center">
-            <div className="text-[10px] uppercase tracking-wide text-gray-400 mb-1">
-              Senha provisória do lote
-            </div>
-            <div className="font-mono font-bold text-base sm:text-lg text-bordo tracking-wider break-all">
-              {estado.senhaPadrao}
-            </div>
-          </div>
+          {estado.senhaPadrao && (
+            <>
+              <div className="bg-white border border-green-200 rounded-lg px-3 py-2.5 text-center">
+                <div className="text-[10px] uppercase tracking-wide text-gray-400 mb-1">
+                  Senha provisória do lote
+                </div>
+                <div className="font-mono font-bold text-base sm:text-lg text-bordo tracking-wider break-all">
+                  {estado.senhaPadrao}
+                </div>
+              </div>
 
-          <Botao variante="secundario" onClick={copiar}>
-            {copiado ? "Copiado ✓" : "Copiar mensagem para enviar"}
-          </Botao>
+              <Botao variante="secundario" onClick={copiar}>
+                {copiado ? "Copiado ✓" : "Copiar mensagem para enviar"}
+              </Botao>
 
-          <div className="text-[10px] text-green-900/70 leading-relaxed">
-            Anote ou copie agora: esta senha não aparece de novo — o sistema guarda só o resumo
-            criptográfico dela. Vale só até a primeira entrada de cada um: o sistema obriga a
-            escolher uma senha definitiva, que ninguém da equipe conhece — nem esta, repetida.
-          </div>
+              <div className="text-[10px] text-green-900/70 leading-relaxed">
+                Anote ou copie agora: esta senha não aparece de novo — o sistema guarda só o resumo
+                criptográfico dela. Vale só até a primeira entrada de cada um: o sistema obriga a
+                escolher uma senha definitiva, que ninguém da equipe conhece — nem esta, repetida.
+              </div>
+            </>
+          )}
 
           <ul className="text-[11px] text-green-900/80 space-y-0.5 pt-1 border-t border-green-200">
             {estado.importados.map((p) => (
@@ -128,13 +138,27 @@ export function ImportarProfissionais() {
           />
           <div className="text-[10px] text-gray-400 mt-1">
             Um profissional por linha, com nome e e-mail. Serve colar direto do Excel, ou um CSV.
-            Quem já existe é pulado — nada é sobrescrito. Todo mundo importado numa mesma colagem
-            recebe a mesma senha provisória, para avisar todo mundo de uma vez.
+            Quem já existe é pulado — nada é sobrescrito.
           </div>
         </div>
+
+        <label className="flex items-start gap-2 text-[11px] text-gray-600 cursor-pointer">
+          <input
+            type="checkbox"
+            name="criarAcesso"
+            checked={criarAcesso}
+            onChange={(e) => setCriarAcesso(e.target.checked)}
+            className="mt-0.5"
+          />
+          <span>
+            Também criar acesso ao portal para todos, com uma senha provisória única para o lote.
+            Desmarcado, só cadastra — sem login para ninguém.
+          </span>
+        </label>
+
         {estado.erro && <Aviso tom="erro">{estado.erro}</Aviso>}
         <div className="flex flex-wrap gap-2">
-          <Botao type="submit">Importar e gerar acessos</Botao>
+          <Botao type="submit">{criarAcesso ? "Importar e gerar acessos" : "Importar (só cadastro)"}</Botao>
           <Botao variante="secundario" onClick={() => setAberto(false)} type="button">
             Fechar
           </Botao>
