@@ -318,8 +318,19 @@ async function transicionar(pedidoId: string, para: StatusPedido, usuarioId: str
   return { ok: true };
 }
 
+/**
+ * A triagem: o pedido que chegou vira compromisso da operação.
+ *
+ * Restrito ao comercial desde a ata de 28/09 — é a mesa da Ana, que filtra e
+ * confirma o que chega antes de a logística ver. Ficava aberto a qualquer
+ * conta interna, e com a esteira separada por setor isso significaria a
+ * logística confirmando pedido que ninguém triou.
+ */
 export async function confirmarPedido(pedidoId: string): Promise<Resultado> {
   const sessao = await exigirInterno();
+  if (!perfilPermite(sessao.perfil, "COMERCIAL", "ATENDENTE")) {
+    return { ok: false, erro: "A triagem é do comercial — quem confirma o agendamento é quem atende a clínica." };
+  }
   const resultado = await transicionar(pedidoId, "CONFIRMADO", sessao.usuarioId);
   if (resultado.ok) {
     await enfileirarMensagem(pedidoId, "CONFIRMACAO");

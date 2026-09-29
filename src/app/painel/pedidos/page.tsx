@@ -1,12 +1,11 @@
 import Link from "next/link";
-import type { StatusPedido } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { exigirInterno } from "@/lib/sessao";
 import { Cartao, SeloStatus, Titulo, Vazio } from "@/components/ui";
 import { codigoDoPedido } from "@/lib/numeracao";
 import { formatarDataCurta } from "@/lib/data";
 import { formatarReais } from "@/lib/dinheiro";
-import { STATUS_PENDENTES } from "@/lib/pedido";
+import { ETAPAS, etapaDoPerfil, etapaPorChave } from "@/lib/esteira";
 import { profissionaisIndisponiveis } from "@/lib/alocacao";
 import { AcoesPedido } from "./AcoesPedido";
 import { CondicaoPagamento } from "./CondicaoPagamento";
@@ -18,18 +17,16 @@ import { condicaoValida } from "@/lib/pagamento";
 
 export const dynamic = "force-dynamic";
 
-const FILTROS: { chave: string; rotulo: string; status?: StatusPedido[] }[] = [
-  { chave: "pendentes", rotulo: "Aguardando ação", status: STATUS_PENDENTES },
-  { chave: "alocados", rotulo: "Alocados", status: ["ALOCADO"] },
-  { chave: "fechados", rotulo: "Fechados", status: ["REALIZADO", "FALTOU"] },
-  { chave: "cancelados", rotulo: "Cancelados", status: ["CANCELADO"] },
-  { chave: "todos", rotulo: "Todos" },
-];
-
 /**
- * A esteira. É a tela de trabalho da equipe, e abre no filtro do que está
- * parado — não na lista completa: com 1.500 atendimentos por mês, uma lista
- * ordenada por data é um arquivo, não uma fila de trabalho.
+ * A esteira. É a tela de trabalho da equipe, e abre na ETAPA de quem entrou
+ * (lib/esteira.ts) — não na lista completa: com 1.500 atendimentos por mês,
+ * uma lista ordenada por data é um arquivo, não uma fila de trabalho.
+ *
+ * A separação por setor é da ata de 28/09: a triagem é da Ana e a alocação é
+ * da Joyce, e enquanto as duas dividiam o mesmo balde ("Aguardando ação")
+ * cada uma via o trabalho da outra como ruído. Abrir na própria fila resolve
+ * isso sem esconder as demais — a interface é a mesma para todos os setores,
+ * como a ata pediu.
  */
 export default async function Esteira({
   searchParams,
@@ -38,15 +35,15 @@ export default async function Esteira({
 }) {
   const sessao = await exigirInterno();
 
-  const filtro = FILTROS.find((f) => f.chave === searchParams.filtro) ?? FILTROS[0];
+  const minhaEtapa = etapaDoPerfil(sessao.perfil);
+  const filtro = etapaPorChave(searchParams.filtro) ?? minhaEtapa;
   const pagamento = condicaoValida(searchParams.pagamento ?? "") ? searchParams.pagamento! : "";
 
-  const [pedidos, profissionais] = await Promise.all([
+  const ondePagamento = pagamento ? { condicaoPagamento: pagamento } : {};
+
+  const [pedidos, profissionais, contagens] = await Promise.all([
     prisma.pedido.findMany({
-      where: {
-        ...(filtro.status ? { status: { in: filtro.status } } : {}),
-        ...(pagamento ? { condicaoPagamento: pagamento } : {}),
-      },
+      where: { ...filtro.onde, ...ondePagamento },
       orderBy: [{ data: "asc" }, { horaInicio: "asc" }],
       take: 200,
       include: {
@@ -73,6 +70,13 @@ export default async function Esteira({
       orderBy: { nome: "asc" },
       select: { id: true, nome: true },
     }),
+    // O tamanho de cada fila, no mesmo recorte de pagamento que está na tela.
+    // É o número que diz "tem trabalho ali" sem a pessoa precisar clicar em
+    // cada etapa para descobrir — e é o que faz a separação por setor render:
+    // a Joyce vê quantos esperam alocação enquanto trabalha a triagem.
+    Promise.all(
+      ETAPAS.map((etapa) => prisma.pedido.count({ where: { ...etapa.onde, ...ondePagamento } }))
+    ),
   ]);
 
   // Só quem está "Confirmado" mostra o seletor de alocar (ver AcoesPedido) —
@@ -105,21 +109,36 @@ export default async function Esteira({
         Esteira de agendamentos
       </Titulo>
 
-      <div className="flex flex-wrap items-center gap-2 mb-4">
-        {FILTROS.map((f) => (
-          <Link
-            key={f.chave}
-            href={`/painel/pedidos?filtro=${f.chave}${pagamento ? `&pagamento=${encodeURIComponent(pagamento)}` : ""}`}
-            className={`text-[11px] font-semibold px-3 py-2.5 sm:py-1.5 rounded-full border ${
-              f.chave === filtro.chave
-                ? "bg-bordo text-white border-bordo"
-                : "bg-white text-gray-600 border-gray-300 hover:bg-gray-50"
-            }`}
-          >
-            {f.rotulo}
-          </Link>
-        ))}
+      <div className="flex flex-wrap items-center gap-2 mb-2">
+        {ETAPAS.map((etapa, i) => {
+          const minha = etapa.chave === minhaEtapa.chave;
+          const selecionada = etapa.chave === filtro.chave;
+          return (
+            <Link
+              key={etapa.chave}
+              href={`/painel/pedidos?filtro=${etapa.chave}${pagamento ? `&pagamento=${encodeURIComponent(pagamento)}` : ""}`}
+              title={etapa.descricao}
+              className={`text-[11px] font-semibold px-3 py-2.5 sm:py-1.5 rounded-full border ${
+                selecionada
+                  ? "bg-bordo text-white border-bordo"
+                  : minha
+                    ? "bg-white text-bordo border-bordo/50 hover:bg-bordo/5"
+                    : "bg-white text-gray-600 border-gray-300 hover:bg-gray-50"
+              }`}
+            >
+              {etapa.rotulo}
+              {contagens[i] > 0 && <span className="ml-1 opacity-70">· {contagens[i]}</span>}
+            </Link>
+          );
+        })}
         <FiltroPagamento filtroStatus={filtro.chave} pagamento={pagamento} />
+      </div>
+
+      <div className="text-[11px] text-gray-500 mb-4">
+        {filtro.descricao}
+        {filtro.chave === minhaEtapa.chave && minhaEtapa.dono && (
+          <span className="text-bordo font-semibold"> · esta é a sua fila</span>
+        )}
       </div>
 
       {pedidos.length === 0 ? (
