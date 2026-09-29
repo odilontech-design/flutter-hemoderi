@@ -739,6 +739,14 @@ model Pedido {
   checkinLongitude      Float?
   checkinPrecisaoMetros Float?
 
+  /// Por que a chegada passou do horário (ata de 28/09). Só é pedida quando
+  /// o check-in acontece depois da tolerância — e NUNCA trava o check-in:
+  /// o botão existe para a clínica saber que alguém vem, e exigir texto
+  /// para registrar a chegada atrasaria justamente o aviso que resolve o
+  /// desencontro. Vazio quer dizer "chegou tarde e não disse por quê", que
+  /// é um dado útil por si só no relatório de atrasos.
+  checkinJustificativa String?
+
   relatorio   RelatorioAtendimento?
   repasse     Repasse?
   avaliacao   Avaliacao?

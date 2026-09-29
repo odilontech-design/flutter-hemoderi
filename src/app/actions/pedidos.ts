@@ -22,6 +22,7 @@ import { condicaoValida } from "@/lib/pagamento";
 import { perfilPermite } from "@/lib/papeis";
 import { formatarReais, lerCentavos } from "@/lib/dinheiro";
 import { precoDoServico } from "@/lib/preco";
+import { houveAtraso } from "@/lib/atraso";
 
 export type Resultado = { ok: boolean; erro?: string; avisos?: string[] };
 
@@ -961,25 +962,33 @@ export async function recusarAlocacao(pedidoId: string, motivo: string): Promise
  */
 export async function registrarCheckin(
   pedidoId: string,
-  local: { latitude: number; longitude: number; precisaoMetros: number } | null
+  local: { latitude: number; longitude: number; precisaoMetros: number } | null,
+  justificativa?: string
 ): Promise<Resultado> {
   const sessao = await exigirProfissional();
 
   const pedido = await prisma.pedido.findFirst({
     where: { id: pedidoId, profissionalId: sessao.profissionalId },
-    select: { id: true, status: true, checkinEm: true },
+    select: { id: true, status: true, checkinEm: true, data: true, horaInicio: true },
   });
   if (!pedido) return { ok: false, erro: "Atendimento não encontrado na sua agenda." };
   if (pedido.status !== "ALOCADO") return { ok: false, erro: "Este atendimento já foi finalizado." };
   if (pedido.checkinEm) return { ok: true };
 
+  const agora = new Date();
+  const atrasado = houveAtraso(pedido.data, pedido.horaInicio, agora);
+
   await prisma.pedido.update({
     where: { id: pedido.id },
     data: {
-      checkinEm: new Date(),
+      checkinEm: agora,
       checkinLatitude: local?.latitude ?? null,
       checkinLongitude: local?.longitude ?? null,
       checkinPrecisaoMetros: local?.precisaoMetros ?? null,
+      // Só faz sentido guardar justificativa de quem chegou atrasado: texto
+      // colado numa chegada no horário sujaria o relatório de atrasos com
+      // linhas que não são atraso.
+      checkinJustificativa: atrasado ? justificativa?.trim() || null : null,
     },
   });
   await registrarAuditoria(
@@ -987,7 +996,12 @@ export async function registrarCheckin(
     "Pedido",
     pedido.id,
     "checkin",
-    local ? `${local.latitude},${local.longitude}` : "sem localização"
+    [
+      local ? `${local.latitude},${local.longitude}` : "sem localização",
+      atrasado ? `atrasado: ${justificativa?.trim() || "sem justificativa"}` : null,
+    ]
+      .filter(Boolean)
+      .join(" · ")
   );
 
   atualizarTelas();

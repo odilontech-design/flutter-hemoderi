@@ -6,6 +6,7 @@ import { codigoDoPedido } from "@/lib/numeracao";
 import { formatarDataCurta } from "@/lib/data";
 import { formatarReais } from "@/lib/dinheiro";
 import { ETAPAS, etapaDoPerfil, etapaPorChave } from "@/lib/esteira";
+import { formatarAtraso, houveAtraso, minutosDeAtraso } from "@/lib/atraso";
 import { profissionaisIndisponiveis } from "@/lib/alocacao";
 import { AcoesPedido } from "./AcoesPedido";
 import { CondicaoPagamento } from "./CondicaoPagamento";
@@ -207,6 +208,15 @@ export default async function Esteira({
                         ) : (
                           <span className="font-semibold text-green-700">chegada registrada</span>
                         ))}
+                      {/* O atraso aparece junto da chegada, não escondido no
+                          relatório: é agora que a central avisa a clínica. */}
+                      {houveAtraso(pedido.data, pedido.horaInicio, pedido.checkinEm) && (
+                        <span className="font-semibold text-amber-700">
+                          {formatarAtraso(minutosDeAtraso(pedido.data, pedido.horaInicio, pedido.checkinEm!))}{" "}
+                          de atraso
+                          {pedido.checkinJustificativa ? ` · ${pedido.checkinJustificativa}` : ""}
+                        </span>
+                      )}
                     </div>
                   )}
                   <div className="mt-1.5">

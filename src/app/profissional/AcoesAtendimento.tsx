@@ -73,28 +73,55 @@ export function AceiteAlocacao({ pedidoId }: { pedidoId: string }) {
  * Check-in de chegada. Pede a localização no clique — nunca antes, mesmo
  * motivo do relatório — e nunca trava por causa dela: sem permissão ou sem
  * sinal o check-in é registrado do mesmo jeito, só sem coordenada.
+ *
+ * Passado o horário, abre um campo de justificativa antes de confirmar (ata
+ * de 28/09). O campo NÃO é obrigatório: o botão existe para a clínica saber
+ * que alguém vem, e exigir texto para registrar a chegada atrasaria o aviso
+ * que resolve o desencontro — que é o problema que ele veio resolver.
  */
-export function BotaoCheckin({ pedidoId }: { pedidoId: string }) {
+export function BotaoCheckin({ pedidoId, atrasado }: { pedidoId: string; atrasado: boolean }) {
   const [pendente, iniciar] = useTransition();
   const [buscandoLocal, setBuscandoLocal] = useState(false);
+  const [justificando, setJustificando] = useState(false);
+  const [justificativa, setJustificativa] = useState("");
   const [erro, setErro] = useState("");
 
+  function registrar() {
+    setErro("");
+    void (async () => {
+      setBuscandoLocal(true);
+      const posicao = await obterLocalizacao();
+      setBuscandoLocal(false);
+      iniciar(async () => {
+        const resultado = await registrarCheckin(pedidoId, posicao, justificativa);
+        if (!resultado.ok) setErro(resultado.erro ?? "Não foi possível registrar.");
+      });
+    })();
+  }
+
+  if (atrasado && !justificando) {
+    return (
+      <div>
+        <Botao variante="secundario" onClick={() => setJustificando(true)}>
+          Cheguei no local
+        </Botao>
+      </div>
+    );
+  }
+
   return (
-    <div>
-      <Botao
-        disabled={pendente || buscandoLocal}
-        onClick={async () => {
-          setErro("");
-          setBuscandoLocal(true);
-          const posicao = await obterLocalizacao();
-          setBuscandoLocal(false);
-          iniciar(async () => {
-            const resultado = await registrarCheckin(pedidoId, posicao);
-            if (!resultado.ok) setErro(resultado.erro ?? "Não foi possível registrar.");
-          });
-        }}
-      >
-        {buscandoLocal ? "Confirmando localização…" : "Cheguei no local"}
+    <div className={justificando ? "space-y-2 w-full" : ""}>
+      {justificando && (
+        <Area
+          rows={2}
+          autoFocus
+          placeholder="Passou do horário. Se puder, diga o que atrasou — ajuda a central a avisar a clínica. (opcional)"
+          value={justificativa}
+          onChange={(e) => setJustificativa(e.target.value)}
+        />
+      )}
+      <Botao disabled={pendente || buscandoLocal} onClick={registrar}>
+        {buscandoLocal ? "Confirmando localização…" : justificando ? "Confirmar chegada" : "Cheguei no local"}
       </Botao>
       {erro && <div className="text-[11px] text-red-600 mt-1">{erro}</div>}
     </div>

@@ -41,6 +41,12 @@ export default async function Profissionais() {
       <Titulo
         acao={
           <div className="flex flex-wrap items-center gap-2">
+            <Link
+              href="/painel/profissionais/atrasos"
+              className="border border-gray-300 text-bordo text-xs font-semibold px-3 py-2 min-h-[40px] sm:min-h-0 inline-flex items-center rounded-lg hover:bg-gray-50"
+            >
+              Atrasos de chegada
+            </Link>
             <ImportarProfissionais />
             <Link
               href="/painel/profissionais/novo"

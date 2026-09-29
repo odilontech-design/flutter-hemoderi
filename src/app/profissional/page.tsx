@@ -7,6 +7,7 @@ import { formatarReais } from "@/lib/dinheiro";
 import { parametros } from "@/lib/alocacao";
 import { LOCAL_FECHADO, localRevelado } from "@/lib/sigilo";
 import { linkAdicionarGoogleAgenda } from "@/lib/google-calendar-link";
+import { houveAtraso } from "@/lib/atraso";
 import { AceiteAlocacao, BotaoCheckin } from "./AcoesAtendimento";
 
 type PedidoParaCalendario = {
@@ -144,7 +145,10 @@ export default async function MinhaAgenda() {
                       })}
                     </span>
                   ) : (
-                    <BotaoCheckin pedidoId={pedido.id} />
+                    <BotaoCheckin
+                      pedidoId={pedido.id}
+                      atrasado={houveAtraso(pedido.data, pedido.horaInicio, new Date())}
+                    />
                   )}
                   <a
                     href={linkCalendarioDoPedido(
