@@ -2,12 +2,14 @@ import { MenuLateral } from "@/components/MenuLateral";
 import { Provedores } from "@/components/Provedores";
 import { AvisoDeFila } from "@/components/AvisoDeFila";
 import { exigirInterno } from "@/lib/sessao";
+import { perfilPermite } from "@/lib/papeis";
 import {
   IconeAcessos,
   IconeAgenda,
   IconeAgendamentos,
   IconeCatalogo,
   IconeClinicas,
+  IconeDisponibilidade,
   IconeFinanceiro,
   IconeHoje,
   IconePedidosSite,
@@ -22,6 +24,7 @@ const ITENS = [
   { href: "/painel/pedidos", icone: <IconeAgendamentos />, rotulo: "Agendamentos" },
   { href: "/painel/solicitacoes", icone: <IconePedidosSite />, rotulo: "Pedidos do site" },
   { href: "/painel/agenda", icone: <IconeAgenda />, rotulo: "Agenda" },
+  { href: "/painel/disponibilidade", icone: <IconeDisponibilidade />, rotulo: "Disponibilidade" },
   { href: "/painel/clinicas", icone: <IconeClinicas />, rotulo: "Clínicas" },
   { href: "/painel/profissionais", icone: <IconeProfissionais />, rotulo: "Profissionais" },
   { href: "/painel/catalogo", icone: <IconeCatalogo />, rotulo: "Serviços e equipamentos" },
@@ -36,9 +39,20 @@ const ITENS = [
 // própria tela vai recusar.
 const ITENS_SO_RESPONSAVEL = new Set(["/painel/financeiro", "/painel/acessos"]);
 
+// A grade de disponibilidade é a mesa da logística (ata de 28/09). Quem não
+// aloca não precisa dela no menu — mesma lógica dos itens de responsável:
+// esconder não substitui a guarda da própria página, é só evitar o clique
+// que a tela vai recusar. perfilPermite deixa RESPONSAVEL passar sozinho.
+const ITENS_SO_LOGISTICA = new Set(["/painel/disponibilidade"]);
+
 export default async function LayoutPainel({ children }: { children: React.ReactNode }) {
   const sessao = await exigirInterno();
-  const itens = sessao.perfil === "RESPONSAVEL" ? ITENS : ITENS.filter((item) => !ITENS_SO_RESPONSAVEL.has(item.href));
+  const podeLogistica = perfilPermite(sessao.perfil, "LOGISTICA");
+  const itens = ITENS.filter((item) => {
+    if (ITENS_SO_RESPONSAVEL.has(item.href)) return sessao.perfil === "RESPONSAVEL";
+    if (ITENS_SO_LOGISTICA.has(item.href)) return podeLogistica;
+    return true;
+  });
 
   return (
     <Provedores>
