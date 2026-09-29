@@ -119,21 +119,43 @@ export async function criarNegocio(pedidoId: string): Promise<void> {
   }
 }
 
-/** Marca o negócio como GANHO quando o atendimento é realizado (14/09). */
+/**
+ * Marca o negócio como GANHO quando o atendimento é realizado (14/09).
+ *
+ * Se o negócio nunca chegou a nascer — a criação lá atrás falhou, ou o pedido
+ * é anterior à integração — tenta criá-lo agora antes de marcar. Era esta a
+ * "falha no registro" que a ata de 28/09 mandou revisar: um pedido realizado
+ * cujo negócio não existia fazia esta função sair em silêncio, e o ganho
+ * simplesmente não acontecia sem deixar rastro. Agora, ou o negócio é criado
+ * e marcado, ou a lacuna fica gravada para a tela de integrações mostrar.
+ */
 export async function marcarNegocioGanho(pedidoId: string): Promise<void> {
-  const pedido = await prisma.pedido.findUnique({
+  let pedido = await prisma.pedido.findUnique({
     where: { id: pedidoId },
     select: { id: true, pipedriveNegocioId: true },
   });
-  if (!pedido?.pipedriveNegocioId) return;
+  if (!pedido) return;
 
-  if (!configurado()) {
+  // Sem negócio e com integração ligada: cria agora (idempotente) e relê.
+  if (!pedido.pipedriveNegocioId && configurado()) {
+    await criarNegocio(pedido.id);
+    pedido = await prisma.pedido.findUnique({
+      where: { id: pedidoId },
+      select: { id: true, pipedriveNegocioId: true },
+    });
+  }
+  if (!pedido) return;
+
+  if (!pedido.pipedriveNegocioId) {
+    // Registra a lacuna em vez de sair calado: sem isto, um "ganho" que não
+    // aconteceu ficava invisível. Configurada mas ainda sem negócio quer
+    // dizer que a criação falhou — a tela de integrações pega os dois casos.
     await registrarSincronizacao(
       pedido.id,
       "marcar-ganho",
       false,
-      pedido.pipedriveNegocioId,
-      "Integração não configurada."
+      undefined,
+      configurado() ? "Sem negócio no PipeDrive para marcar como ganho." : "Integração não configurada."
     );
     return;
   }

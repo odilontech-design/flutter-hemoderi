@@ -32,7 +32,8 @@
     "fumaca:atrasos": "dotenv -e .env -- node scripts/fumaca-atrasos.mjs",
     "fumaca:disponibilidade": "dotenv -e .env -- node scripts/fumaca-disponibilidade.mjs",
     "fumaca:feedback": "dotenv -e .env -- node scripts/fumaca-feedback.mjs",
-    "fumaca:agenda-grade": "dotenv -e .env -- node scripts/fumaca-agenda-grade.mjs"
+    "fumaca:agenda-grade": "dotenv -e .env -- node scripts/fumaca-agenda-grade.mjs",
+    "fumaca:integracoes": "dotenv -e .env -- node scripts/fumaca-integracoes.mjs"
   },
   "prisma": {
     "seed": "dotenv -e .env -- tsx prisma/seed.ts"
