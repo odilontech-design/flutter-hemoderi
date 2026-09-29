@@ -5,7 +5,8 @@ import { exigirInterno } from "@/lib/sessao";
 import { Cartao, SeloStatus, Titulo, Vazio } from "@/components/ui";
 import { dataDaURL, dataDeISO, formatarData, formatarDataCurta, hojeISO, isoDeData, somarDias } from "@/lib/data";
 import { paraMinutos } from "@/lib/data";
-import { STATUS_ATIVOS } from "@/lib/pedido";
+import { parametros } from "@/lib/alocacao";
+import { COR_STATUS, ROTULO_STATUS, STATUS_ATIVOS } from "@/lib/pedido";
 import { FiltrosAgenda } from "./FiltrosAgenda";
 import { urlAgenda, type ValoresFiltro } from "./filtros";
 
@@ -80,7 +81,7 @@ export default async function Agenda({
     valores.profissional || valores.clinica || valores.servico || valores.status
   );
 
-  const [pedidos, profissionais, clinicas, servicos] = await Promise.all([
+  const [pedidos, profissionais, clinicas, servicos, config] = await Promise.all([
     prisma.pedido.findMany({
       where: {
         data: { gte: inicio, lte: fim },
@@ -106,6 +107,7 @@ export default async function Agenda({
     }),
     prisma.clinica.findMany({ where: { ativa: true }, orderBy: { nome: "asc" }, select: { id: true, nome: true } }),
     prisma.servico.findMany({ where: { ativo: true }, orderBy: { nome: "asc" }, select: { id: true, nome: true } }),
+    parametros(),
   ]);
 
   // Para o seletor, a lista precisa ser de TODOS os profissionais ativos —
@@ -202,7 +204,13 @@ export default async function Agenda({
           mostrarTodos={mostrarTodos}
         />
       ) : (
-        <PorDia pedidos={pedidos} inicio={inicio} dias={dias} />
+        <GradeCalendario
+          pedidos={pedidos}
+          inicio={inicio}
+          dias={dias}
+          horaAbertura={config.horaAbertura}
+          horaFechamento={config.horaFechamento}
+        />
       )}
     </>
   );
@@ -212,6 +220,7 @@ type PedidoNaAgenda = {
   id: string;
   data: Date;
   horaInicio: string;
+  duracaoMin: number;
   status: StatusPedido;
   profissionalId: string | null;
   clinica: { nome: string };
@@ -316,51 +325,142 @@ function PorProfissional({
   );
 }
 
-/** Visão de período, em ordem cronológica, com os dias vazios à mostra. */
-function PorDia({ pedidos, inicio, dias }: { pedidos: PedidoNaAgenda[]; inicio: Date; dias: number }) {
-  const porDia = new Map<string, PedidoNaAgenda[]>();
-  for (const pedido of pedidos) {
-    const chave = isoDeData(pedido.data);
-    const lista = porDia.get(chave);
-    if (lista) lista.push(pedido);
-    else porDia.set(chave, [pedido]);
-  }
+/**
+ * Visão de período no formato de calendário (ata de 28/09): horas na vertical,
+ * dias em colunas, cada atendimento é um bloco posicionado pela hora e com
+ * altura proporcional à duração — o "modelo Google Agenda" que o André pediu.
+ *
+ * A lista cronológica anterior respondia "o que tem", mas não "onde tem
+ * buraco de duas horas na quarta": para achar folga a pessoa somava horários
+ * de cabeça. Na grade o vazio é espaço em branco, que é como a operação já
+ * lê uma agenda.
+ *
+ * A faixa de horas vem do funcionamento da operação (Parametros), não fixa:
+ * mostrar 00h–23h encheria a tela de vazio onde ninguém atende. Um bloco que
+ * comece antes da abertura (raro, um dado antigo) é fixado no topo em vez de
+ * escapar para cima da grade.
+ */
+const ALTURA_HORA_PX = 48;
 
-  const doPeriodo = Array.from({ length: dias }, (_, i) => {
+function GradeCalendario({
+  pedidos,
+  inicio,
+  dias,
+  horaAbertura,
+  horaFechamento,
+}: {
+  pedidos: PedidoNaAgenda[];
+  inicio: Date;
+  dias: number;
+  horaAbertura: string;
+  horaFechamento: string;
+}) {
+  const minInicio = paraMinutos(horaAbertura);
+  const minFim = paraMinutos(horaFechamento);
+  const horas: number[] = [];
+  for (let h = Math.floor(minInicio / 60); h <= Math.ceil(minFim / 60); h++) horas.push(h);
+  const alturaTotal = ((minFim - minInicio) / 60) * ALTURA_HORA_PX;
+
+  const hojeIso = hojeISO();
+  const colunas = Array.from({ length: dias }, (_, i) => {
     const dia = somarDias(inicio, i);
-    return { dia, chave: isoDeData(dia), lista: porDia.get(isoDeData(dia)) ?? [] };
+    const iso = isoDeData(dia);
+    return {
+      iso,
+      dia,
+      hoje: iso === hojeIso,
+      lista: pedidos
+        .filter((p) => isoDeData(p.data) === iso)
+        .sort((a, b) => paraMinutos(a.horaInicio) - paraMinutos(b.horaInicio)),
+    };
   });
 
   return (
-    <div className="space-y-2">
-      {doPeriodo.map(({ dia, chave, lista }) => (
-        <Cartao key={chave} className="!p-4">
-          <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
-            <div className="font-semibold text-bordo text-sm">{formatarData(dia)}</div>
-            <div className="text-[10px] text-gray-400">
-              {lista.length === 0 ? "nada marcado" : `${lista.length} atendimento(s)`}
+    <Cartao className="!p-0 overflow-x-auto">
+      <div className="min-w-[640px]">
+        {/* Cabeçalho dos dias, alinhado à faixa de horas da esquerda. */}
+        <div className="flex border-b border-gray-200 sticky top-0 bg-white z-10">
+          <div className="w-12 shrink-0" />
+          {colunas.map((c) => (
+            <div
+              key={c.iso}
+              className={`flex-1 min-w-[80px] px-2 py-2 text-center border-l border-gray-100 ${
+                c.hoje ? "bg-bordo/5" : ""
+              }`}
+            >
+              <div className={`text-[11px] font-semibold ${c.hoje ? "text-bordo" : "text-gray-600"}`}>
+                {c.dia.toLocaleDateString("pt-BR", { timeZone: "UTC", weekday: "short" }).replace(".", "")}
+              </div>
+              <div className="text-[10px] text-gray-400">
+                {c.dia.toLocaleDateString("pt-BR", { timeZone: "UTC", day: "2-digit", month: "2-digit" })}
+              </div>
             </div>
+          ))}
+        </div>
+
+        <div className="flex">
+          {/* Coluna das horas. */}
+          <div className="w-12 shrink-0 relative" style={{ height: alturaTotal }}>
+            {horas.map((h) => (
+              <div
+                key={h}
+                className="absolute right-1 -translate-y-1/2 text-[10px] text-gray-400"
+                style={{ top: ((h * 60 - minInicio) / 60) * ALTURA_HORA_PX }}
+              >
+                {String(h).padStart(2, "0")}h
+              </div>
+            ))}
           </div>
 
-          {lista.length === 0 ? (
-            <div className="text-[11px] text-gray-300">—</div>
-          ) : (
-            <div className="space-y-1">
-              {lista.map((pedido) => (
-                <div key={pedido.id} className="flex flex-wrap items-center gap-2 text-xs">
-                  <span className="font-semibold w-12 shrink-0">{pedido.horaInicio}</span>
-                  <span className="text-gray-700">{pedido.clinica.nome}</span>
-                  <span className="text-gray-400">{pedido.servico.nome}</span>
-                  <span className="text-gray-500">
-                    {pedido.profissional?.nome ?? <span className="text-red-600 font-semibold">sem profissional</span>}
-                  </span>
-                  <SeloStatus status={pedido.status} />
-                </div>
+          {/* Uma coluna por dia, com os blocos posicionados. */}
+          {colunas.map((c) => (
+            <div
+              key={c.iso}
+              className={`flex-1 min-w-[80px] relative border-l border-gray-100 ${c.hoje ? "bg-bordo/5" : ""}`}
+              style={{ height: alturaTotal }}
+            >
+              {/* Linhas de hora, para o olho ancorar. */}
+              {horas.map((h) => (
+                <div
+                  key={h}
+                  className="absolute left-0 right-0 border-t border-gray-100"
+                  style={{ top: ((h * 60 - minInicio) / 60) * ALTURA_HORA_PX }}
+                />
               ))}
+
+              {c.lista.map((pedido) => {
+                const inicioMin = paraMinutos(pedido.horaInicio);
+                const top = Math.max(((inicioMin - minInicio) / 60) * ALTURA_HORA_PX, 0);
+                const altura = Math.max((pedido.duracaoMin / 60) * ALTURA_HORA_PX, 22);
+                const semProfissional = !pedido.profissionalId;
+                return (
+                  <Link
+                    key={pedido.id}
+                    href={`/painel/pedidos/${pedido.id}`}
+                    title={`${pedido.horaInicio} · ${pedido.clinica.nome} · ${pedido.servico.nome} · ${
+                      pedido.profissional?.nome ?? "sem profissional"
+                    } · ${ROTULO_STATUS[pedido.status]}`}
+                    className={`absolute left-0.5 right-0.5 rounded-md px-1.5 py-0.5 overflow-hidden border-l-2 ${
+                      semProfissional ? "border-red-500 bg-red-50" : "border-bordo/40"
+                    } ${COR_STATUS[pedido.status]}`}
+                    style={{ top, height: altura }}
+                  >
+                    <div className="text-[10px] font-semibold leading-tight truncate">
+                      {pedido.horaInicio} {pedido.clinica.nome}
+                    </div>
+                    <div className="text-[9px] leading-tight truncate opacity-80">{pedido.servico.nome}</div>
+                    {semProfissional && (
+                      <div className="text-[9px] font-semibold leading-tight text-red-600 truncate">
+                        sem profissional
+                      </div>
+                    )}
+                  </Link>
+                );
+              })}
             </div>
-          )}
-        </Cartao>
-      ))}
-    </div>
+          ))}
+        </div>
+      </div>
+    </Cartao>
   );
 }
