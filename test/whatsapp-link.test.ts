@@ -1,6 +1,12 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { formatarTelefone, linkWhatsapp, mensagemDeUrgencia, numeroParaWhatsapp } from "../src/lib/whatsapp-link";
+import {
+  formatarTelefone,
+  linkWhatsapp,
+  mensagemDeFeedback,
+  mensagemDeUrgencia,
+  numeroParaWhatsapp,
+} from "../src/lib/whatsapp-link";
 
 test("completa o código do país quando o cadastro veio sem ele", () => {
   assert.equal(numeroParaWhatsapp("(11) 99477-2191"), "5511994772191");
@@ -56,4 +62,31 @@ test("a máscara do telefone acompanha o tanto de dígito já digitado", () => {
 test("a máscara do telefone ignora o que não é dígito e trava em 11", () => {
   assert.equal(formatarTelefone("(11) 99477-2191"), "(11) 99477-2191");
   assert.equal(formatarTelefone("11994772191999"), "(11) 99477-2191");
+});
+
+// ── Feedback do pós-venda (ata de 28/09) ────────────────────────────────────
+
+test("a mensagem de feedback avisa do relatório e pede avaliação", () => {
+  const texto = mensagemDeFeedback({ clinica: "Santa Rita", servico: "PRF", data: "10/03" });
+  assert.match(texto, /Hemoderi/);
+  assert.match(texto, /relat[óo]rio/i);
+  assert.match(texto, /Santa Rita/);
+  assert.match(texto, /PRF/);
+  assert.match(texto, /10\/03/);
+});
+
+test("o feedback não carrega o nome de quem atendeu", () => {
+  // Mesma imparcialidade do portal: entre clínica e Hemoderi, o atendimento
+  // é da Hemoderi. A função nem recebe o nome do profissional — este teste
+  // guarda que ninguém adicione um "Dr. Fulano" à mensagem depois.
+  const texto = mensagemDeFeedback({ clinica: "Santa Rita", servico: "PRF", data: "10/03" });
+  assert.doesNotMatch(texto, /\bDr[a]?\.?\s|enfermeir/i);
+});
+
+test("o feedback se vira sem serviço nem data", () => {
+  // Pedido antigo, sem tudo preenchido, ainda gera uma mensagem que faz
+  // sentido — não "o atendimento de undefined".
+  const texto = mensagemDeFeedback({ clinica: "Santa Rita" });
+  assert.match(texto, /o atendimento já está fechado|o atendimento/);
+  assert.doesNotMatch(texto, /undefined|null/);
 });

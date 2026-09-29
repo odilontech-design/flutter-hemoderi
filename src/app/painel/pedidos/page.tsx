@@ -7,6 +7,7 @@ import { formatarDataCurta } from "@/lib/data";
 import { formatarReais } from "@/lib/dinheiro";
 import { ETAPAS, etapaDoPerfil, etapaPorChave } from "@/lib/esteira";
 import { formatarAtraso, houveAtraso, minutosDeAtraso } from "@/lib/atraso";
+import { linkWhatsapp, mensagemDeFeedback } from "@/lib/whatsapp-link";
 import { profissionaisIndisponiveis } from "@/lib/alocacao";
 import { AcoesPedido } from "./AcoesPedido";
 import { CondicaoPagamento } from "./CondicaoPagamento";
@@ -48,7 +49,7 @@ export default async function Esteira({
       orderBy: [{ data: "asc" }, { horaInicio: "asc" }],
       take: 200,
       include: {
-        clinica: { select: { nome: true } },
+        clinica: { select: { nome: true, telefone: true } },
         servico: { select: { nome: true } },
         profissional: { select: { nome: true } },
         relatorio: {
@@ -275,8 +276,35 @@ export default async function Esteira({
                       />
                     )}
                   {pedido.relatorio?.aprovadoEm && (
-                    <div className="text-[10px] font-semibold text-green-700 mt-1">
-                      relatório conferido · repasse liberado
+                    <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1">
+                      <span className="text-[10px] font-semibold text-green-700">
+                        relatório conferido · repasse liberado
+                      </span>
+                      {/* Feedback via WhatsApp (ata de 28/09): depois de
+                          aprovar, o pós-venda avisa a clínica que o relatório
+                          está pronto e pede a avaliação. Só aparece com um
+                          número para onde mandar — sem telefone, o link abriria
+                          em branco. */}
+                      {(() => {
+                        const link = linkWhatsapp(
+                          pedido.clinica.telefone,
+                          mensagemDeFeedback({
+                            clinica: pedido.clinica.nome,
+                            servico: pedido.servico.nome,
+                            data: formatarDataCurta(pedido.data),
+                          })
+                        );
+                        return link ? (
+                          <a
+                            href={link}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center gap-1 text-[10px] font-semibold text-[#1EA952] hover:underline"
+                          >
+                            pedir feedback no WhatsApp →
+                          </a>
+                        ) : null;
+                      })()}
                     </div>
                   )}
                   {pedido.relatorio?.latitude != null && pedido.relatorio?.longitude != null && (

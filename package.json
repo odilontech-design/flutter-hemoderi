@@ -30,7 +30,8 @@
     "fumaca:avisos": "dotenv -e .env -- node scripts/fumaca-avisos.mjs",
     "fumaca:relatorio": "dotenv -e .env -- node scripts/fumaca-relatorio.mjs",
     "fumaca:atrasos": "dotenv -e .env -- node scripts/fumaca-atrasos.mjs",
-    "fumaca:disponibilidade": "dotenv -e .env -- node scripts/fumaca-disponibilidade.mjs"
+    "fumaca:disponibilidade": "dotenv -e .env -- node scripts/fumaca-disponibilidade.mjs",
+    "fumaca:feedback": "dotenv -e .env -- node scripts/fumaca-feedback.mjs"
   },
   "prisma": {
     "seed": "dotenv -e .env -- tsx prisma/seed.ts"

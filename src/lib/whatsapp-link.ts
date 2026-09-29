@@ -66,3 +66,35 @@ export function mensagemDeUrgencia(pedido: PedidoUrgente): string {
   ];
   return linhas.filter((l) => l !== null).join("\n");
 }
+
+/**
+ * A mensagem que o pós-venda manda à clínica depois de aprovar o relatório
+ * (ata de 28/09).
+ *
+ * Diferente da urgência, esta é a Hemoderi falando com o cliente, não o
+ * contrário — então a voz é da operação. Junta duas coisas que a Stephanie
+ * hoje faz em duas mensagens: avisar que o relatório do atendimento está
+ * pronto e pedir a avaliação. Texto padrão de propósito: é o que ela
+ * dispara dezenas de vezes por semana, e reescrever a cada vez é onde o
+ * pedido de feedback deixa de acontecer.
+ *
+ * O nome de quem atendeu NÃO entra: entre a clínica e a Hemoderi o
+ * atendimento é da Hemoderi, e pôr o profissional aqui abriria a porta para
+ * a clínica pedir "manda o mesmo de novo" por fora — a mesma imparcialidade
+ * que esconde o profissional no portal até 24h antes (ata de 14/09).
+ */
+export function mensagemDeFeedback(pedido: {
+  clinica: string;
+  servico?: string | null;
+  data?: string | null;
+}): string {
+  const oQue = pedido.servico ? `o atendimento de ${pedido.servico}` : "o atendimento";
+  const quando = pedido.data ? ` do dia ${pedido.data}` : "";
+  return [
+    `Olá! Aqui é da Hemoderi.`,
+    "",
+    `O relatório ${oQue}${quando} já está fechado e disponível no seu portal.`,
+    "",
+    `Como foi a experiência? Sua avaliação ajuda a gente a mandar sempre o melhor profissional para a ${pedido.clinica}. É rapidinho, e você pode responder por aqui mesmo ou lá no portal.`,
+  ].join("\n");
+}
