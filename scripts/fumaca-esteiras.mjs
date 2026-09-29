@@ -126,6 +126,32 @@ try {
     select: { status: true },
   });
   ok("o comercial confirma e o pedido passa para a logística", depoisDoComercial.status === "CONFIRMADO", depoisDoComercial.status);
+
+  // ── Cancelamento é só de Ana, André e Naiara (ata de 28/09) ──────────────
+  // O pedido está CONFIRMADO (não-terminal), então o botão de cancelar existe
+  // para quem pode. O comercial (Ana) já está logado nesta tela.
+  await p.goto(`${BASE}/painel/pedidos?filtro=todos`);
+  await p.waitForTimeout(1500);
+  ok(
+    "o comercial vê o botão de cancelar",
+    (await p.locator('button:has-text("Cancelar")').count()) > 0
+  );
+
+  await entrar(p, "posvenda@hemoderi.com.br");
+  await p.goto(`${BASE}/painel/pedidos?filtro=todos`);
+  await p.waitForTimeout(1500);
+  ok(
+    "o pós-venda não vê o botão de cancelar",
+    (await p.locator('button:has-text("Cancelar")').count()) === 0
+  );
+
+  await entrar(p, "equipe@hemoderi.com.br");
+  await p.goto(`${BASE}/painel/pedidos?filtro=todos`);
+  await p.waitForTimeout(1500);
+  ok(
+    "o responsável (André, Naiara) vê o botão de cancelar",
+    (await p.locator('button:has-text("Cancelar")').count()) > 0
+  );
 } finally {
   await nav.close();
   await prisma.pedido.deleteMany({ where: { doutorNome: "Dra. Esteira" } });

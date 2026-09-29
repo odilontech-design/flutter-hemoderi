@@ -137,7 +137,9 @@ try {
 
   await prof.locator('button:has-text("Não consigo atender")').first().click();
   await prof.waitForTimeout(400);
-  ok("recusa exige motivo", await prof.locator('button:has-text("Confirmar recusa")').isDisabled());
+  // Motivo é opcional desde a ata de 28/09: o botão de confirmar não fica
+  // travado esperando texto. O motivo, quando dado, ajuda a logística.
+  ok("recusa não fica travada esperando motivo", !(await prof.locator('button:has-text("Confirmar recusa")').isDisabled()));
   await prof.locator("textarea").first().fill("Estou em outra cidade nesse dia");
   await prof.waitForTimeout(200);
   await prof.locator('button:has-text("Confirmar recusa")').click();
