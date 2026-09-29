@@ -56,6 +56,9 @@ export default async function Esteira({
             longitude: true,
             aprovadoEm: true,
             servicosAdicionais: true,
+            clinicaNomeInformado: true,
+            enderecoInformado: true,
+            doutorNomeInformado: true,
             ajudaCustoCentavos: true,
             ajudaCustoJustificativa: true,
             servicoValidadoEm: true,
@@ -218,6 +221,28 @@ export default async function Esteira({
                   {pedido.relatorio?.servicosAdicionais && (
                     <div className="text-[11px] text-amber-800 mt-1">
                       <strong>Além do contratado:</strong> {pedido.relatorio.servicosAdicionais}
+                    </div>
+                  )}
+                  {/* O atendimento saiu diferente do agendado (ata de 28/09).
+                      Só aparece quando de fato divergiu — a action grava nulo
+                      quando o profissional deixa o campo como estava. */}
+                  {pedido.relatorio?.clinicaNomeInformado && (
+                    <div className="text-[11px] text-amber-800">
+                      <strong>Atendido em:</strong> {pedido.relatorio.clinicaNomeInformado}{" "}
+                      <span className="text-gray-400">(agendado: {pedido.clinica.nome})</span>
+                    </div>
+                  )}
+                  {pedido.relatorio?.enderecoInformado && (
+                    <div className="text-[11px] text-amber-800">
+                      <strong>Endereço do dia:</strong> {pedido.relatorio.enderecoInformado}
+                    </div>
+                  )}
+                  {pedido.relatorio?.doutorNomeInformado && (
+                    <div className="text-[11px] text-amber-800">
+                      <strong>Quem recebeu:</strong> {pedido.relatorio.doutorNomeInformado}
+                      {pedido.doutorNome && (
+                        <span className="text-gray-400"> (agendado: {pedido.doutorNome})</span>
+                      )}
                     </div>
                   )}
                   {pedido.relatorio?.ajudaCustoCentavos != null && (

@@ -3,7 +3,13 @@
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { exigirProfissional } from "@/lib/sessao";
-import { ajudaCustoEmCentavos, camposClinicosEmBranco, CAMPOS_CLINICOS } from "@/lib/relatorio";
+import {
+  ajudaCustoEmCentavos,
+  camposClinicosEmBranco,
+  CAMPOS_CLINICOS,
+  divergiu,
+  enderecoEmUmaLinha,
+} from "@/lib/relatorio";
 import { registrarResultado, type Resultado } from "./pedidos";
 
 /**
@@ -29,7 +35,13 @@ export async function enviarRelatorio(_anterior: Resultado, dados: FormData): Pr
   // formulário fecharia o atendimento de outra pessoa.
   const pedido = await prisma.pedido.findFirst({
     where: { id: pedidoId, profissionalId: sessao.profissionalId },
-    select: { id: true, status: true, relatorio: { select: { aprovadoEm: true } } },
+    select: {
+      id: true,
+      status: true,
+      doutorNome: true,
+      clinica: { select: { nome: true, endereco: true, numero: true, bairro: true, cidade: true, uf: true } },
+      relatorio: { select: { aprovadoEm: true } },
+    },
   });
   if (!pedido) return { ok: false, erro: "Atendimento não encontrado na sua agenda." };
 
@@ -84,6 +96,15 @@ export async function enviarRelatorio(_anterior: Resultado, dados: FormData): Pr
       ? { latitude, longitude, precisaoMetros: Number.isFinite(precisaoMetros) ? precisaoMetros : null }
       : { latitude: null, longitude: null, precisaoMetros: null };
 
+  const clinicaNome = String(dados.get("clinicaNomeInformado") ?? "").trim();
+  const endereco = String(dados.get("enderecoInformado") ?? "").trim();
+  const doutor = String(dados.get("doutorNomeInformado") ?? "").trim();
+  const correcoesDoAgendamento = {
+    clinicaNomeInformado: divergiu(pedido.clinica.nome, clinicaNome) ? clinicaNome : null,
+    enderecoInformado: divergiu(enderecoEmUmaLinha(pedido.clinica), endereco) ? endereco : null,
+    doutorNomeInformado: divergiu(pedido.doutorNome, doutor) ? doutor : null,
+  };
+
   const conteudo = {
     compareceu,
     inicioReal: String(dados.get("inicioReal") ?? "") || null,
@@ -101,6 +122,11 @@ export async function enviarRelatorio(_anterior: Resultado, dados: FormData): Pr
     // nova, chave trocada). É a que vale para ESTE repasse: conferir agora
     // evita o pagamento devolvido três dias depois.
     chavePixConfirmada: String(dados.get("chavePixConfirmada") ?? "").trim() || null,
+    // Os dados do agendamento como ele aconteceu (ata de 28/09). Guardados
+    // SÓ quando divergem do que estava marcado: o formulário chega com o
+    // agendado preenchido, e gravar o texto igual encheria a conferência do
+    // pós-venda de "divergências" que são o próprio valor de origem.
+    ...correcoesDoAgendamento,
   };
 
   await prisma.relatorioAtendimento.upsert({

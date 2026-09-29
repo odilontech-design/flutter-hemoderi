@@ -76,3 +76,66 @@ export function ajudaCustoEmCentavos(texto: string): number | null | undefined {
   if (!Number.isFinite(valor) || valor < 0) return undefined;
   return Math.round(valor * 100);
 }
+
+/**
+ * Os dados do agendamento que o profissional pode corrigir no relatório
+ * (ata de 28/09). O identificador do pedido fica de fora de propósito: é a
+ * chave que liga relatório, repasse e fatura, e editável ele deixaria de
+ * identificar coisa alguma.
+ */
+export const CAMPOS_AGENDAMENTO = [
+  {
+    nome: "clinicaNomeInformado",
+    rotulo: "Clínica",
+    ajuda: "Se o atendimento saiu em outra unidade, escreva qual.",
+  },
+  {
+    nome: "enderecoInformado",
+    rotulo: "Endereço do atendimento",
+    ajuda: "Corrija se o endereço do dia foi outro.",
+  },
+  {
+    nome: "doutorNomeInformado",
+    rotulo: "Doutor(a) responsável",
+    ajuda: "Quem de fato recebeu, se não foi quem estava no agendamento.",
+  },
+] as const;
+
+export type CampoAgendamento = (typeof CAMPOS_AGENDAMENTO)[number]["nome"];
+
+/**
+ * O que o profissional informou é diferente do que estava agendado?
+ *
+ * Compara ignorando espaço, caixa e ACENTO: "Clínica Santa Rita" e
+ * "clinica santa rita " são a mesma resposta digitada com pressa — teclado de
+ * celular em campo, entre um atendimento e outro, come acento o tempo todo.
+ * Tratar isso como divergência encheria a conferência do pós-venda de alarme
+ * falso, que é como se ensina a equipe a ignorar o alarme verdadeiro.
+ */
+export function divergiu(agendado: string | null | undefined, informado: string | null | undefined): boolean {
+  const limpo = (valor: string | null | undefined) =>
+    (valor ?? "")
+      .normalize("NFD")
+      .replace(/[̀-ͯ]/g, "")
+      .trim()
+      .toLowerCase();
+  const declarado = limpo(informado);
+  // Sem correção declarada não há divergência: nulo quer dizer "saiu como
+  // estava marcado", não "o profissional apagou o campo".
+  if (!declarado) return false;
+  return declarado !== limpo(agendado);
+}
+
+/** O endereço da clínica em uma linha — a mesma string que a tela mostra e
+ *  que a comparação de divergência usa. Duas montagens diferentes fariam o
+ *  sistema acusar divergência por causa de uma vírgula. */
+export function enderecoEmUmaLinha(clinica: {
+  endereco?: string | null;
+  numero?: string | null;
+  bairro?: string | null;
+  cidade?: string | null;
+  uf?: string | null;
+}): string {
+  const rua = [clinica.endereco, clinica.numero].filter(Boolean).join(", ");
+  return [rua, clinica.bairro, clinica.cidade, clinica.uf].filter(Boolean).join(" · ");
+}

@@ -835,6 +835,23 @@ model RelatorioAtendimento {
   /// separada só para serviço.
   servicosAdicionais String?
 
+  /// O agendamento como ele ACONTECEU, quando divergiu do que foi marcado
+  /// (ata de 28/09). O atendimento sai num endereço que a clínica mudou na
+  /// véspera, quem recebe é outro doutor, a unidade é a filial — e hoje
+  /// isso só existia como observação solta, quando existia.
+  ///
+  /// São CORREÇÕES DO RELATÓRIO, não edição do cadastro: gravar direto na
+  /// Clinica deixaria um profissional renomear a clínica para todo mundo, e
+  /// um endereço trocado em campo não deve reescrever a base que a logística
+  /// usa para alocar os próximos. A equipe vê a divergência ao conferir e
+  /// decide se o cadastro muda.
+  ///
+  /// Nulo é o normal: significa "saiu como estava marcado". Só é preenchido
+  /// quando o profissional de fato altera o campo.
+  clinicaNomeInformado String?
+  enderecoInformado    String?
+  doutorNomeInformado  String?
+
   /// Deslocamento. Não é tabelado: a régua é até 150km, mas varia por
   /// quilometragem excedente e por tipo de transporte (moto x carro), então
   /// entra caso a caso e passa por validação própria na aprovação.

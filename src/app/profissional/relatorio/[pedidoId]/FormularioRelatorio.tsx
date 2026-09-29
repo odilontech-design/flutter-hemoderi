@@ -7,7 +7,7 @@ import { Area, Aviso, Botao, Campo, Rotulo, Selecao } from "@/components/ui";
 import { enviarRelatorio } from "@/app/actions/relatorio";
 import type { Resultado } from "@/app/actions/pedidos";
 import { obterLocalizacao } from "@/lib/geolocalizacao";
-import { CAMPOS_CLINICOS, NAO_SE_APLICA } from "@/lib/relatorio";
+import { CAMPOS_AGENDAMENTO, CAMPOS_CLINICOS, NAO_SE_APLICA } from "@/lib/relatorio";
 
 const INICIAL: Resultado = { ok: false };
 
@@ -119,6 +119,24 @@ export function FormularioRelatorio({
   return (
     <form ref={formRef} onSubmit={aoSubmeter} className="space-y-4">
       <input type="hidden" name="pedidoId" value={pedidoId} />
+
+      {/* Os dados do agendamento, abertos para correção (ata de 28/09): o
+          atendimento sai numa filial, quem recebe é outro doutor, o endereço
+          mudou na véspera. Chegam preenchidos com o que foi marcado — quem
+          não mexe não declara divergência nenhuma. */}
+      <div className="rounded-xl border border-gray-200 p-3 space-y-3">
+        <div className="text-[11px] text-gray-500 leading-relaxed">
+          Confira os dados do atendimento. Se algo saiu diferente do agendado, corrija aqui — a
+          central confere depois.
+        </div>
+        {CAMPOS_AGENDAMENTO.map((campo) => (
+          <div key={campo.nome}>
+            <Rotulo>{campo.rotulo}</Rotulo>
+            <Campo name={campo.nome} defaultValue={valores[campo.nome] ?? ""} />
+            <div className="text-[10px] text-gray-400 mt-1">{campo.ajuda}</div>
+          </div>
+        ))}
+      </div>
 
       <div>
         <Rotulo>O paciente compareceu?</Rotulo>
