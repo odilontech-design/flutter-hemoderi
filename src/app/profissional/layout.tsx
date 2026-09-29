@@ -23,6 +23,11 @@ export default async function LayoutProfissional({ children }: { children: React
           subtitulo="Portal do profissional"
           nomeUsuario={sessao.nome}
           itens={ITENS}
+          trocaPerfil={
+            sessao.dualPerfil
+              ? { href: "/painel", rotulo: "Ir para equipe Hemoderi" }
+              : undefined
+          }
         />
         <main className="flex-1 min-h-screen overflow-x-hidden p-4 pt-20 md:p-8">{children}</main>
       <BotaoWhatsapp contexto="portal do profissional" />

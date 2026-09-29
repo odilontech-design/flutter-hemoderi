@@ -10,5 +10,5 @@ export { default } from "next-auth/middleware";
 // provisória), então o middleware é o que a mantém fora do alcance de quem
 // não está autenticado.
 export const config = {
-  matcher: ["/painel/:path*", "/portal/:path*", "/profissional/:path*", "/trocar-senha"],
+  matcher: ["/painel/:path*", "/portal/:path*", "/profissional/:path*", "/trocar-senha", "/escolher-perfil"],
 };

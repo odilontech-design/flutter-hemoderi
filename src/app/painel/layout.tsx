@@ -59,7 +59,16 @@ export default async function LayoutPainel({ children }: { children: React.React
   return (
     <Provedores>
       <div className="flex">
-        <MenuLateral titulo="Hemoderi" nomeUsuario={sessao.nome} itens={itens} />
+        <MenuLateral
+          titulo="Hemoderi"
+          nomeUsuario={sessao.nome}
+          itens={itens}
+          trocaPerfil={
+            sessao.profissionalId
+              ? { href: "/profissional", rotulo: "Ir para portal profissional" }
+              : undefined
+          }
+        />
         <main className="flex-1 min-h-screen overflow-x-hidden p-4 pt-20 md:p-8">{children}</main>
         <AvisoDeFila />
       </div>

@@ -16,5 +16,10 @@ export const dynamic = "force-dynamic";
 export default async function Raiz() {
   const sessao = await getServerSession(authOptions);
   if (!sessao?.user) redirect("/agendar");
+
+  const u = sessao.user as any;
+  // Usuário INTERNO com profissionalId = dual-perfil → escolha de ambiente.
+  if (u.papel === "INTERNO" && u.profissionalId) redirect("/escolher-perfil");
+
   redirect(inicioDe(sessao.user.papel));
 }
