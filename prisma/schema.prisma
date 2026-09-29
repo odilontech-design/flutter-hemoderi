@@ -1104,10 +1104,164 @@ model Fatura {
 
   atualizadaEm DateTime @updatedAt
 
-  pedidos Pedido[]
+  /// Desconto concedido, em centavos. Preenchido quando um cupom é aplicado —
+  /// o valor da fatura continua bruto; o líquido = valorCentavos - descontoCentavos.
+  descontoCentavos Int @default(0)
+
+  pedidos     Pedido[]
+  aplicacoes  AplicacaoCupom[]
+  cobrancas   CobrancaPix[]
 
   @@unique([clinicaId, competencia])
   @@index([status, vencimento])
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Cupons de desconto
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// Tipo do desconto: percentual sobre o valor do serviço, ou valor fixo em
+/// centavos. Os dois existem porque a operação pratica os dois: "10% para quem
+/// retorna em 30 dias" e "R$ 50 de cortesia por atraso" são regras reais que
+/// não cabem no mesmo formato.
+enum TipoDesconto {
+  PERCENTUAL
+  VALOR_FIXO
+}
+
+/// Cupom de desconto criado pela equipe da Hemoderi.
+///
+/// Nasceu de decisão do André: a operação quer oferecer desconto como
+/// ferramenta comercial e de pós-venda — cortesia por atraso, incentivo de
+/// retorno, campanha de indicação. O cupom é aplicado no momento da cobrança
+/// (esteira do faturamento, pós-venda), não no agendamento: o serviço tem
+/// preço cheio, e o desconto é uma redução sobre a cobrança já gerada.
+///
+/// Configurável pela equipe: tipo (% ou R$), serviços elegíveis (um, vários
+/// ou todos), validade por data e/ou por quantidade de usos.
+model CupomDesconto {
+  id     String @id @default(cuid())
+  /// Código digitável — caixa-insensível, sem espaço, único.
+  codigo String @unique
+
+  descricao String?
+
+  tipo  TipoDesconto
+  /// % quando PERCENTUAL (ex: 10 = 10%), centavos quando VALOR_FIXO.
+  valor Int
+
+  /// Serviços elegíveis. Vazio = todos os serviços. É um array de ids de
+  /// Servico — sem relação formal porque a elegibilidade não é integridade
+  /// referencial (excluir um serviço não invalida o cupom, só encolhe o
+  /// alcance, e recriar o serviço com outro id é outra oferta).
+  servicoIds String[]
+
+  /// Validade por data — nulo = sem limite de data.
+  validoAte DateTime?
+
+  /// Quantas vezes o cupom pode ser usado no total. Nulo = ilimitado.
+  limiteUsos Int?
+  /// Contador de usos efetivos (aplicados em fatura). O cupom está esgotado
+  /// quando limiteUsos != null e usosRealizados >= limiteUsos.
+  usosRealizados Int @default(0)
+
+  ativo    Boolean  @default(true)
+  criadoEm DateTime @default(now())
+
+  aplicacoes AplicacaoCupom[]
+
+  @@index([codigo])
+  @@index([ativo, validoAte])
+}
+
+/// Registro de cada vez que um cupom foi aplicado a uma fatura. Existe
+/// separado do campo na fatura porque: (a) a auditoria precisa saber qual
+/// cupom foi usado, quando e por quem, (b) o contador de usos do cupom
+/// depende de contar estas linhas, e (c) reverter a aplicação é zerar na
+/// fatura e marcar aqui como revertido, sem perder o rastro.
+model AplicacaoCupom {
+  id String @id @default(cuid())
+
+  cupomId String
+  cupom   CupomDesconto @relation(fields: [cupomId], references: [id])
+
+  faturaId String
+  fatura   Fatura @relation(fields: [faturaId], references: [id])
+
+  /// Quanto foi efetivamente descontado, em centavos. Pode ser menor que o
+  /// valor nominal do cupom quando o desconto ultrapassa o valor da fatura.
+  descontoCentavos Int
+
+  aplicadoEm   DateTime @default(now())
+  aplicadoPorId String?
+
+  @@index([cupomId])
+  @@index([faturaId])
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Cobranças Pix (Santander)
+// ─────────────────────────────────────────────────────────────────────────────
+
+enum StatusCobrancaPix {
+  /// QR Code gerado, aguardando pagamento.
+  ATIVA
+  /// Paga pelo cliente — confirmação veio do webhook ou consulta.
+  CONCLUIDA
+  /// Expirou sem pagamento.
+  EXPIRADA
+  /// Cancelada pela equipe antes do pagamento.
+  CANCELADA
+}
+
+/// Uma cobrança Pix (cob) gerada via API do Santander para uma fatura.
+///
+/// André decidiu: todas as cobranças serão via Pix pelo Santander. A cobrança
+/// nasce quando o pós-venda (Stephanie) gera a cobrança na esteira do
+/// faturamento — depois que a fatura da clínica é fechada e o cupom (se
+/// houver) já foi aplicado.
+///
+/// O sistema gera uma cobrança com vencimento (cobv) via API Pix do
+/// Santander, que devolve o QR Code e o código copia-e-cola. A equipe
+/// compartilha com a clínica (WhatsApp), e o webhook confirma o pagamento.
+model CobrancaPix {
+  id String @id @default(cuid())
+
+  faturaId String
+  fatura   Fatura @relation(fields: [faturaId], references: [id])
+
+  /// Identificador da cobrança no Santander (txid). Único, gerado pelo
+  /// sistema no formato que o BACEN exige (26-35 alfanuméricos).
+  txid String @unique
+
+  /// Valor em centavos — pode diferir do valor da fatura se houve desconto.
+  valorCentavos Int
+
+  status StatusCobrancaPix @default(ATIVA)
+
+  /// O payload do QR Code (BRCode / EMV). É o que gera a imagem do QR.
+  qrCode     String?
+  /// Código copia-e-cola — o texto que o cliente cola no app do banco.
+  copiaECola String?
+  /// URL da imagem do QR Code retornada pela API.
+  imagemQrUrl String?
+
+  /// Chave Pix da Hemoderi (recebedora).
+  chavePix String
+
+  /// Vencimento da cobrança.
+  vencimento DateTime
+
+  /// End-to-end ID do pagamento, preenchido pelo webhook/consulta.
+  endToEndId String?
+  pagoEm     DateTime?
+
+  criadaEm     DateTime @default(now())
+  atualizadaEm DateTime @updatedAt
+
+  @@index([faturaId])
+  @@index([status])
+  @@index([txid])
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1159,6 +1313,7 @@ enum SistemaExterno {
   PIPEDRIVE
   GOOGLE_AGENDA
   WHATSAPP
+  SANTANDER
 }
 
 /// Log das chamadas a sistemas de terceiros. Existe porque falha de

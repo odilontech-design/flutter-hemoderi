@@ -29,6 +29,7 @@ const ITENS = [
   { href: "/painel/profissionais", icone: <IconeProfissionais />, rotulo: "Profissionais" },
   { href: "/painel/catalogo", icone: <IconeCatalogo />, rotulo: "Serviços e equipamentos" },
   { href: "/painel/financeiro", icone: <IconeFinanceiro />, rotulo: "Financeiro" },
+  { href: "/painel/cupons", icone: <IconeCatalogo />, rotulo: "Cupons de desconto" },
   { href: "/painel/integracoes", icone: <IconeCatalogo />, rotulo: "Integração PipeDrive" },
   { href: "/painel/acessos", icone: <IconeAcessos />, rotulo: "Acessos" },
 ];
@@ -38,7 +39,7 @@ const ITENS = [
 // é só atendente. Tirar do menu não substitui a guarda (`exigirResponsavel`
 // em cada página e ação): é só o que evita a pessoa clicar em algo que a
 // própria tela vai recusar.
-const ITENS_SO_RESPONSAVEL = new Set(["/painel/financeiro", "/painel/acessos", "/painel/integracoes"]);
+const ITENS_SO_RESPONSAVEL = new Set(["/painel/financeiro", "/painel/cupons", "/painel/acessos", "/painel/integracoes"]);
 
 // A grade de disponibilidade é a mesa da logística (ata de 28/09). Quem não
 // aloca não precisa dela no menu — mesma lógica dos itens de responsável:

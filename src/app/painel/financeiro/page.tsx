@@ -7,6 +7,8 @@ import { baixarFatura, fecharFatura, pagarRepasses } from "@/app/actions/finance
 import { competenciaAtual, competenciaPorExtenso, formatarData } from "@/lib/data";
 import { formatarReais } from "@/lib/dinheiro";
 import { GruposRepasse } from "./GruposRepasse";
+import { AplicarCupom } from "./AplicarCupom";
+import { GerarPix, DetalhePix } from "./CobrancaPix";
 
 export const dynamic = "force-dynamic";
 
@@ -39,7 +41,23 @@ export default async function Financeiro({ searchParams }: { searchParams: { com
     prisma.fatura.findMany({
       where: { competencia },
       orderBy: { numero: "asc" },
-      include: { clinica: { select: { nome: true } }, _count: { select: { pedidos: true } } },
+      include: {
+        clinica: { select: { nome: true } },
+        _count: { select: { pedidos: true } },
+        cobrancas: {
+          orderBy: { criadaEm: "desc" },
+          take: 1,
+          select: {
+            id: true,
+            txid: true,
+            valorCentavos: true,
+            status: true,
+            copiaECola: true,
+            imagemQrUrl: true,
+            pagoEm: true,
+          },
+        },
+      },
     }),
     prisma.repasse.groupBy({
       by: ["profissionalId", "status"],
@@ -175,7 +193,17 @@ export default async function Financeiro({ searchParams }: { searchParams: { com
                   <td className={`py-2 pr-3 font-semibold ${OCULTO_MOVEL}`}>{fatura.numero}</td>
                   <td className="py-2 pr-3">{fatura.clinica.nome}</td>
                   <td className={`py-2 pr-3 text-gray-500 ${OCULTO_MOVEL}`}>{formatarData(fatura.vencimento)}</td>
-                  <td className="py-2 pr-3">{formatarReais(fatura.valorCentavos)}</td>
+                  <td className="py-2 pr-3">
+                    {formatarReais(fatura.valorCentavos)}
+                    {fatura.descontoCentavos > 0 && (
+                      <div className="text-[10px] text-emerald-700">
+                        −{formatarReais(fatura.descontoCentavos)} cupom
+                        <span className="font-semibold ml-1">
+                          = {formatarReais(fatura.valorCentavos - fatura.descontoCentavos)}
+                        </span>
+                      </div>
+                    )}
+                  </td>
                   <td className="py-2 pr-3">
                     {fatura.status === "PAGA" ? (
                       <span className="text-emerald-700 font-semibold">paga</span>
@@ -185,7 +213,28 @@ export default async function Financeiro({ searchParams }: { searchParams: { com
                   </td>
                   <td className="py-2">
                     {fatura.status === "ABERTA" && (
-                      <BotaoAcao acao={baixarFatura.bind(null, fatura.id)}>Dar baixa</BotaoAcao>
+                      <div className="flex flex-wrap gap-1.5 items-start">
+                        <AplicarCupom faturaId={fatura.id} />
+                        {fatura.cobrancas.length === 0 ? (
+                          <GerarPix faturaId={fatura.id} />
+                        ) : (
+                          <DetalhePix
+                            cobranca={{
+                              ...fatura.cobrancas[0],
+                              pagoEm: fatura.cobrancas[0].pagoEm?.toISOString() ?? null,
+                            }}
+                          />
+                        )}
+                        <BotaoAcao acao={baixarFatura.bind(null, fatura.id)}>Dar baixa</BotaoAcao>
+                      </div>
+                    )}
+                    {fatura.status === "PAGA" && fatura.cobrancas.length > 0 && fatura.cobrancas[0].status === "CONCLUIDA" && (
+                      <DetalhePix
+                        cobranca={{
+                          ...fatura.cobrancas[0],
+                          pagoEm: fatura.cobrancas[0].pagoEm?.toISOString() ?? null,
+                        }}
+                      />
                     )}
                   </td>
                 </tr>
