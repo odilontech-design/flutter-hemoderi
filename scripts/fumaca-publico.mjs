@@ -67,24 +67,23 @@ try {
   await p.waitForTimeout(900);
   ok("escolher o serviço abre o passo do quando", (await p.innerText("body")).includes("2 · Quando"));
 
-  // passo 3 só depois de data e horário
-  ok("o passo de identificação ainda não apareceu", !(await p.innerText("body")).includes("3 · Quem é você"));
-  // Amanhã no fuso de São Paulo: perto da meia-noite UTC os dois calendários
-  // discordam, e um teste que só passa em parte do dia mente sobre o app.
-  const amanha = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Sao_Paulo" })
-    .format(new Date(Date.now() + 86400000));
-  await p.fill('input[type="date"]', amanha);
+  // passo 3 (onde) só depois de data e horário
+  ok("o passo do local ainda não apareceu", !(await p.innerText("body")).includes("3 · Onde é o atendimento"));
+  // Três dias à frente, no fuso de São Paulo. Não é excesso de margem: a
+  // regra da ata (dataMinimaAgendamentoPublico) exige +1 dia até as 18h e +2
+  // depois delas, então um teste marcado para "amanhã" passa de manhã e
+  // falha à noite — acusando o app por causa do relógio. E o fuso importa:
+  // perto da meia-noite UTC os dois calendários discordam.
+  const dataAlvo = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Sao_Paulo" })
+    .format(new Date(Date.now() + 3 * 86400000));
+  await p.fill('input[type="date"]', dataAlvo);
   await p.waitForTimeout(400);
   await p.locator('button[aria-pressed]:has-text("14:00")').first().click();
   await p.waitForTimeout(900);
-  ok("data e horário liberam a identificação", (await p.innerText("body")).includes("3 · Quem é você"));
-
-  // envia
-  await p.fill('input[name="solicitante"]', "Dra. Marina Teste");
-  await p.fill('input[name="telefone"]', `11 9${String(carimbo).slice(-8)}`);
-  await p.fill('input[name="clinicaNome"]', NOME_CLINICA);
-  await p.fill('input[name="email"]', `clinica.teste.${carimbo}@exemplo.com.br`);
-  await p.fill('input[name="doutorNome"]', "Dra. Marina");
+  ok("data e horário liberam o passo do local", (await p.innerText("body")).includes("3 · Onde é o atendimento"));
+  // A ordem que a ata de 28/09 fechou: o local vem ANTES da identificação, e
+  // o cadastro só aparece quando o endereço já está resolvido.
+  ok("a identificação ainda não apareceu", !(await p.innerText("body")).includes("4 · Quem é você"));
 
   // CEP (ata de 21/09 + item rápido de CPF/CNPJ, ambos com endereço
   // obrigatório). Sem rede para o serviço de CEP aqui, o preenchimento cai no
@@ -98,10 +97,24 @@ try {
   await p.fill('input[name="bairro"]', "Bela Vista");
   await p.fill('input[name="cidade"]', "São Paulo");
   await p.fill('input[name="uf"]', "SP");
+  await p.fill('input[name="doutorNome"]', "Dra. Marina");
+  await p.waitForTimeout(600);
+  ok("o endereço preenchido libera a identificação", (await p.innerText("body")).includes("4 · Quem é você"));
+
+  // envia
+  await p.fill('input[name="solicitante"]', "Dra. Marina Teste");
+  await p.fill('input[name="telefone"]', `11 9${String(carimbo).slice(-8)}`);
+  await p.fill('input[name="clinicaNome"]', NOME_CLINICA);
+  await p.fill('input[name="email"]', `clinica.teste.${carimbo}@exemplo.com.br`);
+  // CNPJ passou a ser obrigatório e conferido (ata de 28/09).
+  await p.fill('input[name="cnpj"]', "11222333000181");
 
   await p.locator('button:has-text("Enviar pedido de agendamento")').click();
   await p.waitForTimeout(3500);
   ok("o envio confirma sem pedir cadastro", (await p.innerText("body")).includes("Recebemos seu agendamento"), (await p.innerText("body")).slice(0, 200));
+  // O resumo do pedido na confirmação (ata de 28/09).
+  const confirmacao = await p.innerText("body");
+  ok("a confirmação mostra o resumo do pedido", confirmacao.includes("Aguardando confirmação da central"), confirmacao.slice(0, 300));
 
   // mobile
   const mob = await nav.newContext({ viewport: { width: 390, height: 800 } });

@@ -211,6 +211,12 @@ model Clinica {
   /// ou aceita mais gente do que cabe na sala.
   salas Int @default(1)
 
+  /// Como esta clínica paga, como regra: antecipado ou depois do
+  /// procedimento. Informação INTERNA da equipe (ata de 28/09) — a clínica
+  /// não vê isto no portal dela. Serve de padrão na hora de preencher a
+  /// condição de cada pedido, que continua podendo divergir caso a caso.
+  condicaoPagamento String?
+
   observacoes String?
 
   ativa        Boolean   @default(true)
@@ -711,7 +717,11 @@ model RecusaAtendimento {
   profissionalId String
   profissional   Profissional @relation(fields: [profissionalId], references: [id], onDelete: Cascade)
 
-  motivo   String
+  /// Opcional desde a ata de 28/09: André decidiu que exigir justificativa
+  /// para recusar trava quem está de fato indisponível e ainda enche a base
+  /// de "não posso" digitado só para o botão liberar. A série de recusas é o
+  /// que a operação acompanha — o texto é bônus, não pré-requisito.
+  motivo   String?
   criadaEm DateTime @default(now())
 
   @@index([profissionalId, criadaEm])

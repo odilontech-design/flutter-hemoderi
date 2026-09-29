@@ -37,16 +37,17 @@ function gradeDeHorarios(abertura: string, fechamento: string): string[] {
 /**
  * Escolher primeiro, identificar depois.
  *
- * Quatro passos agora, não três — a ata de 21/09 dividiu o antigo passo 1
- * (equipamento e procedimento juntos) e acrescentou identificação de verdade
- * no fim: o equipamento (a "família") vem primeiro, sozinho, para não jogar
- * as duas dezenas de procedimentos na cara de quem ainda nem escolheu o
- * essencial — as opções detalhadas só aparecem depois que o equipamento é
- * escolhido. E o último passo deixou de ser só "deixa seu contato": todo
- * pedido pelo site agora resolve a clínica na hora, por login de quem já é
- * cliente ou por um cadastro novo criado ali mesmo — é o que a ata chamou de
- * "cadastro obrigatório ao final", pensado para barrar robô e curioso vindos
- * de tráfego pago sem voltar a pedir identificação logo de cara.
+ * Quatro passos, na ordem que a ata de 28/09 fechou: equipamento e
+ * procedimento, quando, ONDE, e só então quem é você. André apontou que o
+ * formato anterior misturava o agendamento com o cadastro de usuário — o
+ * endereço do atendimento morava no mesmo bloco do login e do CNPJ, e quem
+ * chegava pelo anúncio via um formulário de cadastro quando ainda estava
+ * marcando um procedimento. Agora tudo que é do ATENDIMENTO (serviço, data,
+ * horário, local, doutor) vem antes, e a identificação fecha.
+ *
+ * A identificação continua obrigatória no fim (ata de 21/09): quem já é
+ * cliente entra com a conta, quem é novo ganha uma na hora. É o que barra
+ * robô e curioso de tráfego pago sem pedir cadastro logo de cara.
  *
  * O horário aqui é preferência, não reserva: sem saber de qual clínica é, o
  * sistema não tem como conferir sala nem equipamento, e prometer horário
@@ -77,6 +78,7 @@ export function VitrineAgendamento({
   const [horario, setHorario] = useState("");
   const [telefone, setTelefone] = useState("");
   const [modo, setModo] = useState<"novo" | "login">("novo");
+  const [enderecoPronto, setEnderecoPronto] = useState(false);
   const [clinicaNome, setClinicaNome] = useState("");
   const [doutorNome, setDoutorNome] = useState("");
   const [pacienteNome, setPacienteNome] = useState("");
@@ -143,6 +145,40 @@ export function VitrineAgendamento({
           Para acessar seus agendamentos e relatórios, entre no nosso sistema usando este mesmo
           e-mail.
         </p>
+
+        {/* O resumo do que foi pedido (ata de 28/09): a tela de sucesso antes
+            confirmava o envio sem repetir o conteúdo, e quem preencheu ficava
+            sem onde conferir se a data saiu certa. */}
+        {servico && data && horario && (
+          <div className="mt-4 border border-gray-200 rounded-xl divide-y divide-gray-100 text-xs">
+            <div className="px-3 py-2.5 flex justify-between gap-3">
+              <span className="text-gray-500">Procedimento</span>
+              <span className="font-semibold text-bordo text-right">{servico.nome}</span>
+            </div>
+            <div className="px-3 py-2.5 flex justify-between gap-3">
+              <span className="text-gray-500">Quando</span>
+              <span className="font-semibold text-right">
+                {data.split("-").reverse().join("/")} · por volta das {horario}
+              </span>
+            </div>
+            {doutorNome && (
+              <div className="px-3 py-2.5 flex justify-between gap-3">
+                <span className="text-gray-500">Doutor(a)</span>
+                <span className="font-semibold text-right">{doutorNome}</span>
+              </div>
+            )}
+            {pacienteNome && (
+              <div className="px-3 py-2.5 flex justify-between gap-3">
+                <span className="text-gray-500">Paciente</span>
+                <span className="font-semibold text-right">{pacienteNome}</span>
+              </div>
+            )}
+            <div className="px-3 py-2.5 flex justify-between gap-3">
+              <span className="text-gray-500">Situação</span>
+              <span className="font-semibold text-amber-700 text-right">Aguardando confirmação da central</span>
+            </div>
+          </div>
+        )}
 
         {estado.credencial && (
           <div className="mt-4 bg-bege rounded-xl p-4">
@@ -325,144 +361,165 @@ export function VitrineAgendamento({
         </section>
       )}
 
-      {/* ── 3. Quem é você ───────────────────────────────────────────────── */}
+      {/* ── 3. Onde, e 4. Quem é você ───────────────────────────────────── */}
+      {/* Um formulário só cobrindo os dois passos: o envio é um só, mas a
+          ordem na tela separa o que é do atendimento do que é cadastro. */}
       {servico && data && horario && (
-        <section className="scroll-mt-4">
-          <h2 className="font-display font-bold text-bordo text-sm mb-1">3 · Quem é você</h2>
-          <p className="text-[11px] text-gray-500 mb-4">
-            Já é cliente da Hemoderi? Entre com sua conta. Primeira vez? A gente cria seu acesso
-            agora — é rápido e evita repetir tudo isso no próximo pedido.
-          </p>
+        <form action={enviar} className="space-y-8">
+          <input type="hidden" name="servicoId" value={servico.id} />
+          <input type="hidden" name="data" value={data} />
+          <input type="hidden" name="horarioDesejado" value={horario} />
+          <input type="hidden" name="modo" value={modo} />
 
-          <div className="flex gap-2 mb-3">
-            <button
-              type="button"
-              onClick={() => setModo("novo")}
-              className={`text-xs font-semibold px-3.5 py-2.5 rounded-lg border ${
-                modo === "novo" ? "bg-bordo text-white border-bordo" : "border-gray-300 text-gray-600"
-              }`}
-            >
-              Primeira vez
-            </button>
-            <button
-              type="button"
-              onClick={() => setModo("login")}
-              className={`text-xs font-semibold px-3.5 py-2.5 rounded-lg border ${
-                modo === "login" ? "bg-bordo text-white border-bordo" : "border-gray-300 text-gray-600"
-              }`}
-            >
-              Já sou cliente
-            </button>
-          </div>
+          <section id="passo-onde" className="scroll-mt-4">
+            <h2 className="font-display font-bold text-bordo text-sm mb-1">3 · Onde é o atendimento</h2>
+            <p className="text-[11px] text-gray-500 mb-4">
+              É para onde levamos o profissional e o equipamento. O endereço vem do CEP.
+            </p>
 
-          <form action={enviar} className="bg-white border border-gray-200 rounded-2xl p-4 max-w-2xl space-y-3">
-            <input type="hidden" name="servicoId" value={servico.id} />
-            <input type="hidden" name="data" value={data} />
-            <input type="hidden" name="horarioDesejado" value={horario} />
-            <input type="hidden" name="modo" value={modo} />
-
-            <div className="bg-bege rounded-xl p-3 text-[11px] text-gray-600">
-              <strong className="text-bordo">{servico.nome}</strong> ·{" "}
-              {data.split("-").reverse().join("/")} por volta das {horario} · {servico.duracaoMin} min
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <div>
-                <Rotulo>Seu nome</Rotulo>
-                <Campo name="solicitante" required autoComplete="name" />
+            <div className="bg-white border border-gray-200 rounded-2xl p-4 max-w-2xl space-y-3">
+              <div className="bg-bege rounded-xl p-3 text-[11px] text-gray-600">
+                <strong className="text-bordo">{servico.nome}</strong> ·{" "}
+                {data.split("-").reverse().join("/")} por volta das {horario} · {servico.duracaoMin} min
               </div>
-              <div>
-                <Rotulo>WhatsApp com DDD</Rotulo>
-                <Campo
-                  name="telefone"
-                  required
-                  inputMode="tel"
-                  autoComplete="tel"
-                  placeholder="(11) 99999-0000"
-                  maxLength={16}
-                  value={telefone}
-                  onChange={(e) => setTelefone(formatarTelefone(e.target.value))}
-                />
-                <div className="text-[10px] text-gray-400 mt-1">É por aqui que a central responde.</div>
-              </div>
-            </div>
 
-            {modo === "login" ? (
+              <CamposEndereco aoPreencher={setEnderecoPronto} />
+              <div>
+                <Rotulo>Ponto de referência (opcional)</Rotulo>
+                <Campo name="pontoReferencia" placeholder="Perto do mercado X, portão azul…" />
+              </div>
+
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
-                  <Rotulo>E-mail da sua conta</Rotulo>
-                  <Campo name="emailLogin" type="email" required autoComplete="email" />
-                </div>
-                <div>
-                  <Rotulo>Senha</Rotulo>
-                  <Campo name="senhaLogin" type="password" required autoComplete="current-password" />
-                </div>
-              </div>
-            ) : (
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div>
-                  <Rotulo>Nome da clínica</Rotulo>
+                  <Rotulo>Doutor(a) responsável</Rotulo>
                   <Campo
-                    name="clinicaNome"
+                    name="doutorNome"
                     required
-                    value={clinicaNome}
-                    onChange={(e) => setClinicaNome(e.target.value)}
+                    value={doutorNome}
+                    onChange={(e) => setDoutorNome(e.target.value)}
                   />
-                </div>
-                <div>
-                  <Rotulo>E-mail</Rotulo>
-                  <Campo name="email" type="email" required autoComplete="email" />
                   <div className="text-[10px] text-gray-400 mt-1">
-                    Vira o login do portal — a senha a gente sorteia e mostra no fim.
+                    Quem responde pelo caso. É por este nome que a central pergunta.
                   </div>
                 </div>
-                <CampoDocumento tipo="cnpj" name="cnpj" rotulo="CNPJ (opcional)" />
+                <div>
+                  <Rotulo>Paciente (opcional)</Rotulo>
+                  <Campo
+                    name="pacienteNome"
+                    value={pacienteNome}
+                    onChange={(e) => setPacienteNome(e.target.value)}
+                  />
+                </div>
               </div>
-            )}
 
-            <div className="pt-1 border-t border-gray-100" />
-
-            <CamposEndereco />
-            <div>
-              <Rotulo>Ponto de referência (opcional)</Rotulo>
-              <Campo name="pontoReferencia" placeholder="Perto do mercado X, portão azul…" />
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
-                <Rotulo>Doutor(a) responsável (opcional)</Rotulo>
-                <Campo name="doutorNome" value={doutorNome} onChange={(e) => setDoutorNome(e.target.value)} />
-              </div>
-              <div>
-                <Rotulo>Paciente (opcional)</Rotulo>
-                <Campo
-                  name="pacienteNome"
-                  value={pacienteNome}
-                  onChange={(e) => setPacienteNome(e.target.value)}
+                <Rotulo>Alguma observação?</Rotulo>
+                <Area
+                  name="observacoes"
+                  rows={2}
+                  value={observacoes}
+                  onChange={(e) => setObservacoes(e.target.value)}
                 />
               </div>
             </div>
+          </section>
 
-            <div>
-              <Rotulo>Alguma observação?</Rotulo>
-              <Area
-                name="observacoes"
-                rows={2}
-                value={observacoes}
-                onChange={(e) => setObservacoes(e.target.value)}
-              />
-            </div>
+          {enderecoPronto && (
+            <section className="scroll-mt-4">
+              <h2 className="font-display font-bold text-bordo text-sm mb-1">4 · Quem é você</h2>
+              <p className="text-[11px] text-gray-500 mb-4">
+                Já é cliente da Hemoderi? Entre com sua conta. Primeira vez? A gente cria seu acesso
+                agora — é rápido e evita repetir tudo isso no próximo pedido.
+              </p>
 
-            {estado.erro && <Aviso tom="erro">{estado.erro}</Aviso>}
+              <div className="flex gap-2 mb-3">
+                <button
+                  type="button"
+                  onClick={() => setModo("novo")}
+                  className={`text-xs font-semibold px-3.5 py-2.5 rounded-lg border ${
+                    modo === "novo" ? "bg-bordo text-white border-bordo" : "border-gray-300 text-gray-600"
+                  }`}
+                >
+                  Primeira vez
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setModo("login")}
+                  className={`text-xs font-semibold px-3.5 py-2.5 rounded-lg border ${
+                    modo === "login" ? "bg-bordo text-white border-bordo" : "border-gray-300 text-gray-600"
+                  }`}
+                >
+                  Já sou cliente
+                </button>
+              </div>
 
-            <Botao type="submit" className="w-full py-3">
-              Enviar pedido de agendamento
-            </Botao>
-            <p className="text-[10px] text-gray-400 text-center">
-              Enviar não confirma o horário — a central retorna para fechar.
-            </p>
-          </form>
-        </section>
+              <div className="bg-white border border-gray-200 rounded-2xl p-4 max-w-2xl space-y-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <Rotulo>Seu nome</Rotulo>
+                    <Campo name="solicitante" required autoComplete="name" />
+                  </div>
+                  <div>
+                    <Rotulo>WhatsApp com DDD</Rotulo>
+                    <Campo
+                      name="telefone"
+                      required
+                      inputMode="tel"
+                      autoComplete="tel"
+                      placeholder="(11) 99999-0000"
+                      maxLength={16}
+                      value={telefone}
+                      onChange={(e) => setTelefone(formatarTelefone(e.target.value))}
+                    />
+                    <div className="text-[10px] text-gray-400 mt-1">É por aqui que a central responde.</div>
+                  </div>
+                </div>
+
+                {modo === "login" ? (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                      <Rotulo>E-mail da sua conta</Rotulo>
+                      <Campo name="emailLogin" type="email" required autoComplete="email" />
+                    </div>
+                    <div>
+                      <Rotulo>Senha</Rotulo>
+                      <Campo name="senhaLogin" type="password" required autoComplete="current-password" />
+                    </div>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                      <Rotulo>Nome da clínica</Rotulo>
+                      <Campo
+                        name="clinicaNome"
+                        required
+                        value={clinicaNome}
+                        onChange={(e) => setClinicaNome(e.target.value)}
+                      />
+                    </div>
+                    <div>
+                      <Rotulo>E-mail</Rotulo>
+                      <Campo name="email" type="email" required autoComplete="email" />
+                      <div className="text-[10px] text-gray-400 mt-1">
+                        Vira o login do portal — a senha a gente sorteia e mostra no fim.
+                      </div>
+                    </div>
+                    <CampoDocumento tipo="cnpj" name="cnpj" rotulo="CNPJ (ou CPF)" obrigatorio />
+                  </div>
+                )}
+
+                {estado.erro && <Aviso tom="erro">{estado.erro}</Aviso>}
+
+                <Botao type="submit" className="w-full py-3">
+                  Enviar pedido de agendamento
+                </Botao>
+                <p className="text-[10px] text-gray-400 text-center">
+                  Enviar não confirma o horário — a central retorna para fechar.
+                </p>
+              </div>
+            </section>
+          )}
+        </form>
       )}
     </div>
   );

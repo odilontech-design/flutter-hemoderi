@@ -8,10 +8,13 @@ import { obterLocalizacao } from "@/lib/geolocalizacao";
 /**
  * Aceitar ou recusar um atendimento que a logística indicou.
  *
- * A recusa pede motivo e só existe aqui, antes do aceite: depois de aceitar,
- * sair do caso é decisão da logística (ata de 21/09). Por isso o botão de
- * recusar some da tela no instante em que a pessoa aceita — e não vira um
- * botão desabilitado com explicação, que é convite para tentar.
+ * A recusa só existe aqui, antes do aceite: depois de aceitar, sair do caso é
+ * decisão da logística (ata de 21/09). Por isso o botão de recusar some da
+ * tela no instante em que a pessoa aceita — e não vira um botão desabilitado
+ * com explicação, que é convite para tentar.
+ *
+ * O motivo é opcional (ata de 28/09): ajuda a logística a remanejar, mas
+ * exigir texto para poder recusar só trava quem está de fato indisponível.
  */
 export function AceiteAlocacao({ pedidoId }: { pedidoId: string }) {
   const [pendente, iniciar] = useTransition();
@@ -32,14 +35,14 @@ export function AceiteAlocacao({ pedidoId }: { pedidoId: string }) {
       <div className="space-y-2">
         <Area
           rows={2}
-          placeholder="Por que não consegue atender? A logística precisa saber para remanejar."
+          placeholder="Se puder, diga o motivo — ajuda a logística a remanejar. (opcional)"
           value={motivo}
           onChange={(e) => setMotivo(e.target.value)}
         />
         <div className="flex flex-wrap gap-2">
           <Botao
             variante="perigo"
-            disabled={pendente || !motivo.trim()}
+            disabled={pendente}
             onClick={() => executar(() => recusarAlocacao(pedidoId, motivo))}
           >
             Confirmar recusa

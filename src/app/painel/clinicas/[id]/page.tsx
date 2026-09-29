@@ -2,10 +2,12 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { exigirInterno } from "@/lib/sessao";
-import { Area, Campo, Cartao, Rotulo, Titulo, Vazio } from "@/components/ui";
+import { Area, Campo, Cartao, Rotulo, Selecao, Titulo, Vazio } from "@/components/ui";
 import { FormularioAcao } from "@/components/FormularioAcao";
+import { CamposEndereco } from "@/components/CamposEndereco";
 import { CartaoDivulgacao } from "@/components/CartaoDivulgacao";
 import { salvarClinica } from "@/app/actions/cadastros";
+import { CONDICOES_PAGAMENTO } from "@/lib/pagamento";
 import { TabelaPrecos } from "./TabelaPrecos";
 import { formatarData } from "@/lib/data";
 import { ROTULO_FAIXA_NPS, faixaDaNota } from "@/lib/nps";
@@ -69,23 +71,28 @@ export default async function DetalheClinica({ params }: { params: { id: string 
                 <Rotulo>E-mail</Rotulo>
                 <Campo name="email" type="email" defaultValue={clinica.email ?? ""} />
               </div>
-              <div>
-                <Rotulo>Endereço</Rotulo>
-                <Campo name="endereco" defaultValue={clinica.endereco ?? ""} />
-              </div>
-              <div className="grid grid-cols-3 gap-2">
-                <div className="col-span-2">
-                  <Rotulo>Cidade</Rotulo>
-                  <Campo name="cidade" defaultValue={clinica.cidade ?? ""} />
-                </div>
-                <div>
-                  <Rotulo>UF</Rotulo>
-                  <Campo name="uf" maxLength={2} defaultValue={clinica.uf ?? ""} />
-                </div>
-              </div>
+              {/* O mesmo bloco do cadastro novo, e não campos soltos: sem o
+                  CEP aqui o salvamento era recusado pela própria action, e
+                  número, complemento e bairro — que não existiam na tela —
+                  eram apagados a cada gravação. */}
+              <CamposEndereco inicial={clinica} />
               <div>
                 <Rotulo>Salas de atendimento simultâneo</Rotulo>
                 <Campo name="salas" type="number" min={1} defaultValue={clinica.salas} />
+              </div>
+              <div>
+                <Rotulo>Condição de pagamento</Rotulo>
+                <Selecao name="condicaoPagamento" defaultValue={clinica.condicaoPagamento ?? ""}>
+                  <option value="">a definir</option>
+                  {CONDICOES_PAGAMENTO.map((condicao) => (
+                    <option key={condicao} value={condicao}>
+                      {condicao}
+                    </option>
+                  ))}
+                </Selecao>
+                <div className="text-[10px] text-gray-400 mt-1">
+                  Uso interno da equipe — a clínica não vê isto no portal dela.
+                </div>
               </div>
               <div>
                 <Rotulo>Observações</Rotulo>

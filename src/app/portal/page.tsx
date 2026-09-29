@@ -22,7 +22,7 @@ export default async function MeusAgendamentos() {
   const sessao = await exigirClinica();
   const hoje = hojeUTC();
 
-  const [proximos, historico, total, aAvaliar, notasDadas, npsPendente] = await Promise.all([
+  const [proximos, historico, total, aAvaliar, notasDadas, npsPendente, aguardando] = await Promise.all([
     prisma.pedido.findMany({
       where: { clinicaId: sessao.clinicaId, data: { gte: hoje }, status: { in: STATUS_ATIVOS } },
       orderBy: [{ data: "asc" }, { horaInicio: "asc" }],
@@ -62,6 +62,21 @@ export default async function MeusAgendamentos() {
       orderBy: { criadaEm: "asc" },
       select: { id: true },
     }),
+    // O que a clínica pediu pelo site e a equipe ainda não triou. Sem isto o
+    // pedido feito no site sumia até alguém do outro lado vinculá-lo, e quem
+    // pediu ficava sem saber se chegou (ata de 28/09).
+    prisma.solicitacaoPublica.findMany({
+      where: { clinicaId: sessao.clinicaId, status: "NOVA" },
+      orderBy: { criadaEm: "desc" },
+      select: {
+        id: true,
+        dataDesejada: true,
+        horarioDesejado: true,
+        doutorNome: true,
+        pacienteNome: true,
+        servico: { select: { nome: true } },
+      },
+    }),
   ]);
 
   const minhaMedia = mediaDeNotas(notasDadas.map((a) => a.nota));
@@ -86,7 +101,7 @@ export default async function MeusAgendamentos() {
         <Kpi rotulo="Já realizados" valor={String(total)} />
         <Kpi
           rotulo="Aguardando confirmação"
-          valor={String(proximos.filter((p) => p.status === "SOLICITADO").length)}
+          valor={String(proximos.filter((p) => p.status === "SOLICITADO").length + aguardando.length)}
           sub="a central confirma"
         />
         <Kpi
@@ -95,6 +110,30 @@ export default async function MeusAgendamentos() {
           sub={notasDadas.length ? `${notasDadas.length} avaliação(ões)` : "nenhuma avaliação ainda"}
         />
       </div>
+
+      {aguardando.length > 0 && (
+        <Cartao className="mb-3 border-amber-200 bg-amber-50/40">
+          <div className="font-display font-bold text-bordo text-sm mb-1">Aguardando confirmação</div>
+          <div className="text-[11px] text-gray-500 mb-4 leading-relaxed">
+            Pedidos que você fez pelo site. A central confere a agenda e o equipamento, confirma o
+            horário e avisa pelo WhatsApp — aí eles aparecem em Próximos.
+          </div>
+          <Tabela cabecalho={["Data", "Hora", "Serviço", "Doutor(a)", "Paciente", "Status"]}>
+            {aguardando.map((solicitacao) => (
+              <tr key={solicitacao.id} className="border-b border-amber-200/70 last:border-0">
+                <td className="py-2 pr-3 font-semibold">{formatarDataCurta(solicitacao.dataDesejada)}</td>
+                <td className="py-2 pr-3">{solicitacao.horarioDesejado}</td>
+                <td className="py-2 pr-3 text-gray-600">{solicitacao.servico.nome}</td>
+                <td className="py-2 pr-3 text-gray-600">{solicitacao.doutorNome ?? "—"}</td>
+                <td className="py-2 pr-3 text-gray-500">{solicitacao.pacienteNome ?? "—"}</td>
+                <td className="py-2 whitespace-nowrap">
+                  <span className="text-[10px] font-semibold text-amber-700">Aguardando</span>
+                </td>
+              </tr>
+            ))}
+          </Tabela>
+        </Cartao>
+      )}
 
       <Cartao className="mb-3">
         <div className="font-display font-bold text-bordo text-sm mb-3">Próximos</div>

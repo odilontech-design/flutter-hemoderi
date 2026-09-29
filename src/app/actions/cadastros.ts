@@ -7,6 +7,7 @@ import { exigirInterno } from "@/lib/sessao";
 import { gerarSlug } from "@/lib/slug";
 import { lerCentavos } from "@/lib/dinheiro";
 import { cepValido, cnpjValido, cpfValido } from "@/lib/documento";
+import { condicaoValida } from "@/lib/pagamento";
 import type { Resultado } from "./pedidos";
 
 /**
@@ -46,6 +47,7 @@ export async function salvarClinica(_anterior: Resultado, dados: FormData): Prom
   }
 
   const salas = Number(dados.get("salas") ?? 1);
+  const condicaoInformada = String(dados.get("condicaoPagamento") ?? "").trim();
   const comum = {
     nome,
     cnpj: cnpj || null,
@@ -59,6 +61,10 @@ export async function salvarClinica(_anterior: Resultado, dados: FormData): Prom
     cidade: String(dados.get("cidade") ?? "") || null,
     uf: String(dados.get("uf") ?? "") || null,
     salas: Number.isFinite(salas) && salas > 0 ? Math.trunc(salas) : 1,
+    // Mesmo vocabulário fechado do pedido (lib/pagamento.ts): duas listas
+    // diferentes para a mesma pergunta viram "Antecipado" e "antecipado"
+    // significando a mesma coisa no fechamento do mês.
+    condicaoPagamento: condicaoValida(condicaoInformada) ? condicaoInformada : null,
     observacoes: String(dados.get("observacoes") ?? "") || null,
   };
 

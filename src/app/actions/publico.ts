@@ -104,6 +104,12 @@ export async function solicitarPublico(
   }
   if (!numero) return { ok: false, erro: "Informe o número do endereço." };
 
+  // Obrigatório desde a ata de 28/09: é por este nome que a central pergunta
+  // ("o pedido da doutora Marina"), e sem ele a triagem começa ligando para
+  // descobrir quem responde pelo caso.
+  const doutorNome = String(dados.get("doutorNome") ?? "").trim();
+  if (!doutorNome) return { ok: false, erro: "Informe o doutor(a) responsável pelo caso." };
+
   // Rota aberta pede teto. Sem isso, um formulário público é um convite a
   // encher a fila de trabalho da equipe com trote.
   const desde = new Date(Date.now() - JANELA_MINUTOS * 60 * 1000);
@@ -155,12 +161,13 @@ export async function solicitarPublico(
     if (!clinicaNomeInformado) return { ok: false, erro: "Informe o nome da clínica." };
     if (!emailNovo) return { ok: false, erro: "Informe um e-mail — é por ele que você entra no portal depois." };
 
-    // Opcional aqui como no cadastro interno (salvarClinica) — mas quando
-    // vem preenchido, tem que ser um CNPJ ou CPF de verdade: é o dado que
-    // sustenta cobrança e rastreio de inadimplência (ata de 21/09), e não dá
-    // para deixar a porta de autocadastro aceitar qualquer dígito.
+    // Obrigatório desde a ata de 28/09 — e conferido, não só preenchido: é o
+    // dado que sustenta cobrança e rastreio de inadimplência, e uma porta de
+    // autocadastro que aceita qualquer dígito devolve uma base impossível de
+    // cobrar. CPF vale para quem atende como pessoa física.
     const cnpj = String(dados.get("cnpj") ?? "").trim();
-    if (cnpj && !cnpjValido(cnpj) && !cpfValido(cnpj)) {
+    if (!cnpj) return { ok: false, erro: "Informe o CNPJ da clínica (ou o CPF, se for pessoa física)." };
+    if (!cnpjValido(cnpj) && !cpfValido(cnpj)) {
       return { ok: false, erro: "CNPJ (ou CPF) inválido — confira se algum dígito ficou trocado." };
     }
 
@@ -220,7 +227,7 @@ export async function solicitarPublico(
       cidade,
       uf,
       pontoReferencia: String(dados.get("pontoReferencia") ?? "").trim() || null,
-      doutorNome: String(dados.get("doutorNome") ?? "").trim() || null,
+      doutorNome,
       pacienteNome: String(dados.get("pacienteNome") ?? "").trim() || null,
       observacoes: String(dados.get("observacoes") ?? "").trim() || null,
     },

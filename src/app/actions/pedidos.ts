@@ -900,8 +900,6 @@ export async function aceitarAlocacao(pedidoId: string): Promise<Resultado> {
 export async function recusarAlocacao(pedidoId: string, motivo: string): Promise<Resultado> {
   const sessao = await exigirProfissional();
 
-  if (!motivo.trim()) return { ok: false, erro: "Diga o motivo da recusa para a logística remanejar." };
-
   const pedido = await prisma.pedido.findFirst({
     where: { id: pedidoId, profissionalId: sessao.profissionalId },
     select: { id: true, status: true, aceitoEm: true },
@@ -919,7 +917,7 @@ export async function recusarAlocacao(pedidoId: string, motivo: string): Promise
   if (!resultado.ok) return resultado;
 
   await prisma.recusaAtendimento.create({
-    data: { pedidoId: pedido.id, profissionalId: sessao.profissionalId, motivo: motivo.trim() },
+    data: { pedidoId: pedido.id, profissionalId: sessao.profissionalId, motivo: motivo.trim() || null },
   });
   await prisma.pedido.update({
     where: { id: pedido.id },
@@ -932,7 +930,7 @@ export async function recusarAlocacao(pedidoId: string, motivo: string): Promise
     .delete({ where: { pedidoId_tipo: { pedidoId: pedido.id, tipo: "ALOCACAO" } } })
     .catch(() => undefined);
   await sincronizarEvento(pedido.id);
-  await registrarAuditoria(sessao.usuarioId, "Pedido", pedido.id, "recusar-alocacao", motivo.trim());
+  await registrarAuditoria(sessao.usuarioId, "Pedido", pedido.id, "recusar-alocacao", motivo.trim() || undefined);
 
   atualizarTelas();
   return { ok: true };

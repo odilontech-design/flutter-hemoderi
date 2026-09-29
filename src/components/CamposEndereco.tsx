@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Campo, Rotulo } from "@/components/ui";
 import { cepValido, formatarCep } from "@/lib/documento";
 
@@ -24,7 +24,15 @@ type Endereco = {
  * assim uma indisponibilidade do serviço de CEP não derruba o cadastro nem
  * prende uma função serverless esperando resposta.
  */
-export function CamposEndereco({ inicial }: { inicial?: Endereco }) {
+export function CamposEndereco({
+  inicial,
+  /** Avisa quando o endereço deixou de estar em branco — usado pelo
+   *  agendamento público para só então pedir a identificação. */
+  aoPreencher,
+}: {
+  inicial?: Endereco;
+  aoPreencher?: (preenchido: boolean) => void;
+}) {
   const [cep, setCep] = useState(formatarCep(inicial?.cep ?? ""));
   const [logradouro, setLogradouro] = useState(inicial?.endereco ?? "");
   const [bairro, setBairro] = useState(inicial?.bairro ?? "");
@@ -38,6 +46,11 @@ export function CamposEndereco({ inicial }: { inicial?: Endereco }) {
   // consulta e passam a aceitar digitação — travá-los vazios e travados
   // prenderia o cadastro por causa de um serviço de terceiro fora do ar.
   const [manual, setManual] = useState(false);
+
+  useEffect(() => {
+    aoPreencher?.(encontrado);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- só a mudança de `encontrado` interessa, não a identidade da função.
+  }, [encontrado]);
 
   async function buscar(valor: string) {
     const limpo = valor.replace(/\D/g, "");
