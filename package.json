@@ -24,7 +24,8 @@
     "fumaca:ata": "node scripts/fumaca-ata.mjs",
     "fumaca:aceite": "dotenv -e .env -- node scripts/fumaca-aceite.mjs",
     "fumaca:publico": "node scripts/fumaca-publico.mjs",
-    "fumaca:nps": "dotenv -e .env -- node scripts/fumaca-nps.mjs"
+    "fumaca:nps": "dotenv -e .env -- node scripts/fumaca-nps.mjs",
+    "fumaca:preco": "dotenv -e .env -- node scripts/fumaca-preco.mjs"
   },
   "prisma": {
     "seed": "dotenv -e .env -- tsx prisma/seed.ts"

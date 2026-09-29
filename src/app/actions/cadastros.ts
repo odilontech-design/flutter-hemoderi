@@ -2,12 +2,13 @@
 
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
-import type { CategoriaServico } from "@prisma/client";
+import { Prisma, type CategoriaServico } from "@prisma/client";
 import { exigirInterno } from "@/lib/sessao";
 import { gerarSlug } from "@/lib/slug";
 import { lerCentavos } from "@/lib/dinheiro";
 import { cepValido, cnpjValido, cpfValido } from "@/lib/documento";
 import { condicaoValida } from "@/lib/pagamento";
+import { lerUfs } from "@/lib/uf";
 import type { Resultado } from "./pedidos";
 
 /**
@@ -250,5 +251,86 @@ export async function salvarPreco(_anterior: Resultado, dados: FormData): Promis
   }
 
   revalidatePath("/painel/clinicas");
+  return { ok: true };
+}
+
+/**
+ * Praça de preço: um nome e as UFs que caem nela (ata de 28/09).
+ *
+ * A sobreposição é recusada, não resolvida por desempate: duas praças
+ * reivindicando SP fariam o preço da clínica paulista depender de qual
+ * consulta o banco devolvesse primeiro — e um preço que oscila sozinho é
+ * pior do que um cadastro que reclama na hora.
+ */
+export async function salvarRegiaoPreco(_anterior: Resultado, dados: FormData): Promise<Resultado> {
+  await exigirInterno();
+
+  const id = String(dados.get("id") ?? "");
+  const nome = String(dados.get("nome") ?? "").trim();
+  if (!nome) return { ok: false, erro: "Dê um nome à praça — é por ele que a equipe a reconhece." };
+
+  const ufs = lerUfs(String(dados.get("ufs") ?? ""));
+  if (ufs.length === 0) {
+    return { ok: false, erro: "Informe ao menos uma UF válida (ex.: SP, RJ, MG)." };
+  }
+
+  const conflitos = await prisma.regiaoPreco.findMany({
+    where: { ufs: { hasSome: ufs }, ...(id ? { NOT: { id } } : {}) },
+    select: { nome: true, ufs: true },
+  });
+  if (conflitos.length > 0) {
+    const repetidas = [...new Set(conflitos.flatMap((c) => c.ufs.filter((uf) => ufs.includes(uf as never))))];
+    return {
+      ok: false,
+      erro: `${repetidas.join(", ")} já está em "${conflitos[0].nome}". Cada UF pertence a uma praça só.`,
+    };
+  }
+
+  try {
+    if (id) {
+      await prisma.regiaoPreco.update({ where: { id }, data: { nome, ufs } });
+    } else {
+      await prisma.regiaoPreco.create({ data: { nome, ufs } });
+    }
+  } catch (erro) {
+    if (erro instanceof Prisma.PrismaClientKnownRequestError && erro.code === "P2002") {
+      return { ok: false, erro: `Já existe uma praça chamada "${nome}".` };
+    }
+    throw erro;
+  }
+
+  revalidatePath("/painel/catalogo/regioes");
+  return { ok: true };
+}
+
+export async function alternarRegiaoPreco(id: string, ativa: boolean): Promise<Resultado> {
+  await exigirInterno();
+  await prisma.regiaoPreco.update({ where: { id }, data: { ativa } });
+  revalidatePath("/painel/catalogo/regioes");
+  return { ok: true };
+}
+
+/** Preço de um serviço numa praça. Vazio remove — o serviço volta à tabela. */
+export async function salvarPrecoRegiao(_anterior: Resultado, dados: FormData): Promise<Resultado> {
+  await exigirInterno();
+
+  const regiaoId = String(dados.get("regiaoId") ?? "");
+  const servicoId = String(dados.get("servicoId") ?? "");
+  const texto = String(dados.get("valor") ?? "").trim();
+  if (!regiaoId || !servicoId) return { ok: false, erro: "Praça e serviço são obrigatórios." };
+
+  if (!texto) {
+    await prisma.precoRegiao.deleteMany({ where: { regiaoId, servicoId } });
+  } else {
+    const valorCentavos = lerCentavos(texto);
+    if (valorCentavos <= 0) return { ok: false, erro: "Informe um valor maior que zero." };
+    await prisma.precoRegiao.upsert({
+      where: { regiaoId_servicoId: { regiaoId, servicoId } },
+      update: { valorCentavos },
+      create: { regiaoId, servicoId, valorCentavos },
+    });
+  }
+
+  revalidatePath("/painel/catalogo/regioes");
   return { ok: true };
 }

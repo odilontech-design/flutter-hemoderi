@@ -324,6 +324,7 @@ model Servico {
   desativadoEm DateTime?
 
   precos        PrecoClinica[]
+  precosRegiao  PrecoRegiao[]
   solicitacoes  SolicitacaoPublica[]
   regrasRepasse RegraRepasse[]
   pedidos       Pedido[]
@@ -340,6 +341,57 @@ enum CategoriaServico {
   ODONTOLOGIA
   ESTETICA
   SAUDE
+}
+
+/// Uma praça de preço — "São Paulo e região", "Interior", "Outros estados".
+///
+/// Nasceu da ata de 28/09: o mesmo procedimento não custa o mesmo em toda
+/// parte, e sem uma tabela por praça a alternativa era negociar clínica por
+/// clínica desde a primeira (PrecoClinica), o que não escala e faz o preço da
+/// vitrine depender de alguém ter lembrado de cadastrar.
+///
+/// A praça é definida por UF porque é o recorte que o cadastro já tem — o
+/// endereço vem do CEP, e a UF vem junto. "São Paulo e arredores até 150 km",
+/// que o André citou, não é representável por UF sozinha: quando essa
+/// distinção fizer falta, ela entra como uma praça própria com as UFs que a
+/// compõem, ou como preço negociado da clínica, que continua vencendo tudo.
+model RegiaoPreco {
+  id   String @id @default(cuid())
+  nome String @unique
+
+  /// As UFs que caem nesta praça. Uma UF mora em uma praça só — duas praças
+  /// reivindicando o mesmo estado tornariam o preço da clínica ambíguo, e o
+  /// cadastro recusa a sobreposição por isso.
+  ufs String[]
+
+  ativa        Boolean   @default(true)
+  criadaEm     DateTime  @default(now())
+  atualizadaEm DateTime  @updatedAt
+
+  precos PrecoRegiao[]
+
+  @@index([ativa])
+}
+
+/// Preço de um serviço numa praça. Fica ENTRE o preço negociado da clínica e
+/// o preço de tabela do serviço: quem tem negociação usa a dela, quem não tem
+/// usa a da praça, e quem não tem praça cai na tabela.
+model PrecoRegiao {
+  id String @id @default(cuid())
+
+  regiaoId String
+  regiao   RegiaoPreco @relation(fields: [regiaoId], references: [id], onDelete: Cascade)
+
+  servicoId String
+  servico   Servico @relation(fields: [servicoId], references: [id], onDelete: Cascade)
+
+  valorCentavos Int
+
+  criadoEm     DateTime @default(now())
+  atualizadoEm DateTime @updatedAt
+
+  @@unique([regiaoId, servicoId])
+  @@index([regiaoId])
 }
 
 /// Preço negociado de um serviço para uma clínica específica. A tabela de

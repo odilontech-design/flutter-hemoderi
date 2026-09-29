@@ -21,6 +21,7 @@ import { criarNegocio, marcarNegocioGanho } from "@/lib/integracoes/pipedrive";
 import { condicaoValida } from "@/lib/pagamento";
 import { perfilPermite } from "@/lib/papeis";
 import { formatarReais, lerCentavos } from "@/lib/dinheiro";
+import { precoDoServico } from "@/lib/preco";
 
 export type Resultado = { ok: boolean; erro?: string; avisos?: string[] };
 
@@ -51,16 +52,19 @@ async function proximoNumero(tx: Prisma.TransactionClient): Promise<number> {
   return config.proximoNumeroPedido - 1;
 }
 
-/** Preço do serviço para a clínica: o negociado, quando existe; senão a tabela. */
+/** Preço do serviço para a clínica — negociado, praça ou tabela (lib/preco.ts). */
 async function valorDoServico(clinicaId: string, servicoId: string): Promise<number> {
-  const [negociado, servico] = await Promise.all([
-    prisma.precoClinica.findUnique({
-      where: { clinicaId_servicoId: { clinicaId, servicoId } },
-      select: { valorCentavos: true },
-    }),
+  const [clinica, servico] = await Promise.all([
+    prisma.clinica.findUnique({ where: { id: clinicaId }, select: { uf: true } }),
     prisma.servico.findUnique({ where: { id: servicoId }, select: { valorPadraoCentavos: true } }),
   ]);
-  return negociado?.valorCentavos ?? servico?.valorPadraoCentavos ?? 0;
+  const { valorCentavos } = await precoDoServico(prisma, {
+    clinicaId,
+    servicoId,
+    uf: clinica?.uf,
+    valorPadraoCentavos: servico?.valorPadraoCentavos ?? 0,
+  });
+  return valorCentavos;
 }
 
 async function repasseDoPedido(profissionalId: string, servicoId: string, valorServicoCentavos: number) {
