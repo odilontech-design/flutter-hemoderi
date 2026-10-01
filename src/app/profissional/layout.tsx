@@ -2,13 +2,14 @@ import { MenuLateral } from "@/components/MenuLateral";
 import { Provedores } from "@/components/Provedores";
 import { exigirProfissional } from "@/lib/sessao";
 import { BotaoWhatsapp } from "@/components/BotaoWhatsapp";
-import { IconeAgenda, IconeDisponibilidade, IconeFinanceiro } from "@/components/icones/MenuIcones";
+import { IconeAgenda, IconeDisponibilidade, IconeFinanceiro, IconeRelatorios } from "@/components/icones/MenuIcones";
 
 export const dynamic = "force-dynamic";
 
 const ITENS = [
   { href: "/profissional", icone: <IconeAgenda />, rotulo: "Minha agenda" },
   { href: "/profissional/disponibilidade", icone: <IconeDisponibilidade />, rotulo: "Disponibilidade" },
+  { href: "/profissional/relatorios", icone: <IconeRelatorios />, rotulo: "Relatórios" },
   { href: "/profissional/ganhos", icone: <IconeFinanceiro />, rotulo: "Meus ganhos" },
 ];
 
