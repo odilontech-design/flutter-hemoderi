@@ -3,6 +3,7 @@ import { Provedores } from "@/components/Provedores";
 import { AvisoDeFila } from "@/components/AvisoDeFila";
 import { exigirInterno } from "@/lib/sessao";
 import { perfilPermite } from "@/lib/papeis";
+import { agendamentoPublicoAtivo } from "@/lib/agendamento-publico";
 import {
   IconeAcessos,
   IconeAgenda,
@@ -47,10 +48,16 @@ const ITENS_SO_RESPONSAVEL = new Set(["/painel/financeiro", "/painel/cupons", "/
 // que a tela vai recusar. perfilPermite deixa RESPONSAVEL passar sozinho.
 const ITENS_SO_LOGISTICA = new Set(["/painel/disponibilidade"]);
 
+// "Pedidos do site" só trata o que vem do agendamento público. Com a página
+// pública desligada não há o que tratar, e o item no menu só confunde.
+const ITENS_DO_SITE = new Set(["/painel/solicitacoes"]);
+
 export default async function LayoutPainel({ children }: { children: React.ReactNode }) {
   const sessao = await exigirInterno();
   const podeLogistica = perfilPermite(sessao.perfil, "LOGISTICA");
+  const sitePublico = agendamentoPublicoAtivo();
   const itens = ITENS.filter((item) => {
+    if (ITENS_DO_SITE.has(item.href)) return sitePublico;
     if (ITENS_SO_RESPONSAVEL.has(item.href)) return sessao.perfil === "RESPONSAVEL";
     if (ITENS_SO_LOGISTICA.has(item.href)) return podeLogistica;
     return true;

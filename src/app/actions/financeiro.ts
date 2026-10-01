@@ -175,10 +175,11 @@ export async function validarItemRelatorio(
 
   const relatorio = await prisma.relatorioAtendimento.findUnique({
     where: { pedidoId },
-    select: { id: true, aprovadoEm: true },
+    select: { id: true, aprovadoEm: true, devolvidoEm: true },
   });
   if (!relatorio) return { ok: false, erro: "Este atendimento ainda não tem relatório." };
   if (relatorio.aprovadoEm) return { ok: false, erro: "Relatório já aprovado — a conferência está fechada." };
+  if (relatorio.devolvidoEm) return { ok: false, erro: "Relatório devolvido ao profissional — aguarde a correção." };
 
   await prisma.relatorioAtendimento.update({
     where: { id: relatorio.id },
@@ -197,6 +198,51 @@ export async function validarItemRelatorio(
   return { ok: true };
 }
 
+/**
+ * Recusa o relatório e o devolve ao profissional para corrigir.
+ *
+ * O motivo é obrigatório: devolver sem dizer o quê só faz o profissional
+ * reenviar o mesmo relatório. O relatório sai da fila de conferência (a bola
+ * é do profissional) e volta sozinho quando ele reenvia — ver enviarRelatorio.
+ * As conferências já marcadas são zeradas: valiam para o texto recusado.
+ */
+export async function devolverRelatorio(pedidoId: string, motivo: string): Promise<Resultado> {
+  const sessao = await exigirInterno();
+  if (!perfilPermite(sessao.perfil, "POS_VENDA")) {
+    return { ok: false, erro: "Só o pós-venda devolve relatório." };
+  }
+
+  const texto = String(motivo ?? "").trim().slice(0, 500);
+  if (!texto) return { ok: false, erro: "Diga o que o profissional precisa corrigir." };
+
+  const relatorio = await prisma.relatorioAtendimento.findUnique({
+    where: { pedidoId },
+    select: { id: true, aprovadoEm: true },
+  });
+  if (!relatorio) return { ok: false, erro: "Este atendimento ainda não tem relatório." };
+  if (relatorio.aprovadoEm) return { ok: false, erro: "Relatório já aprovado — não dá mais para devolver." };
+
+  await prisma.relatorioAtendimento.update({
+    where: { id: relatorio.id },
+    data: {
+      devolvidoEm: new Date(),
+      motivoDevolucao: texto,
+      devolvidoPorId: sessao.usuarioId,
+      servicoValidadoEm: null,
+      valorValidadoEm: null,
+      ajudaCustoValidadaEm: null,
+    },
+  });
+
+  await registrarAuditoria(sessao.usuarioId, "Pedido", pedidoId, "devolver-relatorio", texto);
+
+  revalidatePath("/painel/pedidos");
+  revalidatePath(`/painel/pedidos/${pedidoId}`);
+  revalidatePath("/profissional");
+  revalidatePath("/profissional/relatorios");
+  return { ok: true };
+}
+
 export async function aprovarRelatorio(pedidoId: string): Promise<Resultado> {
   const sessao = await exigirInterno();
   if (!perfilPermite(sessao.perfil, "POS_VENDA")) {
@@ -208,6 +254,7 @@ export async function aprovarRelatorio(pedidoId: string): Promise<Resultado> {
     select: {
       id: true,
       aprovadoEm: true,
+      devolvidoEm: true,
       compareceu: true,
       servicoValidadoEm: true,
       valorValidadoEm: true,
@@ -216,6 +263,9 @@ export async function aprovarRelatorio(pedidoId: string): Promise<Resultado> {
   });
   if (!relatorio) return { ok: false, erro: "Este atendimento ainda não tem relatório." };
   if (relatorio.aprovadoEm) return { ok: false, erro: "Relatório já aprovado." };
+  // Devolvido não se aprova: o que está na tela é justamente o que foi
+  // recusado. Só depois que o profissional reenviar.
+  if (relatorio.devolvidoEm) return { ok: false, erro: "Relatório devolvido ao profissional — aguarde a correção." };
 
   // A aprovação geral é a soma das três conferências, nunca um atalho por
   // cima delas: é o que a ata de 21/09 pediu para o "aprovado" significar

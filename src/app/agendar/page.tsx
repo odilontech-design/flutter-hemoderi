@@ -1,3 +1,4 @@
+import { agendamentoPublicoAtivo } from "@/lib/agendamento-publico";
 import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 import { parametros } from "@/lib/alocacao";
@@ -28,7 +29,7 @@ export default async function AgendamentoPublico({ searchParams }: { searchParam
   // Pausado na reunião de 01/10: o foco é o portal do cliente cadastrado, e o
   // agendamento sem cadastro vira cancelamento quando o serviço não existe na
   // praça da pessoa. Volta com AGENDAMENTO_PUBLICO_ATIVO=1, sem mexer no código.
-  if (process.env.AGENDAMENTO_PUBLICO_ATIVO !== "1") return <AgendamentoPausado />;
+  if (!agendamentoPublicoAtivo()) return <AgendamentoPausado />;
 
   const [servicos, config] = await Promise.all([
     prisma.servico.findMany({

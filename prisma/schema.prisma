@@ -1059,6 +1059,15 @@ model RelatorioAtendimento {
   valorValidadoEm      DateTime?
   ajudaCustoValidadaEm DateTime?
 
+  /// O pós-venda recusou o relatório e o devolveu ao profissional para
+  /// corrigir. Enquanto `devolvidoEm` está preenchido, o relatório NÃO está na
+  /// fila de conferência — a bola é do profissional. Reenviar limpa os três
+  /// campos e o relatório volta para a conferência. Aprovar nunca passa por
+  /// aqui: só relatório sem devolução pendente é aprovável.
+  devolvidoEm     DateTime?
+  motivoDevolucao String?
+  devolvidoPorId  String?
+
   /// Serviços do catálogo que o profissional executou ALÉM do agendado, com
   /// a quantidade de cada um. É a versão estruturada de `servicosAdicionais`:
   /// o texto livre continua para o que não cabe no catálogo, mas o que cabe

@@ -7,7 +7,7 @@ import { prisma } from "@/lib/prisma";
 import { exigirInterno } from "@/lib/sessao";
 import { Cartao, SeloStatus, Titulo, Vazio } from "@/components/ui";
 import { codigoDoPedido } from "@/lib/numeracao";
-import { formatarDataCurta, paraHora, paraMinutos } from "@/lib/data";
+import { formatarDataCurta, formatarDataHora, paraHora, paraMinutos } from "@/lib/data";
 import { formatarReais } from "@/lib/dinheiro";
 import { ETAPAS, etapaDoPerfil, etapaPorChave } from "@/lib/esteira";
 import { formatarAtraso, houveAtraso, minutosDeAtraso } from "@/lib/atraso";
@@ -312,8 +312,16 @@ export default async function Esteira({
                       </div>
                     </details>
                   )}
+                  {pedido.relatorio?.devolvidoEm && !pedido.relatorio.aprovadoEm && (
+                    <div className="mt-2 max-w-2xl rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-[11px] text-red-800">
+                      <strong>Devolvido ao profissional em {formatarDataHora(pedido.relatorio.devolvidoEm)}</strong>
+                      {pedido.relatorio.motivoDevolucao && <> — {pedido.relatorio.motivoDevolucao}</>}
+                      <div className="text-red-700/80 mt-0.5">Volta para a conferência quando ele reenviar.</div>
+                    </div>
+                  )}
                   {pedido.relatorio &&
                     !pedido.relatorio.aprovadoEm &&
+                    !pedido.relatorio.devolvidoEm &&
                     perfilPermite(sessao.perfil, "POS_VENDA") && (
                       <ConferenciaRelatorio
                         pedidoId={pedido.id}

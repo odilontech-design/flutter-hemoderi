@@ -70,8 +70,13 @@ export default async function MinhaAgenda() {
     servico: { select: { nome: true, duracaoMin: true } },
   };
 
-  const [config, aguardandoAceite, deHoje, atrasados, proximos] = await Promise.all([
+  const [config, devolvidos, aguardandoAceite, deHoje, atrasados, proximos] = await Promise.all([
     parametros(),
+    // Relatórios que a central recusou: vêm antes de tudo, porque travam o
+    // repasse e só o próprio profissional resolve.
+    prisma.relatorioAtendimento.count({
+      where: { profissionalId: sessao.profissionalId, aprovadoEm: null, devolvidoEm: { not: null } },
+    }),
     prisma.pedido.findMany({
       where: { ...meus, aceitoEm: null },
       orderBy: [{ data: "asc" }, { horaInicio: "asc" }],
@@ -97,6 +102,18 @@ export default async function MinhaAgenda() {
   return (
     <>
       <Titulo>Minha agenda</Titulo>
+
+      {devolvidos > 0 && (
+        <Cartao className="mb-3 border-red-300">
+          <div className="font-display font-bold text-red-700 text-sm mb-1">
+            {devolvidos} relatório(s) devolvido(s) para correção
+          </div>
+          <div className="text-[11px] text-gray-500 mb-2">A central pediu um ajuste. O repasse espera o reenvio.</div>
+          <Link href="/profissional/relatorios" className="text-xs font-semibold text-bordo hover:underline">
+            Ver o que corrigir →
+          </Link>
+        </Cartao>
+      )}
 
       {aguardandoAceite.length > 0 && (
         <Cartao className="mb-3 border-bordo">

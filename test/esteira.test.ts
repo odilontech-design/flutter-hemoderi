@@ -27,13 +27,22 @@ test("a fila da logística é o confirmado sem profissional", () => {
   assert.deepEqual(etapaPorChave("alocar")?.onde, { status: "CONFIRMADO" });
 });
 
-test("a conferência exige relatório entregue e ainda não aprovado", () => {
+test("a conferência exige relatório entregue, não aprovado e não devolvido", () => {
   // Realizado SEM relatório nenhum não é trabalho do pós-venda — é do
   // profissional que não entregou. Por isso `is`, e não `isNot: null`.
   assert.deepEqual(etapaPorChave("conferir")?.onde, {
     status: "REALIZADO",
-    relatorio: { is: { aprovadoEm: null } },
+    relatorio: { is: { aprovadoEm: null, devolvidoEm: null } },
   });
+});
+
+test("relatório devolvido sai da conferência e aparece em Devolvidos", () => {
+  assert.deepEqual(etapaPorChave("devolvidos")?.onde, {
+    status: "REALIZADO",
+    relatorio: { is: { aprovadoEm: null, devolvidoEm: { not: null } } },
+  });
+  // E a etapa não tem dono: ninguém "responde" pela fila do profissional.
+  assert.equal(etapaPorChave("devolvidos")?.dono, undefined);
 });
 
 test("triagem e alocação juntas são exatamente a visão de quem gerencia", () => {

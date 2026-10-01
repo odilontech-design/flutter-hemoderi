@@ -53,6 +53,8 @@ export default async function Relatorios() {
         id: true,
         compareceu: true,
         aprovadoEm: true,
+        devolvidoEm: true,
+        motivoDevolucao: true,
         pedido: { select: { id: true, ...dadosDoPedido } },
         _count: { select: { adicionais: true } },
       },
@@ -60,16 +62,54 @@ export default async function Relatorios() {
   ]);
 
   const aprovados = enviados.filter((r) => r.aprovadoEm).length;
+  // Devolvido pelo pós-venda: é a bola do profissional, não do pós-venda.
+  const devolvidos = enviados.filter((r) => r.devolvidoEm && !r.aprovadoEm);
+  const emConferencia = enviados.length - aprovados - devolvidos.length;
 
   return (
     <>
       <Titulo>Relatórios</Titulo>
 
-      <div className="grid grid-cols-3 gap-3 mb-6">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
         <Kpi rotulo="Faltam enviar" valor={String(faltam.length)} />
-        <Kpi rotulo="Em conferência" valor={String(enviados.length - aprovados)} />
+        <Kpi rotulo="Para corrigir" valor={String(devolvidos.length)} />
+        <Kpi rotulo="Em conferência" valor={String(emConferencia)} />
         <Kpi rotulo="Aprovados" valor={String(aprovados)} />
       </div>
+
+      {devolvidos.length > 0 && (
+        <Cartao className="mb-4 border-red-300">
+          <div className="font-display font-bold text-red-700 text-sm mb-1">Devolvidos para correção</div>
+          <div className="text-[11px] text-gray-500 mb-3">
+            A central recusou estes relatórios. Corrija o que foi pedido e reenvie — o repasse só é liberado depois
+            que o relatório é aprovado.
+          </div>
+          <div className="space-y-3">
+            {devolvidos.map((r) => (
+              <div
+                key={r.id}
+                className="flex flex-wrap items-start justify-between gap-2 border-b border-gray-100 pb-3 last:border-0 last:pb-0"
+              >
+                <div className="text-xs min-w-0">
+                  <div className="font-semibold text-bordo">
+                    {codigoDoPedido(r.pedido.numero, r.pedido.clinica.nome, r.pedido.data)} ·{" "}
+                    {formatarDataCurta(r.pedido.data)} {r.pedido.horaInicio}
+                  </div>
+                  <div className="text-gray-500">
+                    {r.pedido.clinica.nome} · {r.pedido.servico.nome}
+                  </div>
+                  <div className="mt-1 text-red-800">
+                    <strong>O que corrigir:</strong> {r.motivoDevolucao ?? "—"}
+                  </div>
+                </div>
+                <Link href={`/profissional/relatorio/${r.pedido.id}`} className={`${BOTAO} bg-bordo text-white hover:bg-bordoEscuro`}>
+                  Corrigir relatório
+                </Link>
+              </div>
+            ))}
+          </div>
+        </Cartao>
+      )}
 
       <Cartao className={`mb-4 ${faltam.length > 0 ? "border-bordo" : ""}`}>
         <div className="font-display font-bold text-bordo text-sm mb-1">Faltam enviar</div>
@@ -123,6 +163,8 @@ export default async function Relatorios() {
                 <td className="py-2 pr-3 whitespace-nowrap">
                   {r.aprovadoEm ? (
                     <span className="text-emerald-700 font-semibold">aprovado</span>
+                  ) : r.devolvidoEm ? (
+                    <span className="text-red-700 font-semibold">devolvido</span>
                   ) : (
                     <span className="text-amber-700 font-semibold">em conferência</span>
                   )}

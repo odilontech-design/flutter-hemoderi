@@ -82,6 +82,14 @@ export default async function Relatorio({ params }: { params: { pedidoId: string
             Repasse previsto: <strong>{formatarReais(pedido.valorRepasseCentavos)}</strong>
           </div>
         </div>
+        {pedido.relatorio?.devolvidoEm && !pedido.relatorio.aprovadoEm && (
+          <div className="mb-4">
+            <Aviso tom="erro">
+              <div className="font-semibold mb-0.5">A central devolveu este relatório para correção.</div>
+              {pedido.relatorio.motivoDevolucao ?? "Confira os dados e reenvie."}
+            </Aviso>
+          </div>
+        )}
         {pedido.relatorio?.aprovadoEm ? (
           <Aviso tom="info">
             Este relatório já foi conferido pela central e o repasse está liberado. Para corrigir

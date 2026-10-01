@@ -124,6 +124,11 @@ export default async function DetalheDoPedido({ params }: { params: { pedidoId: 
                 <span className="font-semibold text-green-700">
                   relatório conferido e aprovado em {formatarDataHora(relatorio.aprovadoEm)} · repasse liberado
                 </span>
+              ) : relatorio.devolvidoEm ? (
+                <span className="font-semibold text-red-700">
+                  devolvido ao profissional em {formatarDataHora(relatorio.devolvidoEm)}
+                  {relatorio.motivoDevolucao ? ` — ${relatorio.motivoDevolucao}` : ""}
+                </span>
               ) : (
                 <span className="font-semibold text-amber-700">
                   aguardando conferência do pós-venda — vá até a esteira para aprovar

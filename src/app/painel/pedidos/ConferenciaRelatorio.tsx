@@ -2,7 +2,8 @@
 
 import { useState, useTransition } from "react";
 import { Botao } from "@/components/ui";
-import { aprovarRelatorio, validarItemRelatorio } from "@/app/actions/financeiro";
+import { aprovarRelatorio, devolverRelatorio, validarItemRelatorio } from "@/app/actions/financeiro";
+import { AcaoComMotivo } from "./AcoesPedido";
 import type { ItemValidacao } from "@/lib/relatorio";
 
 const ITENS: { chave: ItemValidacao; rotulo: string }[] = [
@@ -73,18 +74,35 @@ export function ConferenciaRelatorio({
         ))}
       </div>
 
-      <Botao
-        disabled={pendente || !tudoConferido}
-        onClick={() => {
-          setErro("");
-          iniciar(async () => {
-            const resultado = await aprovarRelatorio(pedidoId);
-            if (!resultado.ok) setErro(resultado.erro ?? "Não foi possível aprovar.");
-          });
-        }}
-      >
-        Aprovar e liberar repasse
-      </Botao>
+      <div className="flex flex-wrap items-center gap-2">
+        <Botao
+          disabled={pendente || !tudoConferido}
+          onClick={() => {
+            setErro("");
+            iniciar(async () => {
+              const resultado = await aprovarRelatorio(pedidoId);
+              if (!resultado.ok) setErro(resultado.erro ?? "Não foi possível aprovar.");
+            });
+          }}
+        >
+          Aprovar e liberar repasse
+        </Botao>
+        {/* Recusar: o relatório volta para o profissional com o motivo, e
+            sai desta fila até ele reenviar. */}
+        <AcaoComMotivo
+          rotulo="Recusar e devolver"
+          variante="perigo"
+          disabled={pendente}
+          placeholder="O que corrigir"
+          onConfirmar={(motivo) => {
+            setErro("");
+            iniciar(async () => {
+              const resultado = await devolverRelatorio(pedidoId, motivo);
+              if (!resultado.ok) setErro(resultado.erro ?? "Não foi possível devolver.");
+            });
+          }}
+        />
+      </div>
       {erro && <div className="text-[10px] text-red-600 mt-1">{erro}</div>}
     </div>
   );

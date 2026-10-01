@@ -163,6 +163,11 @@ export async function enviarRelatorio(_anterior: Resultado, dados: FormData): Pr
         servicoValidadoEm: null,
         valorValidadoEm: null,
         ajudaCustoValidadaEm: null,
+        // Reenviar é a resposta à devolução: o relatório volta para a fila
+        // de conferência do pós-venda.
+        devolvidoEm: null,
+        motivoDevolucao: null,
+        devolvidoPorId: null,
       },
       create: { pedidoId: pedido.id, profissionalId: sessao.profissionalId, ...conteudo, ...localizacao },
       select: { id: true },
@@ -178,6 +183,10 @@ export async function enviarRelatorio(_anterior: Resultado, dados: FormData): Pr
     }
   });
 
+  // Mexe no pedido para a fila do pós-venda ver que há relatório novo (o aviso
+  // de fila olha o `atualizadoEm` do pedido, e relatório reenviado não o muda).
+  await prisma.pedido.update({ where: { id: pedido.id }, data: { atualizadoEm: new Date() } });
+
   // Só fecha o pedido na primeira vez; correção não reabre a esteira.
   const resultado =
     pedido.status === "ALOCADO"
@@ -185,6 +194,8 @@ export async function enviarRelatorio(_anterior: Resultado, dados: FormData): Pr
       : { ok: true as const };
 
   revalidatePath("/profissional");
+  revalidatePath("/profissional/relatorios");
+  revalidatePath("/painel/pedidos");
   revalidatePath("/painel/financeiro");
   return resultado;
 }
