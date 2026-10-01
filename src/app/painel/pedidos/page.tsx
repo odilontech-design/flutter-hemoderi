@@ -1,3 +1,4 @@
+import { INCLUIR_ADICIONAIS, RelatorioPreenchido } from "@/components/RelatorioPreenchido";
 import { resumoDoEndereco } from "@/lib/endereco";
 import { AcoesGrupo } from "./AcoesGrupo";
 import Link from "next/link";
@@ -59,23 +60,7 @@ export default async function Esteira({
         endereco: { select: { rotulo: true, endereco: true, numero: true, complemento: true, bairro: true, cidade: true, uf: true } },
         servico: { select: { nome: true } },
         profissional: { select: { nome: true } },
-        relatorio: {
-          select: {
-            latitude: true,
-            longitude: true,
-            aprovadoEm: true,
-            servicosAdicionais: true,
-            adicionais: { select: { quantidade: true, servico: { select: { nome: true } } } },
-            clinicaNomeInformado: true,
-            enderecoInformado: true,
-            doutorNomeInformado: true,
-            ajudaCustoCentavos: true,
-            ajudaCustoJustificativa: true,
-            servicoValidadoEm: true,
-            valorValidadoEm: true,
-            ajudaCustoValidadaEm: true,
-          },
-        },
+        relatorio: { include: INCLUIR_ADICIONAIS },
       },
     }),
     prisma.profissional.findMany({
@@ -312,6 +297,20 @@ export default async function Esteira({
                         ? ` · ${pedido.relatorio.ajudaCustoJustificativa}`
                         : ""}
                     </div>
+                  )}
+                  {/* O relatório inteiro, ali mesmo: quem confere o repasse lê
+                      o que foi enviado sem abrir outra página. Já aberto
+                      enquanto espera conferência; fechado depois de aprovado,
+                      para não pesar a fila. */}
+                  {pedido.relatorio && (
+                    <details open={!pedido.relatorio.aprovadoEm} className="mt-2 max-w-2xl rounded-xl border border-gray-200 bg-white">
+                      <summary className="cursor-pointer select-none px-3 py-2 text-[11px] font-semibold text-bordo">
+                        Relatório preenchido pelo profissional
+                      </summary>
+                      <div className="px-3 pb-3 pt-1">
+                        <RelatorioPreenchido relatorio={pedido.relatorio} />
+                      </div>
+                    </details>
                   )}
                   {pedido.relatorio &&
                     !pedido.relatorio.aprovadoEm &&

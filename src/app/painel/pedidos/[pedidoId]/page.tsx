@@ -6,7 +6,7 @@ import { Cartao, SeloStatus, Titulo, Vazio } from "@/components/ui";
 import { codigoDoPedido } from "@/lib/numeracao";
 import { formatarData, formatarDataHora } from "@/lib/data";
 import { formatarReais } from "@/lib/dinheiro";
-import { CAMPOS_CLINICOS, NAO_SE_APLICA } from "@/lib/relatorio";
+import { INCLUIR_ADICIONAIS, RelatorioPreenchido } from "@/components/RelatorioPreenchido";
 import { MostrarEstrelas } from "@/components/Estrelas";
 
 export const dynamic = "force-dynamic";
@@ -31,7 +31,7 @@ export default async function DetalheDoPedido({ params }: { params: { pedidoId: 
       clinica: { select: { nome: true } },
       servico: { select: { nome: true } },
       profissional: { select: { nome: true } },
-      relatorio: { include: { adicionais: { select: { quantidade: true, servico: { select: { nome: true } } } } } },
+      relatorio: { include: INCLUIR_ADICIONAIS },
       avaliacao: { select: { nota: true, comentario: true } },
     },
   });
@@ -117,107 +117,7 @@ export default async function DetalheDoPedido({ params }: { params: { pedidoId: 
           <Vazio>Nenhum relatório enviado ainda.</Vazio>
         ) : (
           <div className="space-y-4">
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-2 text-xs">
-              <div>
-                <div className="text-gray-400">Compareceu</div>
-                <div className="text-gray-700">{relatorio.compareceu ? "Sim" : "Não"}</div>
-              </div>
-              {relatorio.compareceu && (
-                <div>
-                  <div className="text-gray-400">Horário real</div>
-                  <div className="text-gray-700">
-                    {relatorio.inicioReal ?? "—"} até {relatorio.fimReal ?? "—"}
-                  </div>
-                </div>
-              )}
-              <div>
-                <div className="text-gray-400">Quantidade</div>
-                <div className="text-gray-700">{relatorio.quantidade}</div>
-              </div>
-              <div>
-                <div className="text-gray-400">Intercorrência</div>
-                <div className={relatorio.intercorrencia ? "text-amber-700 font-semibold" : "text-gray-700"}>
-                  {relatorio.intercorrencia ? "Sim" : "Não"}
-                </div>
-              </div>
-              <div>
-                <div className="text-gray-400">Enviado em</div>
-                <div className="text-gray-700">{formatarDataHora(relatorio.enviadoEm)}</div>
-              </div>
-              {relatorio.chavePixConfirmada && (
-                <div>
-                  <div className="text-gray-400">Chave PIX confirmada</div>
-                  <div className="text-gray-700">{relatorio.chavePixConfirmada}</div>
-                </div>
-              )}
-            </div>
-
-            {relatorio.observacoes && (
-              <div className="text-xs">
-                <div className="text-gray-400 mb-0.5">Observações</div>
-                <div className="text-gray-700">{relatorio.observacoes}</div>
-              </div>
-            )}
-
-            {relatorio.compareceu && (
-              <div>
-                <div className="text-gray-400 text-xs mb-1.5">Sinais vitais</div>
-                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-                  {CAMPOS_CLINICOS.map((campo) => {
-                    const valor = relatorio[campo.nome as keyof typeof relatorio] as string | null;
-                    return (
-                      <div key={campo.nome} className="bg-bege rounded-lg px-2.5 py-1.5">
-                        <div className="text-[10px] text-gray-500">{campo.rotulo}</div>
-                        <div
-                          className={`text-xs font-semibold ${
-                            !valor || valor === NAO_SE_APLICA ? "text-gray-400" : "text-bordo"
-                          }`}
-                        >
-                          {valor ?? "—"}
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
-
-            {(relatorio.adicionais.length > 0 || relatorio.servicosAdicionais) && (
-              <div className="text-xs">
-                <div className="text-gray-400 mb-0.5">Serviços além do agendado</div>
-                {relatorio.adicionais.map((a) => (
-                  <div key={a.servico.nome} className="text-amber-800">
-                    {a.quantidade}× {a.servico.nome}
-                  </div>
-                ))}
-                {relatorio.servicosAdicionais && <div className="text-amber-800">{relatorio.servicosAdicionais}</div>}
-              </div>
-            )}
-
-            {relatorio.ajudaCustoCentavos != null && (
-              <div className="text-xs">
-                <div className="text-gray-400 mb-0.5">Ajuda de custo</div>
-                <div className="text-amber-800">
-                  {formatarReais(relatorio.ajudaCustoCentavos)}
-                  {relatorio.ajudaCustoJustificativa ? ` · ${relatorio.ajudaCustoJustificativa}` : ""}
-                </div>
-              </div>
-            )}
-
-            {relatorio.latitude != null && relatorio.longitude != null && (
-              <div className="text-xs">
-                <div className="text-gray-400 mb-0.5">Local no envio do relatório</div>
-                <a
-                  href={`https://www.google.com/maps?q=${relatorio.latitude},${relatorio.longitude}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="font-semibold text-green-700 hover:underline"
-                >
-                  📍 ver no mapa
-                  {relatorio.precisaoMetros != null && ` · precisão de ${Math.round(relatorio.precisaoMetros)}m`}
-                </a>
-              </div>
-            )}
+            <RelatorioPreenchido relatorio={relatorio} />
 
             <div className="pt-3 border-t border-gray-100 text-xs">
               {relatorio.aprovadoEm ? (
