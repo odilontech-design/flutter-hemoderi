@@ -67,7 +67,7 @@ async function main() {
   const data = new Date(); data.setUTCDate(data.getUTCDate() + 10); data.setUTCHours(0, 0, 0, 0);
   const pedido = await prisma.pedido.create({
     data: {
-      numero: p.proximoNumeroPedido, clinicaId: clinica.id, servicoId: servico.id,
+      numero: p.proximoNumeroPedido - 1, clinicaId: clinica.id, servicoId: servico.id,
       profissionalId: profs[0].id, data, horaInicio: "14:00", duracaoMin: 60,
       status: "SOLICITADO", valorServicoCentavos: 10000,
     },

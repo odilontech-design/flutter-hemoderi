@@ -282,7 +282,7 @@ export async function vincularSolicitacao(
 
     const criado = await tx.pedido.create({
       data: {
-        numero: config.proximoNumeroPedido,
+        numero: config.proximoNumeroPedido - 1,
         clinicaId,
         servicoId: solicitacao.servicoId,
         data: solicitacao.dataDesejada,
