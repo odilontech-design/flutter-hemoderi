@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { precoDoServico, precosDosServicos, regiaoDaUf } from "../src/lib/preco";
+import { precoDoServico, precosDosServicos, regiaoDaUf, tabelasDaClinica } from "../src/lib/preco";
 
 const TABELA = 50_000; // R$ 500,00
 const SERVICO = "servico-1";
@@ -232,4 +232,40 @@ test("em lote, o preço do perfil também entra na cadeia", async () => {
   assert.equal(precos.get("a")?.origem, "perfil");
   assert.equal(precos.get("a")?.valorCentavos, 500);
   assert.equal(precos.get("b")?.origem, "tabela");
+});
+
+test("tabelasDaClinica: o perfil traz a tabela dele, além das liberadas à mão", async () => {
+  let filtro: unknown;
+  const banco = {
+    clinica: { findUnique: async () => ({ perfis: ["ODONTOLOGIA", "CURSO"] }) },
+    tabelaPreco: {
+      findMany: async (args: { where: unknown }) => {
+        filtro = args.where;
+        return [{ id: "t1" }];
+      },
+    },
+  };
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- dublê mínimo
+  const ids = await tabelasDaClinica(banco as any, "c1");
+  assert.deepEqual(ids, ["t1"]);
+  assert.deepEqual(filtro, {
+    ativa: true,
+    OR: [{ clinicas: { some: { id: "c1" } } }, { perfil: { in: ["ODONTOLOGIA", "CURSO"] } }],
+  });
+});
+
+test("tabelasDaClinica: sem perfil, só valem as tabelas liberadas à mão", async () => {
+  let filtro: unknown;
+  const banco = {
+    clinica: { findUnique: async () => ({ perfis: [] }) },
+    tabelaPreco: {
+      findMany: async (args: { where: unknown }) => {
+        filtro = args.where;
+        return [];
+      },
+    },
+  };
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- dublê mínimo
+  await tabelasDaClinica(banco as any, "c1");
+  assert.deepEqual(filtro, { ativa: true, OR: [{ clinicas: { some: { id: "c1" } } }] });
 });

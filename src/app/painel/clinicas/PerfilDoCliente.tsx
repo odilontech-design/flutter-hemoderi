@@ -59,6 +59,9 @@ export function PerfilDoCliente({
                   defaultChecked={tabelasLiberadas.includes(tabela.id)}
                 />
                 {tabela.nome}
+                {tabela.perfil && perfis.includes(tabela.perfil) && (
+                  <span className="text-[10px] font-semibold text-green-700">vale pelo perfil</span>
+                )}
                 {tabela.perfil && (
                   <span className="text-[10px] text-gray-400">
                     {ROTULO_PERFIL_CLIENTE[tabela.perfil as keyof typeof ROTULO_PERFIL_CLIENTE]}
@@ -69,8 +72,9 @@ export function PerfilDoCliente({
           </div>
         )}
         <div className="text-[10px] text-gray-400 mt-1">
-          O preço negociado com a clínica continua valendo acima de qualquer tabela. Com mais de uma
-          liberada, vale a menor.
+          A tabela pensada para um perfil vale sozinha para quem tem aquele perfil; aqui você libera
+          outras à mão. O preço negociado com a clínica continua valendo acima de qualquer tabela. Com
+          mais de uma, vale a menor.
         </div>
       </div>
     </FormularioAcao>

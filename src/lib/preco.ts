@@ -183,16 +183,26 @@ export async function precosDosServicos(
 }
 
 /**
- * Ids das tabelas de preço ativas liberadas para a clínica. Separado de
- * `precoDoServico` para a cadeia continuar testável com um dublê só de
- * preços — quem chama busca uma vez e reaproveita para vários serviços.
+ * Ids das tabelas de preço ativas que valem para a clínica: as liberadas uma a
+ * uma pela equipe E as pensadas para o perfil dela. Cliente de Odontologia
+ * recebe a tabela de Odontologia sem ninguém precisar liberá-la à mão — o
+ * perfil é a finalidade, e é a finalidade que define o preço (ata de 01/10).
+ *
+ * Separado de `precoDoServico` para a cadeia continuar testável com um dublê
+ * só de preços — quem chama busca uma vez e reaproveita para vários serviços.
  */
 export async function tabelasDaClinica(
-  prisma: Pick<PrismaClient, "tabelaPreco">,
+  prisma: Pick<PrismaClient, "tabelaPreco" | "clinica">,
   clinicaId: string
 ): Promise<string[]> {
+  const clinica = await prisma.clinica.findUnique({ where: { id: clinicaId }, select: { perfis: true } });
+  const perfis = clinica?.perfis ?? [];
+
   const tabelas = await prisma.tabelaPreco.findMany({
-    where: { ativa: true, clinicas: { some: { id: clinicaId } } },
+    where: {
+      ativa: true,
+      OR: [{ clinicas: { some: { id: clinicaId } } }, ...(perfis.length > 0 ? [{ perfil: { in: perfis } }] : [])],
+    },
     select: { id: true },
   });
   return tabelas.map((t) => t.id);

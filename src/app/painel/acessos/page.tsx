@@ -10,6 +10,7 @@ import { ROTULO_PAPEL, perfilEfetivo } from "@/lib/papeis";
 import { formatarData } from "@/lib/data";
 import { type Vinculo } from "./NovoAcesso";
 import { SeletorPerfil } from "./SeletorPerfil";
+import { PerfisDoCliente } from "./PerfisDoCliente";
 
 export const dynamic = "force-dynamic";
 
@@ -60,7 +61,7 @@ export default async function Acessos({ searchParams }: { searchParams: { nivel?
     prisma.usuario.findMany({
       orderBy: [{ desativadoEm: "asc" }, { papel: "asc" }, { nome: "asc" }],
       include: {
-        clinica: { select: { nome: true, ativa: true } },
+        clinica: { select: { id: true, nome: true, ativa: true, perfis: true } },
         profissional: { select: { nome: true, ativo: true } },
       },
     }),
@@ -180,7 +181,13 @@ export default async function Acessos({ searchParams }: { searchParams: { nivel?
                     </td>
                     <td className={`py-2 pr-3 whitespace-nowrap ${OCULTO_MOVEL}`}>{ROTULO_PAPEL[usuario.papel]}</td>
                     <td className={`py-2 pr-3 whitespace-nowrap ${OCULTO_MOVEL}`}>
-                      {usuario.papel !== "INTERNO" ? (
+                      {usuario.papel === "CLINICA" && usuario.clinica ? (
+                        <PerfisDoCliente
+                          clinicaId={usuario.clinica.id}
+                          perfisAtuais={usuario.clinica.perfis}
+                          desabilitado={!ativo}
+                        />
+                      ) : usuario.papel !== "INTERNO" ? (
                         "—"
                       ) : (
                         <SeletorPerfil

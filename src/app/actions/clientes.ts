@@ -58,6 +58,39 @@ export async function salvarPerfilDaClinica(_anterior: Resultado, dados: FormDat
 }
 
 /**
+ * Liga ou desliga UM perfil do cliente — o gesto direto da tela de Acessos,
+ * sem abrir a clínica. Mexe só nos perfis: as tabelas liberadas à mão ficam
+ * como estão (o perfil traz a tabela dele sozinho, ver tabelasDaClinica).
+ */
+export async function alternarPerfilDaClinica(clinicaId: string, perfil: string, ligado: boolean): Promise<Resultado> {
+  const { sessao, erro } = await exigirComercial();
+  if (erro) return { ok: false, erro };
+
+  const [valido] = lerPerfis([perfil]);
+  if (!valido) return { ok: false, erro: "Perfil desconhecido." };
+
+  const clinica = await prisma.clinica.findUnique({ where: { id: clinicaId }, select: { perfis: true } });
+  if (!clinica) return { ok: false, erro: "Clínica não encontrada." };
+
+  const atuais = clinica.perfis.filter((p) => p !== valido);
+  const perfis = ligado ? [...atuais, valido] : atuais;
+
+  await prisma.clinica.update({ where: { id: clinicaId }, data: { perfis } });
+  await registrarAuditoria(
+    sessao.usuarioId,
+    "Clinica",
+    clinicaId,
+    "perfil",
+    `${ligado ? "+" : "-"}${valido} → ${perfis.join(", ") || "sem perfil"}`
+  );
+
+  atualizarTelas(clinicaId);
+  revalidatePath("/painel/acessos");
+  revalidatePath("/portal/catalogo");
+  return { ok: true };
+}
+
+/**
  * A triagem do autocadastro: confere o que o cliente declarou e libera (ou
  * não) o agendamento. Aprovar grava os perfis CONFIRMADOS — que podem diferir
  * do declarado, é justamente para isso que existe a conferência.
