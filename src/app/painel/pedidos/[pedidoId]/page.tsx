@@ -31,7 +31,7 @@ export default async function DetalheDoPedido({ params }: { params: { pedidoId: 
       clinica: { select: { nome: true } },
       servico: { select: { nome: true } },
       profissional: { select: { nome: true } },
-      relatorio: true,
+      relatorio: { include: { adicionais: { select: { quantidade: true, servico: { select: { nome: true } } } } } },
       avaliacao: { select: { nota: true, comentario: true } },
     },
   });
@@ -182,10 +182,15 @@ export default async function DetalheDoPedido({ params }: { params: { pedidoId: 
               </div>
             )}
 
-            {relatorio.servicosAdicionais && (
+            {(relatorio.adicionais.length > 0 || relatorio.servicosAdicionais) && (
               <div className="text-xs">
-                <div className="text-gray-400 mb-0.5">Serviços adicionais</div>
-                <div className="text-amber-800">{relatorio.servicosAdicionais}</div>
+                <div className="text-gray-400 mb-0.5">Serviços além do agendado</div>
+                {relatorio.adicionais.map((a) => (
+                  <div key={a.servico.nome} className="text-amber-800">
+                    {a.quantidade}× {a.servico.nome}
+                  </div>
+                ))}
+                {relatorio.servicosAdicionais && <div className="text-amber-800">{relatorio.servicosAdicionais}</div>}
               </div>
             )}
 

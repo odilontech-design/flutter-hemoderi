@@ -139,3 +139,26 @@ export function enderecoEmUmaLinha(clinica: {
   const rua = [clinica.endereco, clinica.numero].filter(Boolean).join(", ");
   return [rua, clinica.bairro, clinica.cidade, clinica.uf].filter(Boolean).join(" · ");
 }
+
+export const LIMITE_QUANTIDADE_ADICIONAL = 99;
+
+/**
+ * Os serviços a mais do relatório, lidos das duas listas paralelas que o
+ * formulário envia (um id e uma quantidade por linha). Linha sem serviço é
+ * linha em branco e some; o mesmo serviço em duas linhas vira uma só, com as
+ * quantidades somadas — a tabela guarda um registro por serviço.
+ */
+export function lerServicosAdicionais(
+  ids: unknown[],
+  quantidades: unknown[]
+): { servicoId: string; quantidade: number }[] {
+  const porServico = new Map<string, number>();
+  ids.forEach((bruto, i) => {
+    const servicoId = String(bruto ?? "").trim();
+    if (!servicoId) return;
+    const n = Math.trunc(Number(quantidades[i]));
+    const quantidade = Number.isFinite(n) && n >= 1 ? Math.min(n, LIMITE_QUANTIDADE_ADICIONAL) : 1;
+    porServico.set(servicoId, Math.min((porServico.get(servicoId) ?? 0) + quantidade, LIMITE_QUANTIDADE_ADICIONAL));
+  });
+  return Array.from(porServico, ([servicoId, quantidade]) => ({ servicoId, quantidade }));
+}

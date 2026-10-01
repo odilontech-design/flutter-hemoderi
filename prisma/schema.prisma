@@ -377,12 +377,13 @@ model Servico {
   atualizadoEm DateTime  @updatedAt
   desativadoEm DateTime?
 
-  precos        PrecoClinica[]
-  precosTabela  PrecoTabela[]
-  precosRegiao  PrecoRegiao[]
-  solicitacoes  SolicitacaoPublica[]
-  regrasRepasse RegraRepasse[]
-  pedidos       Pedido[]
+  precos                PrecoClinica[]
+  precosTabela          PrecoTabela[]
+  precosRegiao          PrecoRegiao[]
+  solicitacoes          SolicitacaoPublica[]
+  regrasRepasse         RegraRepasse[]
+  pedidos               Pedido[]
+  adicionaisDeRelatorio RelatorioServicoAdicional[]
 
   @@index([ativo])
   @@index([categoria])
@@ -1058,8 +1059,34 @@ model RelatorioAtendimento {
   valorValidadoEm      DateTime?
   ajudaCustoValidadaEm DateTime?
 
+  /// Serviços do catálogo que o profissional executou ALÉM do agendado, com
+  /// a quantidade de cada um. É a versão estruturada de `servicosAdicionais`:
+  /// o texto livre continua para o que não cabe no catálogo, mas o que cabe
+  /// vira linha aqui, e é a linha que o pós-venda consegue transformar em valor.
+  adicionais RelatorioServicoAdicional[]
+
   @@index([profissionalId])
   @@index([aprovadoEm])
+}
+
+/// Um serviço a mais num relatório. Declarado por quem atendeu e conferido
+/// pela central na aprovação — a presença aqui NÃO altera o valor do pedido
+/// nem o repasse sozinha.
+model RelatorioServicoAdicional {
+  id String @id @default(cuid())
+
+  relatorioId String
+  relatorio   RelatorioAtendimento @relation(fields: [relatorioId], references: [id], onDelete: Cascade)
+
+  servicoId String
+  servico   Servico @relation(fields: [servicoId], references: [id])
+
+  quantidade Int @default(1)
+
+  /// O mesmo serviço duas vezes no mesmo relatório é uma linha com quantidade
+  /// maior, não duas linhas.
+  @@unique([relatorioId, servicoId])
+  @@index([servicoId])
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

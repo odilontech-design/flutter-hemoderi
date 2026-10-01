@@ -25,10 +25,18 @@ export default async function Relatorio({ params }: { params: { pedidoId: string
       endereco: { select: { endereco: true, numero: true, bairro: true, cidade: true, uf: true } },
       servico: { select: { nome: true } },
       profissional: { select: { chavePix: true } },
-      relatorio: true,
+      relatorio: { include: { adicionais: { select: { servicoId: true, quantidade: true } } } },
     },
   });
   if (!pedido) notFound();
+
+  // Todo o catálogo ativo, sem filtro de perfil ou praça: o que vale aqui é o
+  // que a pessoa de fato executou, não o que a clínica poderia pedir.
+  const catalogo = await prisma.servico.findMany({
+    where: { ativo: true },
+    orderBy: [{ familia: "asc" }, { nome: "asc" }],
+    select: { id: true, nome: true, familia: true },
+  });
 
   // O formulário é controlado por texto (o "N/A" preenche o campo), então os
   // valores já enviados chegam como string — inclusive os que no banco são
@@ -38,7 +46,8 @@ export default async function Relatorio({ params }: { params: { pedidoId: string
     compareceu: r ? (r.compareceu ? "sim" : "nao") : "",
     inicioReal: r?.inicioReal ?? "",
     fimReal: r?.fimReal ?? "",
-    quantidade: r ? String(r.quantidade) : "",
+    // Primeira vez: já vem a quantidade agendada, que é o que costuma acontecer.
+    quantidade: String(r ? r.quantidade : pedido.quantidade),
     intercorrencia: r ? (r.intercorrencia ? "sim" : "nao") : "",
     observacoes: r?.observacoes ?? "",
     frequenciaCardiaca: r?.frequenciaCardiaca ?? "",
@@ -85,6 +94,9 @@ export default async function Relatorio({ params }: { params: { pedidoId: string
             chavePixCadastro={pedido.relatorio?.chavePixConfirmada ?? pedido.profissional?.chavePix ?? null}
             jaEnviado={pedido.relatorio != null}
             valores={valores}
+            quantidadeAgendada={pedido.quantidade}
+            catalogo={catalogo}
+            adicionaisIniciais={r?.adicionais ?? []}
           />
         )}
       </Cartao>

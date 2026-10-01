@@ -66,12 +66,107 @@ function CampoClinico({
 
 export type ValoresRelatorio = Record<string, string>;
 
+export type ServicoDoCatalogo = { id: string; nome: string; familia: string | null };
+type LinhaAdicional = { chave: number; servicoId: string; quantidade: string };
+
+/**
+ * Serviços executados além do agendado: o profissional escolhe no catálogo e
+ * informa quantos fez. Cada linha manda um par (serviço, quantidade) — listas
+ * paralelas no FormData, lidas por lerServicosAdicionais no servidor.
+ */
+function ServicosAdicionais({
+  catalogo,
+  iniciais,
+}: {
+  catalogo: ServicoDoCatalogo[];
+  iniciais: { servicoId: string; quantidade: number }[];
+}) {
+  const [linhas, setLinhas] = useState<LinhaAdicional[]>(
+    iniciais.map((a, i) => ({ chave: i, servicoId: a.servicoId, quantidade: String(a.quantidade) }))
+  );
+  const proxima = useRef(iniciais.length);
+
+  const porFamilia = new Map<string, ServicoDoCatalogo[]>();
+  for (const s of catalogo) {
+    const familia = s.familia ?? "Outros";
+    porFamilia.set(familia, [...(porFamilia.get(familia) ?? []), s]);
+  }
+
+  const alterar = (chave: number, mudanca: Partial<LinhaAdicional>) =>
+    setLinhas((atuais) => atuais.map((l) => (l.chave === chave ? { ...l, ...mudanca } : l)));
+
+  return (
+    <div className="rounded-xl border border-gray-200 p-3 space-y-3">
+      <div>
+        <div className="font-display font-bold text-bordo text-sm">Realizou mais serviços do que o agendado?</div>
+        <div className="text-[10px] text-gray-500 mt-0.5 leading-relaxed">
+          Adicione cada serviço feito a mais, com a quantidade. A central confere antes de virar valor.
+        </div>
+      </div>
+
+      {linhas.map((linha) => (
+        <div key={linha.chave} className="flex items-end gap-2">
+          <div className="flex-1 min-w-0">
+            <Rotulo>Serviço</Rotulo>
+            <Selecao
+              name="adicionalServicoId"
+              value={linha.servicoId}
+              onChange={(e) => alterar(linha.chave, { servicoId: e.target.value })}
+            >
+              <option value="">Escolha o serviço…</option>
+              {Array.from(porFamilia, ([familia, servicos]) => (
+                <optgroup key={familia} label={familia}>
+                  {servicos.map((s) => (
+                    <option key={s.id} value={s.id}>
+                      {s.nome}
+                    </option>
+                  ))}
+                </optgroup>
+              ))}
+            </Selecao>
+          </div>
+          <div className="w-20 shrink-0">
+            <Rotulo>Qtd.</Rotulo>
+            <Campo
+              name="adicionalQuantidade"
+              type="number"
+              min={1}
+              max={99}
+              value={linha.quantidade}
+              onChange={(e) => alterar(linha.chave, { quantidade: e.target.value })}
+            />
+          </div>
+          <button
+            type="button"
+            aria-label="Remover serviço"
+            onClick={() => setLinhas((atuais) => atuais.filter((l) => l.chave !== linha.chave))}
+            className="shrink-0 text-xs font-semibold px-3 py-2 min-h-[40px] sm:min-h-0 rounded-lg border border-gray-300 text-gray-500 hover:bg-gray-50"
+          >
+            ✕
+          </button>
+        </div>
+      ))}
+
+      <button
+        type="button"
+        onClick={() => setLinhas((atuais) => [...atuais, { chave: proxima.current++, servicoId: "", quantidade: "1" }])}
+        className="text-[11px] font-semibold text-bordo hover:underline"
+      >
+        + Adicionar serviço realizado
+      </button>
+    </div>
+  );
+}
+
 export function FormularioRelatorio({
   pedidoId,
   horaPrevista,
   chavePixCadastro,
   jaEnviado,
   valores,
+  quantidadeAgendada,
+  catalogo,
+  adicionaisIniciais,
 }: {
   pedidoId: string;
   horaPrevista: string;
@@ -79,6 +174,9 @@ export function FormularioRelatorio({
   jaEnviado: boolean;
   /** O que já foi enviado, quando é uma correção. */
   valores: ValoresRelatorio;
+  quantidadeAgendada: number;
+  catalogo: ServicoDoCatalogo[];
+  adicionaisIniciais: { servicoId: string; quantidade: number }[];
 }) {
   const router = useRouter();
   const [estado, enviar] = useFormState(enviarRelatorio, INICIAL);
@@ -164,10 +262,18 @@ export function FormularioRelatorio({
               <Campo name="fimReal" type="time" defaultValue={valores.fimReal} />
             </div>
             <div>
-              <Rotulo>Quantidade</Rotulo>
-              <Campo name="quantidade" type="number" min={1} defaultValue={valores.quantidade || 1} />
+              <Rotulo>Quantidade feita</Rotulo>
+              <Campo name="quantidade" type="number" min={1} defaultValue={valores.quantidade || quantidadeAgendada} />
             </div>
           </div>
+
+          {quantidadeAgendada > 1 && (
+            <div className="text-[10px] text-gray-400 -mt-2">
+              Quantidade agendada: {quantidadeAgendada}. Corrija se foi diferente.
+            </div>
+          )}
+
+          <ServicosAdicionais catalogo={catalogo} iniciais={adicionaisIniciais} />
 
           <div className="border-t border-gray-100 pt-4">
             <div className="font-display font-bold text-bordo text-sm mb-1">Sinais vitais</div>
@@ -197,7 +303,7 @@ export function FormularioRelatorio({
           </div>
 
           <div>
-            <Rotulo>Serviço executado além do contratado</Rotulo>
+            <Rotulo>Outro serviço ou ajuste fora do catálogo</Rotulo>
             <Area
               name="servicosAdicionais"
               rows={2}
@@ -205,8 +311,7 @@ export function FormularioRelatorio({
               placeholder="Ex.: membrana virou stickybone; 2 membranas a mais"
             />
             <div className="text-[10px] text-gray-400 mt-1">
-              Deixe em branco se foi exatamente o que estava contratado. O que entrar aqui é
-              conferido pela central antes de virar valor.
+              Só para o que não está na lista acima. Deixe em branco se não houve.
             </div>
           </div>
 

@@ -6,6 +6,7 @@ import {
   CAMPOS_CLINICOS,
   divergiu,
   enderecoEmUmaLinha,
+  lerServicosAdicionais,
   NAO_SE_APLICA,
 } from "../src/lib/relatorio";
 
@@ -96,4 +97,17 @@ test("endereço incompleto não deixa separador solto", () => {
   // Clínica cadastrada só com cidade não pode virar "· · São Paulo ·".
   assert.equal(enderecoEmUmaLinha({ cidade: "São Paulo", uf: "SP" }), "São Paulo · SP");
   assert.equal(enderecoEmUmaLinha({}), "");
+});
+
+test("serviços adicionais: linha sem serviço some e quantidade inválida vira 1", () => {
+  assert.deepEqual(lerServicosAdicionais(["a", "", "b"], ["2", "5", "abc"]), [
+    { servicoId: "a", quantidade: 2 },
+    { servicoId: "b", quantidade: 1 },
+  ]);
+});
+
+test("serviços adicionais: o mesmo serviço em duas linhas soma e respeita o teto", () => {
+  assert.deepEqual(lerServicosAdicionais(["a", "a"], ["2", "3"]), [{ servicoId: "a", quantidade: 5 }]);
+  assert.deepEqual(lerServicosAdicionais(["a", "a"], ["80", "80"]), [{ servicoId: "a", quantidade: 99 }]);
+  assert.deepEqual(lerServicosAdicionais([], []), []);
 });

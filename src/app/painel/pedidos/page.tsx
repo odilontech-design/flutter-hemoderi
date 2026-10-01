@@ -65,6 +65,7 @@ export default async function Esteira({
             longitude: true,
             aprovadoEm: true,
             servicosAdicionais: true,
+            adicionais: { select: { quantidade: true, servico: { select: { nome: true } } } },
             clinicaNomeInformado: true,
             enderecoInformado: true,
             doutorNomeInformado: true,
@@ -272,9 +273,13 @@ export default async function Esteira({
                   {/* O que a pessoa declarou a mais é o que o pós-venda vai
                       conferir — precisa estar à vista, não escondido atrás
                       de um clique. */}
-                  {pedido.relatorio?.servicosAdicionais && (
+                  {pedido.relatorio && (pedido.relatorio.adicionais.length > 0 || pedido.relatorio.servicosAdicionais) && (
                     <div className="text-[11px] text-amber-800 mt-1">
-                      <strong>Além do contratado:</strong> {pedido.relatorio.servicosAdicionais}
+                      <strong>Além do contratado:</strong>{" "}
+                      {[
+                        ...pedido.relatorio.adicionais.map((a) => `${a.quantidade}× ${a.servico.nome}`),
+                        ...(pedido.relatorio.servicosAdicionais ? [pedido.relatorio.servicosAdicionais] : []),
+                      ].join(" · ")}
                     </div>
                   )}
                   {/* O atendimento saiu diferente do agendado (ata de 28/09).

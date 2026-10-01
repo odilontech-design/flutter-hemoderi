@@ -10,6 +10,7 @@ import {
   CAMPOS_CLINICOS,
   divergiu,
   enderecoEmUmaLinha,
+  lerServicosAdicionais,
 } from "@/lib/relatorio";
 import { registrarResultado, type Resultado } from "./pedidos";
 
@@ -86,6 +87,21 @@ export async function enviarRelatorio(_anterior: Resultado, dados: FormData): Pr
 
   const quantidade = Number(dados.get("quantidade") ?? 1);
 
+  // Serviços do catálogo feitos além do agendado. Só entram os que existem e
+  // estão ativos — o id vem do navegador e não vale por si só. Num "não
+  // compareceu" não houve o que executar a mais.
+  const adicionais = compareceu
+    ? lerServicosAdicionais(dados.getAll("adicionalServicoId"), dados.getAll("adicionalQuantidade"))
+    : [];
+  if (adicionais.length > 0) {
+    const validos = await prisma.servico.count({
+      where: { id: { in: adicionais.map((a) => a.servicoId) }, ativo: true },
+    });
+    if (validos !== adicionais.length) {
+      return { ok: false, erro: "Um dos serviços informados além do agendado não está mais no catálogo. Reabra o relatório e confira." };
+    }
+  }
+
   // Vem do navegador, no momento do envio — pode faltar (permissão negada,
   // sem GPS, formulário enviado de um jeito que não passou por lá). Nulo é
   // um estado normal aqui, não um erro: confirma presença quando dá, nunca
@@ -131,23 +147,35 @@ export async function enviarRelatorio(_anterior: Resultado, dados: FormData): Pr
     ...correcoesDoAgendamento,
   };
 
-  await prisma.relatorioAtendimento.upsert({
-    where: { pedidoId: pedido.id },
-    // Update de verdade, não vazio: reenviar é corrigir, e um upsert que
-    // ignora a correção devolve "salvo" sem ter salvo nada.
-    //
-    // A correção derruba as conferências que o pós-venda já tinha feito: o
-    // que foi validado era o texto anterior. Manter o "serviço conferido" em
-    // cima de um serviço reescrito é pior que não ter conferência nenhuma,
-    // porque parece conferido.
-    update: {
-      ...conteudo,
-      ...localizacao,
-      servicoValidadoEm: null,
-      valorValidadoEm: null,
-      ajudaCustoValidadaEm: null,
-    },
-    create: { pedidoId: pedido.id, profissionalId: sessao.profissionalId, ...conteudo, ...localizacao },
+  await prisma.$transaction(async (tx) => {
+    const relatorio = await tx.relatorioAtendimento.upsert({
+      where: { pedidoId: pedido.id },
+      // Update de verdade, não vazio: reenviar é corrigir, e um upsert que
+      // ignora a correção devolve "salvo" sem ter salvo nada.
+      //
+      // A correção derruba as conferências que o pós-venda já tinha feito: o
+      // que foi validado era o texto anterior. Manter o "serviço conferido" em
+      // cima de um serviço reescrito é pior que não ter conferência nenhuma,
+      // porque parece conferido.
+      update: {
+        ...conteudo,
+        ...localizacao,
+        servicoValidadoEm: null,
+        valorValidadoEm: null,
+        ajudaCustoValidadaEm: null,
+      },
+      create: { pedidoId: pedido.id, profissionalId: sessao.profissionalId, ...conteudo, ...localizacao },
+      select: { id: true },
+    });
+
+    // A lista inteira é substituída: reenviar o relatório é reenviar o que
+    // ele diz agora, inclusive o que a pessoa tirou.
+    await tx.relatorioServicoAdicional.deleteMany({ where: { relatorioId: relatorio.id } });
+    if (adicionais.length > 0) {
+      await tx.relatorioServicoAdicional.createMany({
+        data: adicionais.map((a) => ({ relatorioId: relatorio.id, ...a })),
+      });
+    }
   });
 
   // Só fecha o pedido na primeira vez; correção não reabre a esteira.
