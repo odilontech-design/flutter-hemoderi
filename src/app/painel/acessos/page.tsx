@@ -143,6 +143,12 @@ export default async function Acessos({ searchParams }: { searchParams: { nivel?
         })}
       </div>
 
+      <div className="text-[11px] text-gray-500 mb-3 leading-relaxed">
+        <strong className="text-gray-700">Nível</strong> é o tipo de acesso (equipe, clínica ou profissional).{" "}
+        <strong className="text-gray-700">Perfil</strong> detalha o nível: na equipe, a função (comercial, logística…);
+        na clínica, a finalidade — Odontologia, Medicina, Estética, Curso, Mandic —, que define o catálogo e o preço.
+      </div>
+
       <Cartao>
         {usuariosFiltrados.length === 0 ? (
             <Vazio>
@@ -152,8 +158,7 @@ export default async function Acessos({ searchParams }: { searchParams: { nivel?
             <Tabela
               cabecalho={[
                 "Pessoa",
-                { texto: "Nível", ocultoMovel: true },
-                { texto: "Perfil", ocultoMovel: true },
+                { texto: "Nível e perfil", ocultoMovel: true },
                 { texto: "Vínculo", ocultoMovel: true },
                 "Situação",
                 { texto: "Senha", ocultoMovel: true },
@@ -179,23 +184,23 @@ export default async function Acessos({ searchParams }: { searchParams: { nivel?
                       </div>
                       <div className="text-[10px] text-gray-400 break-all">{usuario.email}</div>
                     </td>
-                    <td className={`py-2 pr-3 whitespace-nowrap ${OCULTO_MOVEL}`}>{ROTULO_PAPEL[usuario.papel]}</td>
-                    <td className={`py-2 pr-3 whitespace-nowrap ${OCULTO_MOVEL}`}>
-                      {usuario.papel === "CLINICA" && usuario.clinica ? (
-                        <PerfisDoCliente
-                          clinicaId={usuario.clinica.id}
-                          perfisAtuais={usuario.clinica.perfis}
-                          desabilitado={!ativo}
-                        />
-                      ) : usuario.papel !== "INTERNO" ? (
-                        "—"
-                      ) : (
-                        <SeletorPerfil
-                          usuarioId={usuario.id}
-                          perfilAtual={perfilEfetivo(usuario.perfilInterno)}
-                          desabilitado={!ativo}
-                        />
-                      )}
+                    <td className={`py-2 pr-3 ${OCULTO_MOVEL}`}>
+                      <div className="whitespace-nowrap text-gray-800">{ROTULO_PAPEL[usuario.papel]}</div>
+                      <div className="mt-1">
+                        {usuario.papel === "CLINICA" && usuario.clinica ? (
+                          <PerfisDoCliente
+                            clinicaId={usuario.clinica.id}
+                            perfisAtuais={usuario.clinica.perfis}
+                            desabilitado={!ativo}
+                          />
+                        ) : usuario.papel === "INTERNO" ? (
+                          <SeletorPerfil
+                            usuarioId={usuario.id}
+                            perfilAtual={perfilEfetivo(usuario.perfilInterno)}
+                            desabilitado={!ativo}
+                          />
+                        ) : null}
+                      </div>
                     </td>
                     <td className={`py-2 pr-3 text-gray-500 ${OCULTO_MOVEL}`}>
                       {usuario.clinica?.nome ?? usuario.profissional?.nome ?? "—"}
