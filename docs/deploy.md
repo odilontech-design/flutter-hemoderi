@@ -141,6 +141,21 @@ página renderiza, e um QR já impresso com o domínio antigo (`*.vercel.app` ou
 qualquer provisório) para de funcionar assim que a variável muda — reimprimir
 é a única forma de corrigi-lo.
 
+## Economia no plano gratuito da Vercel
+
+O limite que mais enche no plano Hobby é o **Functions Storage** (10 GB), e ele
+é medido na conta inteira, somando todos os projetos. Quem enche é a quantidade
+de deploys guardados, não o tráfego: cada deploy guarda uma cópia de cada função
+(55 rotas, ~16 MB cada, quase tudo é o motor do Prisma).
+
+- **Um projeto só por repositório.** O mesmo repositório não deve estar ligado a
+  dois projetos Vercel — cada push gera dois deploys.
+- **Só a `main` gera deploy.** Em Settings → Git → *Ignored Build Step*, use
+  `[ "$VERCEL_GIT_COMMIT_REF" != "main" ]`: branches de trabalho não geram preview.
+- **Apagar deploys antigos** (aba Deployments) libera o espaço na hora; se o plano
+  oferecer *Deployment Retention* em Settings → Build and Deployment, reduza.
+- O aviso de fila do painel só consulta com a aba visível, a cada 3 minutos.
+
 ## Ambiente local
 
 ```bash

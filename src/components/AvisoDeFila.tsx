@@ -11,8 +11,15 @@ type Pendencias = {
   movimentadoEm: string | null;
 };
 
-/** De quanto em quanto tempo a fila é consultada. */
-const INTERVALO_MS = 60_000;
+/**
+ * De quanto em quanto tempo a fila é consultada — e só com a aba à vista.
+ *
+ * Cada consulta é uma invocação de função, uma checagem de sessão e duas
+ * consultas ao banco. Uma aba esquecida aberta no fundo gastava isso o dia
+ * inteiro sem ninguém olhar; agora ela pausa e, ao voltar para a aba, consulta
+ * na hora.
+ */
+const INTERVALO_MS = 180_000;
 
 /**
  * O aviso de que caiu trabalho na sua fila (ata de 28/09).
@@ -24,8 +31,8 @@ const INTERVALO_MS = 60_000;
  *
  * Consulta em vez de conexão viva: a fila muda algumas vezes por hora, não
  * por segundo, e um socket aberto por atendente custaria mais operação do que
- * entrega. Um minuto é bem menor que o tempo que a pessoa levaria para
- * perceber sozinha.
+ * entrega. Poucos minutos ainda é bem menos que o tempo que a pessoa
+ * levaria para perceber sozinha.
  *
  * O "já vi isso" é gravado quando a pessoa FECHA ou abre a fila — nunca no
  * instante em que o aviso aparece. A diferença importa: marcar como lido ao
@@ -84,11 +91,17 @@ export function AvisoDeFila() {
       }
     }
 
+    const consultarSeVisivel = () => {
+      if (document.visibilityState === "visible") consultar();
+    };
+
     consultar();
-    const timer = setInterval(consultar, INTERVALO_MS);
+    const timer = setInterval(consultarSeVisivel, INTERVALO_MS);
+    document.addEventListener("visibilitychange", consultarSeVisivel);
     return () => {
       cancelado = true;
       clearInterval(timer);
+      document.removeEventListener("visibilitychange", consultarSeVisivel);
     };
   }, []);
 
