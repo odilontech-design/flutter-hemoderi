@@ -403,99 +403,208 @@ export async function confirmarPedido(pedidoId: string): Promise<Resultado> {
   return resultado;
 }
 
+type PedidoParaAlocar = {
+  id: string;
+  numero: number;
+  clinicaId: string;
+  servicoId: string;
+  data: Date;
+  horaInicio: string;
+  duracaoMin: number;
+  valorServicoCentavos: number;
+  servico: {
+    id: string;
+    duracaoMin: number;
+    exigeEquipamento: boolean;
+    equipamentoIlimitado: boolean;
+    tipoEquipamento: string | null;
+  };
+};
+
+const SELECAO_PARA_ALOCAR = {
+  servico: {
+    select: {
+      id: true,
+      duracaoMin: true,
+      exigeEquipamento: true,
+      equipamentoIlimitado: true,
+      tipoEquipamento: true,
+    },
+  },
+} as const;
+
+/**
+ * O miolo da alocação de UM pedido, dentro de uma transação já aberta — é o que
+ * `alocarPedido` roda sozinho e o que `alocarGrupo` roda para cada serviço do
+ * agendamento, todos na mesma transação (ou aloca tudo, ou nada).
+ */
+async function alocarNaTransacao(tx: Prisma.TransactionClient, pedido: PedidoParaAlocar, profissionalId: string) {
+  await travarRecursos(tx, {
+    clinicaId: pedido.clinicaId,
+    profissionalId,
+    tipoEquipamento: pedido.servico.exigeEquipamento ? pedido.servico.tipoEquipamento : null,
+  });
+
+  const impedimentos = await verificarAlocacao(
+    {
+      clinicaId: pedido.clinicaId,
+      profissionalId,
+      data: pedido.data,
+      horaInicio: pedido.horaInicio,
+      duracaoMin: pedido.duracaoMin,
+      ignorarPedidoId: pedido.id,
+    },
+    tx
+  );
+  if (temBloqueio(impedimentos)) {
+    return {
+      ok: false as const,
+      erro: impedimentos.filter((i) => i.bloqueante).map((i) => i.mensagem).join(" "),
+    };
+  }
+
+  const reservaEquipamento = pedido.servico.exigeEquipamento && !pedido.servico.equipamentoIlimitado;
+  const equipamentoId = reservaEquipamento
+    ? await equipamentoLivre(
+        pedido.data,
+        pedido.horaInicio,
+        pedido.duracaoMin,
+        pedido.servico.tipoEquipamento,
+        pedido.id,
+        tx
+      )
+    : null;
+  if (reservaEquipamento && !equipamentoId) {
+    return { ok: false as const, erro: "Nenhum equipamento livre nesse horário." };
+  }
+
+  const repasse = await repasseDoPedido(profissionalId, pedido.servicoId, pedido.valorServicoCentavos);
+
+  await tx.pedido.update({
+    where: { id: pedido.id },
+    data: {
+      profissionalId,
+      equipamentoId,
+      status: "ALOCADO",
+      valorRepasseCentavos: repasse.valorCentavos,
+    },
+  });
+
+  return {
+    ok: true as const,
+    repasseOrigem: repasse.origem,
+    avisos: impedimentos.filter((i) => !i.bloqueante).map((i) => i.mensagem),
+  };
+}
+
+/** O que acontece depois de alocar: rastro, aviso ao profissional e agenda do Google. */
+async function aposAlocar(usuarioId: string, pedidoId: string, repasseOrigem: string) {
+  await registrarAuditoria(usuarioId, "Pedido", pedidoId, "alocar", `repasse por ${repasseOrigem}`);
+  await enfileirarMensagem(pedidoId, "ALOCACAO");
+  await sincronizarEvento(pedidoId);
+}
+
 export async function alocarPedido(pedidoId: string, profissionalId: string): Promise<Resultado> {
   const sessao = await exigirInterno();
   if (!perfilPermite(sessao.perfil, "LOGISTICA")) {
     return { ok: false, erro: "Só a logística aloca profissionais." };
   }
 
-  const pedido = await prisma.pedido.findUnique({
-    where: { id: pedidoId },
-    include: {
-      servico: {
-        select: {
-          id: true,
-          duracaoMin: true,
-          exigeEquipamento: true,
-          equipamentoIlimitado: true,
-          tipoEquipamento: true,
-        },
-      },
-    },
-  });
+  const pedido = await prisma.pedido.findUnique({ where: { id: pedidoId }, include: SELECAO_PARA_ALOCAR });
   if (!pedido) return { ok: false, erro: "Pedido não encontrado." };
   if (!podeTransicionar(pedido.status, "ALOCADO")) {
     return { ok: false, erro: "Só é possível alocar um pedido confirmado." };
   }
 
-  const resultado = await prisma.$transaction(async (tx) => {
-    await travarRecursos(tx, {
-      clinicaId: pedido.clinicaId,
-      profissionalId,
-      tipoEquipamento: pedido.servico.exigeEquipamento ? pedido.servico.tipoEquipamento : null,
-    });
-
-    const impedimentos = await verificarAlocacao(
-      {
-        clinicaId: pedido.clinicaId,
-        profissionalId,
-        data: pedido.data,
-        horaInicio: pedido.horaInicio,
-        duracaoMin: pedido.duracaoMin,
-        ignorarPedidoId: pedido.id,
-      },
-      tx
-    );
-    if (temBloqueio(impedimentos)) {
-      return {
-        ok: false as const,
-        erro: impedimentos.filter((i) => i.bloqueante).map((i) => i.mensagem).join(" "),
-      };
-    }
-
-    const reservaEquipamento =
-      pedido.servico.exigeEquipamento && !pedido.servico.equipamentoIlimitado;
-    const equipamentoId = reservaEquipamento
-      ? await equipamentoLivre(
-          pedido.data,
-          pedido.horaInicio,
-          pedido.duracaoMin,
-          pedido.servico.tipoEquipamento,
-          pedido.id,
-          tx
-        )
-      : null;
-    if (reservaEquipamento && !equipamentoId) {
-      return { ok: false as const, erro: "Nenhum equipamento livre nesse horário." };
-    }
-
-    const repasse = await repasseDoPedido(profissionalId, pedido.servicoId, pedido.valorServicoCentavos);
-
-    await tx.pedido.update({
-      where: { id: pedido.id },
-      data: {
-        profissionalId,
-        equipamentoId,
-        status: "ALOCADO",
-        valorRepasseCentavos: repasse.valorCentavos,
-      },
-    });
-
-    return {
-      ok: true as const,
-      repasseOrigem: repasse.origem,
-      avisos: impedimentos.filter((i) => !i.bloqueante).map((i) => i.mensagem),
-    };
-  });
-
+  const resultado = await prisma.$transaction((tx) => alocarNaTransacao(tx, pedido, profissionalId));
   if (!resultado.ok) return resultado;
 
-  await registrarAuditoria(sessao.usuarioId, "Pedido", pedido.id, "alocar", `repasse por ${resultado.repasseOrigem}`);
-  await enfileirarMensagem(pedido.id, "ALOCACAO");
-  await sincronizarEvento(pedido.id);
-
+  await aposAlocar(sessao.usuarioId, pedido.id, resultado.repasseOrigem);
   atualizarTelas();
   return { ok: true, avisos: resultado.avisos };
+}
+
+class ErroDoGrupo extends Error {}
+
+/**
+ * Aloca TODOS os serviços confirmados de um agendamento (mesmo `grupoId`) no
+ * mesmo profissional, de uma vez. Os serviços de uma visita acontecem em
+ * sequência na mesma clínica — alocá-los um a um só dobrava o trabalho da
+ * logística e deixava a visita pela metade quando o segundo esbarrava em algo.
+ * Numa transação só: se um serviço não puder ser alocado, nenhum é.
+ */
+export async function alocarGrupo(grupoId: string, profissionalId: string): Promise<Resultado> {
+  const sessao = await exigirInterno();
+  if (!perfilPermite(sessao.perfil, "LOGISTICA")) {
+    return { ok: false, erro: "Só a logística aloca profissionais." };
+  }
+  if (!profissionalId) return { ok: false, erro: "Escolha o profissional." };
+
+  const pedidos = await prisma.pedido.findMany({
+    where: { grupoId, status: "CONFIRMADO" },
+    orderBy: [{ data: "asc" }, { horaInicio: "asc" }],
+    include: SELECAO_PARA_ALOCAR,
+  });
+  if (pedidos.length === 0) return { ok: false, erro: "Nenhum serviço confirmado neste agendamento." };
+
+  let resultados;
+  try {
+    resultados = await prisma.$transaction(
+      async (tx) => {
+        const feitos = [];
+        for (const pedido of pedidos) {
+          const r = await alocarNaTransacao(tx, pedido, profissionalId);
+          if (!r.ok) throw new ErroDoGrupo(`Pedido nº ${pedido.numero}: ${r.erro}`);
+          feitos.push({ pedido, ...r });
+        }
+        return feitos;
+      },
+      { timeout: 30_000 }
+    );
+  } catch (erro) {
+    if (erro instanceof ErroDoGrupo) return { ok: false, erro: erro.message };
+    throw erro;
+  }
+
+  for (const r of resultados) await aposAlocar(sessao.usuarioId, r.pedido.id, r.repasseOrigem);
+  atualizarTelas();
+  return { ok: true, avisos: resultados.flatMap((r) => r.avisos) };
+}
+
+/**
+ * Repete uma ação de um pedido para todos os serviços ativos do agendamento
+ * que estão num dos status dados. Para na primeira recusa e a devolve — a
+ * ação individual já sabe dizer o motivo (perfil, status, agenda).
+ */
+async function paraCadaDoGrupo(
+  grupoId: string,
+  status: StatusPedido[],
+  acao: (pedidoId: string) => Promise<Resultado>
+): Promise<Resultado> {
+  const pedidos = await prisma.pedido.findMany({
+    where: { grupoId, status: { in: status } },
+    orderBy: [{ data: "asc" }, { horaInicio: "asc" }],
+    select: { id: true },
+  });
+  if (pedidos.length === 0) return { ok: false, erro: "Nada a fazer neste agendamento." };
+
+  for (const { id } of pedidos) {
+    const resultado = await acao(id);
+    if (!resultado.ok) return resultado;
+  }
+  return { ok: true };
+}
+
+export async function confirmarGrupo(grupoId: string): Promise<Resultado> {
+  return paraCadaDoGrupo(grupoId, ["SOLICITADO"], confirmarPedido);
+}
+
+export async function desalocarGrupo(grupoId: string, motivo: string): Promise<Resultado> {
+  return paraCadaDoGrupo(grupoId, ["ALOCADO"], (id) => desalocarPedido(id, motivo));
+}
+
+export async function cancelarGrupo(grupoId: string, motivo: string): Promise<Resultado> {
+  return paraCadaDoGrupo(grupoId, ["SOLICITADO", "CONFIRMADO", "ALOCADO"], (id) => cancelarPedido(id, motivo));
 }
 
 /**

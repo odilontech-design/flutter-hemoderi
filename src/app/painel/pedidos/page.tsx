@@ -1,10 +1,12 @@
 import { resumoDoEndereco } from "@/lib/endereco";
+import { AcoesGrupo } from "./AcoesGrupo";
 import Link from "next/link";
+import type { PerfilInterno, StatusPedido } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { exigirInterno } from "@/lib/sessao";
 import { Cartao, SeloStatus, Titulo, Vazio } from "@/components/ui";
 import { codigoDoPedido } from "@/lib/numeracao";
-import { formatarDataCurta } from "@/lib/data";
+import { formatarDataCurta, paraHora, paraMinutos } from "@/lib/data";
 import { formatarReais } from "@/lib/dinheiro";
 import { ETAPAS, etapaDoPerfil, etapaPorChave } from "@/lib/esteira";
 import { formatarAtraso, houveAtraso, minutosDeAtraso } from "@/lib/atraso";
@@ -19,6 +21,9 @@ import { perfilPermite } from "@/lib/papeis";
 import { condicaoValida } from "@/lib/pagamento";
 
 export const dynamic = "force-dynamic";
+
+/** Só o que ainda está em andamento se agrupa: relatório e conferência são por serviço. */
+const STATUS_AGRUPAVEIS: StatusPedido[] = ["SOLICITADO", "CONFIRMADO", "ALOCADO"];
 
 /**
  * A esteira. É a tela de trabalho da equipe, e abre na ETAPA de quem entrou
@@ -101,6 +106,17 @@ export default async function Esteira({
       })
   );
 
+  // Os serviços de UM agendamento (mesmo grupo) ainda em andamento aparecem
+  // juntos, num cartão só, com uma alocação só. Grupo de um membro na lista
+  // (os outros estão em outra etapa do filtro) segue como cartão normal.
+  const grupos = new Map<string, PedidoDaEsteira[]>();
+  for (const p of pedidos) {
+    if (p.grupoId && STATUS_AGRUPAVEIS.includes(p.status)) {
+      grupos.set(p.grupoId, [...(grupos.get(p.grupoId) ?? []), p]);
+    }
+  }
+  for (const [id, membros] of Array.from(grupos)) if (membros.length < 2) grupos.delete(id);
+
   return (
     <>
       <Titulo
@@ -157,7 +173,24 @@ export default async function Esteira({
         </Cartao>
       ) : (
         <div className="space-y-2">
-          {pedidos.map((pedido) => (
+          {pedidos.map((pedido) => {
+            const membros = pedido.grupoId ? grupos.get(pedido.grupoId) : undefined;
+            if (membros) {
+              // O cartão do grupo sai uma vez, no lugar do primeiro serviço.
+              if (membros[0].id !== pedido.id) return null;
+              return (
+                <CartaoDoGrupo
+                  key={`grupo-${pedido.grupoId}`}
+                  membros={membros}
+                  perfil={sessao.perfil}
+                  podeEditarValor={perfilPermite(sessao.perfil, "COMERCIAL")}
+                  profissionais={profissionais.filter((prof) =>
+                    membros.every((m) => !indisponiveisPorPedido.get(m.id)?.has(prof.id))
+                  )}
+                />
+              );
+            }
+            return (
             <Cartao key={pedido.id} className="!p-4">
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div className="min-w-0">
@@ -360,7 +393,8 @@ export default async function Esteira({
                 profissionalSolicitadoId={pedido.profissionalId}
               />
             </Cartao>
-          ))}
+            );
+          })}
         </div>
       )}
 
@@ -370,5 +404,130 @@ export default async function Esteira({
         </div>
       )}
     </>
+  );
+}
+
+/** Hora em que o serviço termina: início + duração. */
+function horaFinal(horaInicio: string, duracaoMin: number): string {
+  return paraHora(paraMinutos(horaInicio) + duracaoMin);
+}
+
+type PedidoDaEsteira = {
+  id: string;
+  numero: number;
+  data: Date;
+  horaInicio: string;
+  duracaoMin: number;
+  status: StatusPedido;
+  quantidade: number;
+  grupoId: string | null;
+  valorServicoCentavos: number;
+  condicaoPagamento: string | null;
+  doutorNome: string | null;
+  pacienteNome: string | null;
+  observacoes: string | null;
+  aceitoEm: Date | null;
+  clinica: { nome: string };
+  endereco: { rotulo: string; endereco: string; numero: string | null; complemento: string | null; bairro: string | null; cidade: string | null; uf: string } | null;
+  servico: { nome: string };
+  profissional: { nome: string } | null;
+};
+
+/**
+ * Um agendamento com vários serviços, num cartão só (ata de 01/10): a visita
+ * é uma só para a clínica e para quem vai atender, então a triagem e a
+ * alocação também são — um botão confirma, um seletor aloca todos os serviços.
+ */
+function CartaoDoGrupo({
+  membros,
+  perfil,
+  podeEditarValor,
+  profissionais,
+}: {
+  membros: PedidoDaEsteira[];
+  perfil: PerfilInterno;
+  podeEditarValor: boolean;
+  profissionais: { id: string; nome: string }[];
+}) {
+  const primeiro = membros[0];
+  const total = membros.reduce((soma, m) => soma + m.valorServicoCentavos, 0);
+  const contar = (status: StatusPedido) => membros.filter((m) => m.status === status).length;
+  const fim = membros[membros.length - 1];
+
+  return (
+    <Cartao className="!p-4 border-bordo/20">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="min-w-0">
+          <div className="text-[10px] uppercase tracking-wide text-bordo font-semibold">
+            Agendamento com {membros.length} serviços
+          </div>
+          <div className="text-xs text-gray-700 mt-1">
+            {formatarDataCurta(primeiro.data)} · {primeiro.horaInicio} a {horaFinal(fim.horaInicio, fim.duracaoMin)}
+          </div>
+          {primeiro.endereco && (
+            <div className="text-[11px] text-amber-700 mt-0.5">
+              Local: <strong>{primeiro.endereco.rotulo}</strong> — {resumoDoEndereco(primeiro.endereco)}
+            </div>
+          )}
+          <div className="text-[11px] text-gray-500 mt-0.5">
+            {primeiro.clinica.nome}
+            {primeiro.doutorNome && <> · Dr(a). {primeiro.doutorNome}</>}
+            {primeiro.pacienteNome && <> · paciente {primeiro.pacienteNome}</>}
+          </div>
+          {primeiro.observacoes && <div className="text-[11px] text-gray-400 mt-1">{primeiro.observacoes}</div>}
+        </div>
+        <div className="text-right shrink-0">
+          <div className="text-xs font-semibold text-bordo">{formatarReais(total)}</div>
+          <div className="text-[10px] text-gray-400">total da visita</div>
+        </div>
+      </div>
+
+      <ul className="mt-3 divide-y divide-gray-100 border border-gray-100 rounded-xl">
+        {membros.map((m) => (
+          <li key={m.id} className="px-3 py-2 flex flex-wrap items-center gap-x-3 gap-y-1.5">
+            <span className="text-[11px] font-semibold text-gray-500 w-12 shrink-0">{m.horaInicio}</span>
+            <div className="min-w-0 flex-1 basis-56">
+              <div className="text-xs text-gray-800">
+                {m.servico.nome}
+                {m.quantidade > 1 && <span className="text-gray-400"> × {m.quantidade}</span>}
+              </div>
+              <div className="text-[10px] text-gray-500 flex flex-wrap items-center gap-x-2">
+                <Link href={`/painel/pedidos/${m.id}`} className="font-semibold text-bordo hover:underline">
+                  {codigoDoPedido(m.numero, m.clinica.nome, m.data)}
+                </Link>
+                {m.profissional ? (
+                  <span>
+                    {m.profissional.nome}
+                    {m.status === "ALOCADO" && (
+                      <span className={m.aceitoEm ? " text-green-700" : " text-amber-700"}>
+                        {m.aceitoEm ? " · aceito" : " · aguardando aceite"}
+                      </span>
+                    )}
+                  </span>
+                ) : (
+                  <span className="text-red-600 font-semibold">sem profissional</span>
+                )}
+              </div>
+            </div>
+            <SeloStatus status={m.status} />
+            <CondicaoPagamento pedidoId={m.id} atual={m.condicaoPagamento} />
+            {podeEditarValor ? (
+              <ValorServico pedidoId={m.id} valorCentavos={m.valorServicoCentavos} />
+            ) : (
+              <span className="text-xs font-semibold text-bordo">{formatarReais(m.valorServicoCentavos)}</span>
+            )}
+          </li>
+        ))}
+      </ul>
+
+      <AcoesGrupo
+        grupoId={primeiro.grupoId as string}
+        perfil={perfil}
+        solicitados={contar("SOLICITADO")}
+        confirmados={contar("CONFIRMADO")}
+        alocados={contar("ALOCADO")}
+        profissionais={profissionais}
+      />
+    </Cartao>
   );
 }

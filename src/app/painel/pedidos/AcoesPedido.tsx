@@ -26,7 +26,7 @@ const MOTIVOS_DESALOCACAO = [
  * destrutiva. Fica fechado até o botão que dispara a ação ser clicado —
  * evita abrir um campo de texto na cara de quem só está lendo a esteira.
  */
-function AcaoComMotivo({
+export function AcaoComMotivo({
   rotulo,
   variante,
   disabled,
