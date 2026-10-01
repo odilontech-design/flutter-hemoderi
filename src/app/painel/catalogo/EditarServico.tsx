@@ -30,6 +30,9 @@ type Servico = {
   permiteQuantidade: boolean;
   rotuloQuantidade: string | null;
   quantidadeMaxima: number | null;
+  quantidadeMinima: number;
+  quantidadeIncluida: number | null;
+  valorAdicionalCentavos: number;
   perfis: string[];
   ufsIndisponiveis: string[];
   ativo: boolean;

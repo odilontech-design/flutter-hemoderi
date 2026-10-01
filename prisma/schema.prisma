@@ -353,6 +353,16 @@ model Servico {
   /// O que se conta: "dentes", "pacientes". Aparece ao lado do campo.
   rotuloQuantidade  String?
   quantidadeMaxima  Int?
+  /// Menor quantidade que se vende. O ultrassom cobra no mínimo 400 disparos
+  /// por paciente: a tela já começa nele, e abaixo disso o servidor recusa.
+  quantidadeMinima  Int     @default(1)
+
+  /// Franquia: o preço do serviço COBRE até esta quantidade (LiteTouch: R$ 750
+  /// até 2 elementos; ultrassom: R$ 990 até 400 disparos). Acima dela, cada
+  /// unidade soma `valorAdicionalCentavos`. Nulo = sem franquia: o preço é
+  /// por unidade e o total é preço × quantidade.
+  quantidadeIncluida     Int?
+  valorAdicionalCentavos Int  @default(0)
 
   /// Perfis de cliente que enxergam o serviço. Vazio = todos. É como "PRF
   /// curso" fica restrito a quem tem perfil de curso sem esconder o resto.

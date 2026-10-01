@@ -16,23 +16,52 @@
  * PRF, e a primeira regra que bate decide. Piezo vem antes porque é o
  * equipamento que define o procedimento; o PRF ali é insumo.
  */
+/**
+ * As categorias do catálogo oficial, NA ORDEM do sumário (página 2 do
+ * catálogo 2026): os serviços clínicos são as categorias principais, e cada
+ * procedimento é uma subcategoria. A ordem do sumário é a ordem da vitrine —
+ * é como a Hemoderi apresenta o que vende.
+ */
+export const CATEGORIAS_DO_CATALOGO = [
+  "AirFlow GBT Machine",
+  "LiteTouch™",
+  "Rotamix Sedação Consciente",
+  "Piezosurgery Mectron Touch",
+  "Cobertura Fotográfica",
+  "Ultrassom Micro Focado",
+  "Megaderme – Radiofrequência Microagulhada",
+  "Platinum Platform",
+  "Laser Therapy EC",
+  "Bisturi Elétrico",
+  "Motor de Implante",
+  "PRF – Coleta e Produção",
+] as const;
+
+const [AIRFLOW, LITETOUCH, SEDACAO, PIEZO, FOTO, ULTRASSOM, MEGADERME, PLATINUM, LASER_THERAPY, BISTURI, IMPLANTE, PRF] =
+  CATEGORIAS_DO_CATALOGO;
+
+/**
+ * Ordem importa: "Piezosurgery + Stickybone + Membranas" casa com Piezo e com
+ * PRF, e a primeira regra que bate decide. Piezo vem antes porque é o
+ * equipamento que define o procedimento; o PRF ali é insumo.
+ */
 const REGRAS: { familia: string; padrao: RegExp }[] = [
-  { familia: "Piezosurgery", padrao: /piezo/i },
-  { familia: "PRF", padrao: /\bi?-?prf\b|stickybone|membranas/i },
+  { familia: PIEZO, padrao: /piezo/i },
+  { familia: PRF, padrao: /\bi?-?prf\b|stickybone|membranas/i },
   // Cada laser é uma categoria própria (ata de 01/10): LiteTouch, Platinum e
   // Laser Therapy têm finalidade clínica diferente e agrupá-los sob "Laser"
   // escondia justamente a escolha que o cliente precisa fazer.
-  { familia: "LiteTouch", padrao: /lite ?touch|light ?touch/i },
-  { familia: "Laser Therapy EC", padrao: /laser ?therapy|ilib/i },
+  { familia: LITETOUCH, padrao: /lite ?touch|light ?touch/i },
+  { familia: LASER_THERAPY, padrao: /laser ?therapy|ilib/i },
   { familia: "Laser", padrao: /laser/i },
-  { familia: "Ultrassom Micro Focado", padrao: /ultrassom|atria/i },
-  { familia: "Megaderme", padrao: /radiofrequ|megaderme/i },
-  { familia: "AirFlow GBT Machine", padrao: /airflow|gbt/i },
-  { familia: "Platinum", padrao: /platinum/i },
-  { familia: "Motor de Implante", padrao: /implante/i },
-  { familia: "Bisturi Elétrico", padrao: /bisturi/i },
-  { familia: "Sedação Consciente", padrao: /seda[çc]/i },
-  { familia: "Cobertura Fotográfica", padrao: /fotogr/i },
+  { familia: ULTRASSOM, padrao: /ultrassom|atria/i },
+  { familia: MEGADERME, padrao: /radiofrequ|megaderme/i },
+  { familia: AIRFLOW, padrao: /airflow|gbt/i },
+  { familia: PLATINUM, padrao: /platinum/i },
+  { familia: IMPLANTE, padrao: /implante/i },
+  { familia: BISTURI, padrao: /bisturi/i },
+  { familia: SEDACAO, padrao: /seda[çc]/i },
+  { familia: FOTO, padrao: /fotogr/i },
 ];
 
 export const OUTROS = "Outros";
@@ -56,10 +85,17 @@ export function familiaDoNome(nome: string): string {
  * equipamento é uma categoria, mesmo com um procedimento só — é a estrutura
  * do catálogo oficial da Hemoderi, e o cliente que procura "Platinum" não
  * pode achá-lo dentro de "Outros".
+ *
+ * `ordemDoCatalogo` troca "mais opções primeiro" pela ordem do sumário do
+ * catálogo — é a ordem que o portal usa; a vitrine pública, que premia o que
+ * mais vende, continua pelo tamanho.
  */
 export function agruparPorFamilia<T extends { nome: string; familia?: string | null }>(
   servicos: T[],
-  { fundirSolitarias = true }: { fundirSolitarias?: boolean } = {}
+  {
+    fundirSolitarias = true,
+    ordemDoCatalogo = false,
+  }: { fundirSolitarias?: boolean; ordemDoCatalogo?: boolean } = {}
 ): { familia: string; servicos: T[] }[] {
   const grupos = new Map<string, T[]>();
 
@@ -95,6 +131,12 @@ export function agruparPorFamilia<T extends { nome: string; familia?: string | n
     .sort((a, b) => {
       if (a.familia === OUTROS) return 1;
       if (b.familia === OUTROS) return -1;
+      if (ordemDoCatalogo) {
+        const ia = (CATEGORIAS_DO_CATALOGO as readonly string[]).indexOf(a.familia);
+        const ib = (CATEGORIAS_DO_CATALOGO as readonly string[]).indexOf(b.familia);
+        // Categoria fora do sumário (cadastrada à mão) vem depois das oficiais.
+        if (ia !== ib) return (ia === -1 ? 999 : ia) - (ib === -1 ? 999 : ib);
+      }
       // Família com mais opções primeiro: é a que a operação mais vende, e a
       // vitrine deve abrir pelo que mais sai.
       if (a.servicos.length !== b.servicos.length) return b.servicos.length - a.servicos.length;

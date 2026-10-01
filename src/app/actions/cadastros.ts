@@ -161,12 +161,22 @@ function lerRegrasDeOferta(dados: FormData) {
   const unidade = String(dados.get("unidadeCobranca") ?? "PACIENTE");
   const permiteQuantidade = String(dados.get("permiteQuantidade") ?? "nao") === "sim";
   const maxima = Math.trunc(Number(dados.get("quantidadeMaxima")));
+  const minima = Math.trunc(Number(dados.get("quantidadeMinima")));
+  const incluida = Math.trunc(Number(dados.get("quantidadeIncluida")));
 
   return {
     unidadeCobranca: (["PACIENTE", "PERIODO", "HORA"].includes(unidade) ? unidade : "PACIENTE") as UnidadeCobranca,
     permiteQuantidade,
     rotuloQuantidade: permiteQuantidade ? String(dados.get("rotuloQuantidade") ?? "").trim() || null : null,
     quantidadeMaxima: permiteQuantidade && Number.isFinite(maxima) && maxima > 0 ? maxima : null,
+    quantidadeMinima: permiteQuantidade && Number.isFinite(minima) && minima > 0 ? minima : 1,
+    // Franquia e adicional andam juntos: um adicional sem franquia não teria a
+    // partir de quando valer.
+    quantidadeIncluida: permiteQuantidade && Number.isFinite(incluida) && incluida > 0 ? incluida : null,
+    valorAdicionalCentavos:
+      permiteQuantidade && Number.isFinite(incluida) && incluida > 0
+        ? lerCentavos(String(dados.get("valorAdicional") ?? ""))
+        : 0,
     perfis: lerPerfis(dados.getAll("perfis")),
     ufsIndisponiveis: lerUfs(dados.getAll("ufsIndisponiveis").join(",")),
   };

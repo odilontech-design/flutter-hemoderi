@@ -7,7 +7,7 @@ import { formatarReais } from "@/lib/dinheiro";
 import { precosDosServicos, tabelasDaClinica } from "@/lib/preco";
 import { locaisDaClinica } from "@/lib/endereco";
 import { servicoVisivel } from "@/lib/visibilidade";
-import { ROTULO_UNIDADE } from "@/lib/cobranca";
+import { descricaoDoPreco } from "@/lib/cobranca";
 
 export const dynamic = "force-dynamic";
 
@@ -63,6 +63,9 @@ export default async function CatalogoDaClinica({ searchParams }: { searchParams
       permiteQuantidade: true,
       rotuloQuantidade: true,
       quantidadeMaxima: true,
+      quantidadeMinima: true,
+      quantidadeIncluida: true,
+      valorAdicionalCentavos: true,
       perfis: true,
       ufsIndisponiveis: true,
     },
@@ -76,7 +79,7 @@ export default async function CatalogoDaClinica({ searchParams }: { searchParams
     tabelaIds,
   });
 
-  const grupos = agruparPorFamilia(servicos, { fundirSolitarias: false });
+  const grupos = agruparPorFamilia(servicos, { fundirSolitarias: false, ordemDoCatalogo: true });
   const podeAgendar = clinica?.statusCadastro === "APROVADO";
 
   return (
@@ -150,18 +153,22 @@ export default async function CatalogoDaClinica({ searchParams }: { searchParams
 
                     <div className="text-[10px] text-gray-500">
                       {servico.permiteQuantidade
-                        ? `Você informa a quantidade${servico.rotuloQuantidade ? ` de ${servico.rotuloQuantidade}` : ""}.`
+                        ? `Você informa a quantidade${servico.rotuloQuantidade ? ` de ${servico.rotuloQuantidade}` : ""}${
+                            servico.quantidadeMinima > 1 ? ` (mínimo ${servico.quantidadeMinima})` : ""
+                          }.`
                         : "Uma unidade por agendamento — para repetir, faça outro agendamento."}
                     </div>
 
-                    <div className="mt-auto pt-2 border-t border-gray-100 flex items-baseline justify-between gap-2">
+                    <div className="mt-auto pt-2 border-t border-gray-100 flex items-end justify-between gap-2">
                       {/* Zero não é "de graça": é tabela ainda não precificada,
                           e escrever R$ 0,00 aqui viraria uma promessa. */}
-                      <span className="text-sm font-bold text-bordo">
-                        {valor > 0 ? formatarReais(valor) : "sob consulta"}
+                      <span className="min-w-0">
+                        <span className="block text-sm font-bold text-bordo">
+                          {valor > 0 ? formatarReais(valor) : "sob consulta"}
+                        </span>
                         {valor > 0 && (
-                          <span className="text-[10px] font-normal text-gray-400 ml-1">
-                            {ROTULO_UNIDADE[servico.unidadeCobranca]}
+                          <span className="block text-[10px] text-gray-400">
+                            {descricaoDoPreco(valor, servico).replace(formatarReais(valor), "").trim()}
                           </span>
                         )}
                       </span>

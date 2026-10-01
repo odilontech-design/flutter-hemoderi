@@ -63,6 +63,9 @@ export default async function Agendar({ searchParams }: { searchParams: { servic
       permiteQuantidade: true,
       rotuloQuantidade: true,
       quantidadeMaxima: true,
+      quantidadeMinima: true,
+      quantidadeIncluida: true,
+      valorAdicionalCentavos: true,
       perfis: true,
       ufsIndisponiveis: true,
     },
@@ -87,9 +90,12 @@ export default async function Agendar({ searchParams }: { searchParams: { servic
     permiteQuantidade: s.permiteQuantidade,
     rotuloQuantidade: s.rotuloQuantidade,
     quantidadeMaxima: s.quantidadeMaxima,
+    quantidadeMinima: s.quantidadeMinima,
+    quantidadeIncluida: s.quantidadeIncluida,
+    valorAdicionalCentavos: s.valorAdicionalCentavos,
     ufsIndisponiveis: s.ufsIndisponiveis,
   }));
-  const grupos = agruparPorFamilia(lista, { fundirSolitarias: false });
+  const grupos = agruparPorFamilia(lista, { fundirSolitarias: false, ordemDoCatalogo: true });
 
   return (
     <>

@@ -8,7 +8,7 @@ import { Area, Aviso, Botao, Campo, Rotulo } from "@/components/ui";
 import { solicitarAgendamento, type Resultado } from "@/app/actions/pedidos";
 import { linkWhatsapp, mensagemDeUrgencia } from "@/lib/whatsapp-link";
 import { formatarReais } from "@/lib/dinheiro";
-import { ROTULO_UNIDADE } from "@/lib/cobranca";
+import { descricaoDoPreco, quantidadeMinimaDe, totalDoItem } from "@/lib/cobranca";
 import type { LocalDeAtendimento } from "@/lib/endereco";
 import type { UnidadeCobranca } from "@prisma/client";
 
@@ -23,6 +23,9 @@ export type ServicoDoCarrinho = {
   permiteQuantidade: boolean;
   rotuloQuantidade: string | null;
   quantidadeMaxima: number | null;
+  quantidadeMinima: number;
+  quantidadeIncluida: number | null;
+  valorAdicionalCentavos: number;
   ufsIndisponiveis: string[];
 };
 type Grupo = { familia: string; servicos: ServicoDoCarrinho[] };
@@ -97,11 +100,10 @@ export function FormularioAgendamento({
     if (!servicoInicialId) return null;
     return grupos.find((g) => g.servicos.some((s) => s.id === servicoInicialId))?.familia ?? null;
   });
-  const [itens, setItens] = useState<Item[]>(() =>
-    servicoInicialId && grupos.some((g) => g.servicos.some((s) => s.id === servicoInicialId))
-      ? [{ servicoId: servicoInicialId, quantidade: 1 }]
-      : []
-  );
+  const [itens, setItens] = useState<Item[]>(() => {
+    const inicial = grupos.flatMap((g) => g.servicos).find((s) => s.id === servicoInicialId);
+    return inicial ? [{ servicoId: inicial.id, quantidade: quantidadeMinimaDe(inicial) }] : [];
+  });
   const [data, setData] = useState("");
   const [doutorNome, setDoutorNome] = useState("");
   const [pacienteNome, setPacienteNome] = useState("");
@@ -156,7 +158,9 @@ export function FormularioAgendamento({
 
   function adicionar(servico: ServicoDoCarrinho) {
     setItens((atuais) =>
-      atuais.some((i) => i.servicoId === servico.id) ? atuais : [...atuais, { servicoId: servico.id, quantidade: 1 }]
+      atuais.some((i) => i.servicoId === servico.id)
+        ? atuais
+        : [...atuais, { servicoId: servico.id, quantidade: quantidadeMinimaDe(servico) }]
     );
   }
   function remover(servicoId: string) {
@@ -164,7 +168,10 @@ export function FormularioAgendamento({
   }
   function mudarQuantidade(servico: ServicoDoCarrinho, valor: string) {
     const n = Math.trunc(Number(valor));
-    const limitado = Math.min(Math.max(Number.isFinite(n) ? n : 1, 1), servico.quantidadeMaxima ?? 999);
+    const limitado = Math.min(
+      Math.max(Number.isFinite(n) ? n : 1, quantidadeMinimaDe(servico)),
+      servico.quantidadeMaxima ?? 99_999
+    );
     setItens((atuais) => atuais.map((i) => (i.servicoId === servico.id ? { ...i, quantidade: limitado } : i)));
   }
 
@@ -172,7 +179,9 @@ export function FormularioAgendamento({
   const linhas = itens
     .map((item) => ({ item, servico: porId.get(item.servicoId) }))
     .filter((l): l is { item: Item; servico: ServicoDoCarrinho } => Boolean(l.servico));
-  const totalCentavos = linhas.reduce((soma, l) => soma + precoUnitario(l.servico.id) * l.item.quantidade, 0);
+  const totalDaLinha = (l: { item: Item; servico: ServicoDoCarrinho }) =>
+    totalDoItem(precoUnitario(l.servico.id), l.item.quantidade, l.servico);
+  const totalCentavos = linhas.reduce((soma, l) => soma + totalDaLinha(l), 0);
   const algumSobConsulta = linhas.some((l) => precoUnitario(l.servico.id) === 0);
 
   // A conta é a mesma que o servidor faz ao recusar — feita aqui só para AVISAR
@@ -280,7 +289,7 @@ export function FormularioAgendamento({
                       <div className="text-xs font-semibold">{item.nome}</div>
                       <div className={`text-[10px] mt-1 ${escolhido ? "text-white/70" : "text-gray-400"}`}>
                         {item.duracaoMin} min ·{" "}
-                        {valor > 0 ? `${formatarReais(valor)} ${ROTULO_UNIDADE[item.unidadeCobranca]}` : "sob consulta"}
+                        {descricaoDoPreco(valor, item)}
                       </div>
                       <div className={`text-[10px] mt-1 font-semibold ${escolhido ? "text-white" : "text-bordo"}`}>
                         {escolhido ? "✓ no agendamento · tocar para remover" : "+ adicionar"}
@@ -317,17 +326,17 @@ export function FormularioAgendamento({
                         <span>{servico.rotuloQuantidade ? servico.rotuloQuantidade : "Quantidade"}</span>
                         <input
                           type="number"
-                          min={1}
+                          min={quantidadeMinimaDe(servico)}
                           max={servico.quantidadeMaxima ?? undefined}
                           value={item.quantidade}
                           onChange={(e) => mudarQuantidade(servico, e.target.value)}
-                          className="w-16 border border-gray-300 rounded-lg px-2 py-1.5 text-xs"
+                          className="w-20 border border-gray-300 rounded-lg px-2 py-1.5 text-xs"
                         />
                       </label>
                     )}
 
                     <div className="text-xs font-semibold text-bordo w-24 text-right">
-                      {unitario > 0 ? formatarReais(unitario * item.quantidade) : "sob consulta"}
+                      {unitario > 0 ? formatarReais(totalDaLinha({ item, servico })) : "sob consulta"}
                     </div>
                     <button
                       type="button"

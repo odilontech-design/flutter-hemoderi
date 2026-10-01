@@ -11,6 +11,9 @@ type Valores = {
   permiteQuantidade?: boolean;
   rotuloQuantidade?: string | null;
   quantidadeMaxima?: number | null;
+  quantidadeMinima?: number;
+  quantidadeIncluida?: number | null;
+  valorAdicionalCentavos?: number;
   perfis?: string[];
   ufsIndisponiveis?: string[];
 };
@@ -56,16 +59,48 @@ export function CamposDeCobranca({ valores = {}, sufixoId = "" }: { valores?: Va
       </div>
 
       {permiteQuantidade && (
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          <div>
-            <Rotulo>O que se conta</Rotulo>
-            <Campo name="rotuloQuantidade" placeholder="dentes, pacientes, horas…" defaultValue={valores.rotuloQuantidade ?? ""} />
+        <>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <div>
+              <Rotulo>O que se conta</Rotulo>
+              <Campo name="rotuloQuantidade" placeholder="dentes, disparos, horas…" defaultValue={valores.rotuloQuantidade ?? ""} />
+            </div>
+            <div>
+              <Rotulo>Mínimo por agendamento</Rotulo>
+              <Campo name="quantidadeMinima" type="number" min={1} defaultValue={valores.quantidadeMinima ?? 1} />
+            </div>
+            <div>
+              <Rotulo>Máximo por agendamento</Rotulo>
+              <Campo name="quantidadeMaxima" type="number" min={1} placeholder="sem limite" defaultValue={valores.quantidadeMaxima ?? ""} />
+            </div>
           </div>
-          <div>
-            <Rotulo>Máximo por agendamento</Rotulo>
-            <Campo name="quantidadeMaxima" type="number" min={1} placeholder="sem limite" defaultValue={valores.quantidadeMaxima ?? ""} />
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <Rotulo>Quantidade coberta pelo valor de tabela</Rotulo>
+              <Campo
+                name="quantidadeIncluida"
+                type="number"
+                min={1}
+                placeholder="vazio = valor por unidade"
+                defaultValue={valores.quantidadeIncluida ?? ""}
+              />
+            </div>
+            <div>
+              <Rotulo>Valor de cada unidade acima disso</Rotulo>
+              <Campo
+                name="valorAdicional"
+                placeholder="ex.: 1,70"
+                defaultValue={
+                  valores.valorAdicionalCentavos ? (valores.valorAdicionalCentavos / 100).toFixed(2).replace(".", ",") : ""
+                }
+              />
+            </div>
           </div>
-        </div>
+          <div className="text-[10px] text-gray-400 leading-relaxed">
+            Com &ldquo;quantidade coberta&rdquo;, o valor de tabela vale até ela e só o excedente soma o adicional
+            (ex.: R$ 990 até 400 disparos + R$ 1,70 por disparo). Em branco, o total é valor × quantidade.
+          </div>
+        </>
       )}
       <div className="text-[10px] text-gray-400 leading-relaxed">
         Cobrado por hora com quantidade, as horas contratadas também ficam reservadas na agenda. Sem

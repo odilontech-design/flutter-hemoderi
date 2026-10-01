@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import bcrypt from "bcryptjs";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
+import { proximoNumeroDePedido } from "@/lib/numero-pedido";
 import { dataDeISO, dataMinimaAgendamentoPublico, isoDeData, paraMinutos } from "@/lib/data";
 import { parametros } from "@/lib/alocacao";
 import { numeroParaWhatsapp } from "@/lib/whatsapp-link";
@@ -274,15 +275,9 @@ export async function vincularSolicitacao(
   });
 
   const pedido = await prisma.$transaction(async (tx) => {
-    const config = await tx.parametros.update({
-      where: { id: "hemoderi" },
-      data: { proximoNumeroPedido: { increment: 1 } },
-      select: { proximoNumeroPedido: true },
-    });
-
     const criado = await tx.pedido.create({
       data: {
-        numero: config.proximoNumeroPedido - 1,
+        numero: await proximoNumeroDePedido(tx),
         clinicaId,
         servicoId: solicitacao.servicoId,
         data: solicitacao.dataDesejada,

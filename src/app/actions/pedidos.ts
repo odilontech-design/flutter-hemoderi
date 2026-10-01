@@ -25,6 +25,7 @@ import { perfilPermite } from "@/lib/papeis";
 import { formatarReais, lerCentavos } from "@/lib/dinheiro";
 import { precoDoServico, tabelasDaClinica } from "@/lib/preco";
 import { houveAtraso } from "@/lib/atraso";
+import { proximoNumeroDePedido } from "@/lib/numero-pedido";
 import { duracaoEfetiva, quantidadeValida, totalDoItem } from "@/lib/cobranca";
 import { servicoVisivel } from "@/lib/visibilidade";
 
@@ -37,24 +38,6 @@ function atualizarTelas() {
   revalidatePath("/painel/financeiro");
   revalidatePath("/portal");
   revalidatePath("/profissional");
-}
-
-/**
- * Numeração sequencial do pedido.
- *
- * Sai de dentro da mesma transação que cria o pedido: dois atendentes
- * marcando ao mesmo tempo — rotina com 5 pessoas na operação — não podem
- * receber o mesmo número, e `numero` é único no banco justamente para que
- * uma corrida vire erro visível em vez de dois pedidos com a mesma
- * identidade.
- */
-async function proximoNumero(tx: Prisma.TransactionClient): Promise<number> {
-  const config = await tx.parametros.update({
-    where: { id: "hemoderi" },
-    data: { proximoNumeroPedido: { increment: 1 } },
-    select: { proximoNumeroPedido: true },
-  });
-  return config.proximoNumeroPedido - 1;
 }
 
 /**
@@ -175,7 +158,7 @@ export async function criarPedido(_anterior: Resultado, dados: FormData): Promis
       return { ok: false as const, erro: "Nenhum equipamento livre nesse horário." };
     }
 
-    const numero = await proximoNumero(tx);
+    const numero = await proximoNumeroDePedido(tx);
     const pedido = await tx.pedido.create({
       data: {
         numero,
@@ -325,7 +308,7 @@ export async function solicitarAgendamento(_anterior: Resultado, dados: FormData
       quantidade: item.quantidade,
       duracaoMin,
       horaInicio: paraHora(cursor),
-      valorServicoCentavos: totalDoItem(unitario, item.quantidade),
+      valorServicoCentavos: totalDoItem(unitario, item.quantidade, servico),
     });
     cursor += duracaoMin;
   }
@@ -347,7 +330,7 @@ export async function solicitarAgendamento(_anterior: Resultado, dados: FormData
 
     const criados = [];
     for (const item of itens) {
-      const numero = await proximoNumero(tx);
+      const numero = await proximoNumeroDePedido(tx);
       criados.push(
         await tx.pedido.create({
           data: {
