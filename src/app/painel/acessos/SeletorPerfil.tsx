@@ -46,7 +46,7 @@ export function SeletorPerfil({
             }
           });
         }}
-        className="!w-auto text-[11px] !py-1"
+        className="!w-auto !text-[11px] !py-1 !pr-7"
       >
         {(Object.keys(ROTULO_PERFIL_INTERNO) as PerfilInterno[]).map((valor) => (
           <option key={valor} value={valor}>
