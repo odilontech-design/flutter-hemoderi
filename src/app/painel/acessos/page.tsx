@@ -36,6 +36,21 @@ const NIVEIS: { chave: string; rotulo: string; papel?: PapelUsuario }[] = [
  * de fora do filtro de propósito: são visão geral da operação, não do
  * recorte que a pessoa está olhando agora.
  */
+/**
+ * Quem entra em cada aba. A conta de equipe que também atua como profissional
+ * (vinculada a um cadastro de profissional — o caso da Naiara) aparece nas
+ * DUAS: é equipe pelo nível e profissional pelo que faz, e quem procura
+ * "quem atende" não pode perdê-la por ela ter nascido como conta interna.
+ */
+function pertenceAoNivel(
+  nivel: { papel?: PapelUsuario },
+  usuario: { papel: PapelUsuario; profissionalId: string | null }
+): boolean {
+  if (!nivel.papel) return true;
+  if (usuario.papel === nivel.papel) return true;
+  return nivel.papel === "PROFISSIONAL" && usuario.papel === "INTERNO" && usuario.profissionalId !== null;
+}
+
 export default async function Acessos({ searchParams }: { searchParams: { nivel?: string } }) {
   const sessao = await exigirResponsavel();
 
@@ -76,7 +91,7 @@ export default async function Acessos({ searchParams }: { searchParams: { nivel?
   const semAcesso =
     listaClinicas.filter((c) => !c.temAcesso).length + listaProfissionais.filter((p) => !p.temAcesso).length;
 
-  const usuariosFiltrados = nivel.papel ? usuarios.filter((u) => u.papel === nivel.papel) : usuarios;
+  const usuariosFiltrados = usuarios.filter((u) => pertenceAoNivel(nivel, u));
 
   return (
     <>
@@ -110,7 +125,7 @@ export default async function Acessos({ searchParams }: { searchParams: { nivel?
 
       <div className="flex flex-wrap items-center gap-2 mb-3">
         {NIVEIS.map((n) => {
-          const quantos = n.papel ? usuarios.filter((u) => u.papel === n.papel).length : usuarios.length;
+          const quantos = usuarios.filter((u) => pertenceAoNivel(n, u)).length;
           return (
             <Link
               key={n.chave}
