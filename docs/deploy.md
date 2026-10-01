@@ -154,7 +154,7 @@ de deploys guardados, não o tráfego: cada deploy guarda uma cópia de cada fun
   `[ "$VERCEL_GIT_COMMIT_REF" != "main" ]`: branches de trabalho não geram preview.
 - **Apagar deploys antigos** (aba Deployments) libera o espaço na hora; se o plano
   oferecer *Deployment Retention* em Settings → Build and Deployment, reduza.
-- O aviso de fila do painel só consulta com a aba visível, a cada 3 minutos.
+- Os pop-ups de aviso (painel e portal do profissional) só consultam com a aba visível, a cada 1 minuto.
 
 ## Ambiente local
 

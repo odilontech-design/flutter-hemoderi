@@ -1,6 +1,6 @@
 import { MenuLateral } from "@/components/MenuLateral";
 import { Provedores } from "@/components/Provedores";
-import { AvisoDeFila } from "@/components/AvisoDeFila";
+import { CentralDeAvisos } from "@/components/CentralDeAvisos";
 import { exigirInterno } from "@/lib/sessao";
 import { perfilPermite } from "@/lib/papeis";
 import { agendamentoPublicoAtivo } from "@/lib/agendamento-publico";
@@ -77,7 +77,7 @@ export default async function LayoutPainel({ children }: { children: React.React
           }
         />
         <main className="flex-1 min-h-screen overflow-x-hidden p-4 pt-20 md:p-8">{children}</main>
-        <AvisoDeFila />
+        <CentralDeAvisos area="painel" />
       </div>
     </Provedores>
   );

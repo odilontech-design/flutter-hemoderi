@@ -2,6 +2,7 @@ import { MenuLateral } from "@/components/MenuLateral";
 import { Provedores } from "@/components/Provedores";
 import { exigirProfissional } from "@/lib/sessao";
 import { BotaoWhatsapp } from "@/components/BotaoWhatsapp";
+import { CentralDeAvisos } from "@/components/CentralDeAvisos";
 import { IconeAgenda, IconeDisponibilidade, IconeFinanceiro, IconeRelatorios } from "@/components/icones/MenuIcones";
 
 export const dynamic = "force-dynamic";
@@ -32,6 +33,7 @@ export default async function LayoutProfissional({ children }: { children: React
         />
         <main className="flex-1 min-h-screen overflow-x-hidden p-4 pt-20 md:p-8">{children}</main>
       <BotaoWhatsapp contexto="portal do profissional" />
+        <CentralDeAvisos area="profissional" />
       </div>
     </Provedores>
   );

@@ -10,11 +10,11 @@ const INICIAL: Resultado = { ok: false };
 
 export function FormularioPedido({
   clinicas,
-  servicos,
+  grupos,
   profissionais,
 }: {
   clinicas: { id: string; nome: string }[];
-  servicos: { id: string; nome: string; duracaoMin: number; exigeEquipamento: boolean }[];
+  grupos: { familia: string; servicos: { id: string; nome: string; duracaoMin: number; exigeEquipamento: boolean }[] }[];
   profissionais: { id: string; nome: string }[];
 }) {
   const router = useRouter();
@@ -25,7 +25,7 @@ export function FormularioPedido({
     if (estado.ok) router.push("/painel/pedidos");
   }, [estado.ok, router]);
 
-  const servico = servicos.find((s) => s.id === servicoId);
+  const servico = grupos.flatMap((g) => g.servicos).find((s) => s.id === servicoId);
 
   return (
     <form action={enviar} className="space-y-4">
@@ -45,10 +45,14 @@ export function FormularioPedido({
           <Rotulo>Serviço</Rotulo>
           <Selecao name="servicoId" required value={servicoId} onChange={(e) => setServicoId(e.target.value)}>
             <option value="">Selecione…</option>
-            {servicos.map((s) => (
-              <option key={s.id} value={s.id}>
-                {s.nome} ({s.duracaoMin} min)
-              </option>
+            {grupos.map((grupo) => (
+              <optgroup key={grupo.familia} label={grupo.familia}>
+                {grupo.servicos.map((s) => (
+                  <option key={s.id} value={s.id}>
+                    {s.nome} ({s.duracaoMin} min)
+                  </option>
+                ))}
+              </optgroup>
             ))}
           </Selecao>
           {servico?.exigeEquipamento && (
@@ -79,6 +83,13 @@ export function FormularioPedido({
             ))}
           </Selecao>
         </div>
+      </div>
+
+      <div>
+        {/* Obrigatório só para o cliente no portal: a equipe agenda por
+            telefone e nem sempre sabe quem é o doutor naquele momento. */}
+        <Rotulo>Doutor(a) responsável (opcional)</Rotulo>
+        <Campo name="doutorNome" placeholder="Quem responde pelo caso na clínica" />
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">

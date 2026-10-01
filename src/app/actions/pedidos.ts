@@ -253,6 +253,11 @@ export async function solicitarAgendamento(_anterior: Resultado, dados: FormData
   const dataISO = String(dados.get("data") ?? "");
   const horaInicio = String(dados.get("horaInicio") ?? "");
   if (!dataISO || !horaInicio) return { ok: false, erro: "Data e horário são obrigatórios." };
+  // Para o cliente o doutor é obrigatório (é por ele que a central pergunta);
+  // para a equipe, que agenda por telefone, é opcional — ver criarPedido.
+  if (!String(dados.get("doutorNome") ?? "").trim()) {
+    return { ok: false, erro: "Informe o(a) doutor(a) responsável." };
+  }
 
   const enderecoId = String(dados.get("enderecoId") ?? "") || null;
   const endereco = enderecoId
