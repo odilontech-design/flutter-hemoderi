@@ -38,6 +38,7 @@ import {
 } from "@/lib/agenda";
 import { dataDeISO, instanteDoAtendimento, paraMinutos } from "@/lib/data";
 import { STATUS_ATIVOS } from "@/lib/pedido";
+import { duracaoEfetiva } from "@/lib/cobranca";
 
 /** Aceita tanto o cliente normal quanto o `tx` de dentro de uma transação. */
 export type ClientePrisma = PrismaClient | Prisma.TransactionClient;
@@ -339,6 +340,107 @@ export async function horariosDisponiveis({
 
     return true;
   });
+}
+
+/**
+ * Horários livres para VÁRIOS serviços numa mesma visita (ata de 01/10).
+ *
+ * Os serviços acontecem um depois do outro, na ordem em que a clínica
+ * escolheu, dentro do mesmo bloco de agenda — a mesma sala, o mesmo paciente.
+ * Por isso a disponibilidade é a do bloco inteiro (soma das durações), não a
+ * de cada serviço sozinho: nenhum equipamento do tipo exigido pode estar
+ * ocupado em nenhum ponto do bloco, e a sala da clínica precisa caber.
+ *
+ * É conservador de propósito. Um equipamento que só fosse usado no segundo
+ * serviço ainda bloquearia o bloco todo se estivesse ocupado de manhã — a
+ * troca é uma opção de horário a menos para o cliente em vez de uma
+ * promessa que a logística descobre que não cumpre.
+ *
+ * Sem profissional definido (a escolha é da central, ata de 14/09): a janela
+ * é o expediente da operação.
+ */
+export async function horariosDisponiveisConjunto({
+  clinicaId,
+  itens,
+  dataISO,
+  exigirAntecedencia = false,
+}: {
+  clinicaId: string;
+  itens: { servicoId: string; quantidade: number }[];
+  dataISO: string;
+  exigirAntecedencia?: boolean;
+}): Promise<{ horarios: string[]; duracaoTotalMin: number }> {
+  if (itens.length === 0) return { horarios: [], duracaoTotalMin: 0 };
+  const data = dataDeISO(dataISO);
+
+  const [config, servicos, clinica] = await Promise.all([
+    parametros(),
+    prisma.servico.findMany({ where: { id: { in: itens.map((i) => i.servicoId) } } }),
+    prisma.clinica.findUnique({ where: { id: clinicaId }, select: { salas: true } }),
+  ]);
+  if (!clinica || servicos.length !== new Set(itens.map((i) => i.servicoId)).size) {
+    return { horarios: [], duracaoTotalMin: 0 };
+  }
+
+  const porId = new Map(servicos.map((s) => [s.id, s]));
+  const duracaoTotalMin = itens.reduce(
+    (soma, item) => soma + duracaoEfetiva(porId.get(item.servicoId)!, item.quantidade),
+    0
+  );
+
+  const pedidosDoDia = await prisma.pedido.findMany({
+    where: {
+      data,
+      status: { in: STATUS_ATIVOS },
+      OR: [{ clinicaId }, { equipamentoId: { not: null } }],
+    },
+    select: { horaInicio: true, duracaoMin: true, clinicaId: true, equipamentoId: true },
+  });
+
+  const expediente: Intervalo = {
+    inicio: paraMinutos(config.horaAbertura),
+    fim: paraMinutos(config.horaFechamento),
+  };
+  const candidatos = horariosLivres({ janelas: [expediente], ocupacoes: [], duracaoMin: duracaoTotalMin });
+
+  // Um pool por tipo de equipamento exigido — "sem tipo" é o pool de qualquer
+  // equipamento disponível (mesma regra do agendamento de um serviço só).
+  const tiposExigidos = new Set<string | null>();
+  for (const item of itens) {
+    const servico = porId.get(item.servicoId)!;
+    if (servico.exigeEquipamento && !servico.equipamentoIlimitado) {
+      tiposExigidos.add(servico.tipoEquipamento ?? null);
+    }
+  }
+  const pools = await Promise.all(
+    [...tiposExigidos].map(async (tipo) => ({
+      equipamentos: await prisma.equipamento.findMany({
+        where: { status: "DISPONIVEL", ...(tipo ? { tipo } : {}) },
+        select: { id: true },
+      }),
+    }))
+  );
+
+  const limite = exigirAntecedencia
+    ? new Date(Date.now() + config.antecedenciaMinimaHoras * 60 * 60 * 1000)
+    : new Date();
+
+  const horarios = candidatos.filter((hora) => {
+    const alvo = intervaloDe(hora, duracaoTotalMin);
+    if (instanteDoAtendimento(data, hora) < limite) return false;
+
+    const sobrepostos = pedidosDoDia.filter((p) => haSobreposicao(alvo, intervaloDe(p.horaInicio, p.duracaoMin)));
+    if (sobrepostos.filter((p) => p.clinicaId === clinicaId).length >= clinica.salas) return false;
+
+    return pools.every(({ equipamentos }) => {
+      if (equipamentos.length === 0) return false;
+      const ids = new Set(equipamentos.map((e) => e.id));
+      const emUso = sobrepostos.filter((p) => p.equipamentoId && ids.has(p.equipamentoId)).length;
+      return emUso < equipamentos.length;
+    });
+  });
+
+  return { horarios, duracaoTotalMin };
 }
 
 /**

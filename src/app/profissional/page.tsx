@@ -8,6 +8,7 @@ import { parametros } from "@/lib/alocacao";
 import { LOCAL_FECHADO, localRevelado } from "@/lib/sigilo";
 import { linkAdicionarGoogleAgenda } from "@/lib/google-calendar-link";
 import { houveAtraso } from "@/lib/atraso";
+import { comEnderecoDoPedido } from "@/lib/endereco";
 import { AceiteAlocacao, BotaoCheckin } from "./AcoesAtendimento";
 
 type PedidoParaCalendario = {
@@ -15,6 +16,7 @@ type PedidoParaCalendario = {
   horaInicio: string;
   servico: { nome: string; duracaoMin: number };
   clinica: { nome: string; endereco: string | null; numero: string | null; bairro: string | null; cidade: string | null };
+  endereco: { endereco: string; numero: string | null; bairro: string | null; cidade: string | null } | null;
 };
 
 /**
@@ -24,11 +26,13 @@ type PedidoParaCalendario = {
  * precisa para reservar a data antes de saber onde é.
  */
 function linkCalendarioDoPedido(pedido: PedidoParaCalendario, revelado: boolean): string {
+  // O endereço do PEDIDO, quando a clínica escolheu outro que não o principal.
+  const onde = comEnderecoDoPedido(pedido.clinica, pedido.endereco);
   const local = revelado
     ? [
-        [pedido.clinica.endereco, pedido.clinica.numero].filter(Boolean).join(", "),
-        pedido.clinica.bairro,
-        pedido.clinica.cidade,
+        [onde.endereco, onde.numero].filter(Boolean).join(", "),
+        onde.bairro,
+        onde.cidade,
       ]
         .filter(Boolean)
         .join(" — ")
@@ -62,6 +66,7 @@ export default async function MinhaAgenda() {
   const meus = { profissionalId: sessao.profissionalId, status: "ALOCADO" as const };
   const dadosDoPedido = {
     clinica: { select: { nome: true, endereco: true, numero: true, bairro: true, cidade: true } },
+    endereco: { select: { endereco: true, numero: true, bairro: true, cidade: true } },
     servico: { select: { nome: true, duracaoMin: true } },
   };
 

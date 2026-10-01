@@ -14,6 +14,8 @@ import {
   dentroDoPrazoDeCancelamento,
   instanteDoAtendimento,
   isoDeData,
+  paraHora,
+  paraMinutos,
 } from "@/lib/data";
 import { enfileirarMensagem } from "@/lib/integracoes/whatsapp";
 import { sincronizarEvento } from "@/lib/integracoes/google-agenda";
@@ -21,8 +23,10 @@ import { criarNegocio, marcarNegocioGanho } from "@/lib/integracoes/pipedrive";
 import { condicaoValida } from "@/lib/pagamento";
 import { perfilPermite } from "@/lib/papeis";
 import { formatarReais, lerCentavos } from "@/lib/dinheiro";
-import { precoDoServico } from "@/lib/preco";
+import { precoDoServico, tabelasDaClinica } from "@/lib/preco";
 import { houveAtraso } from "@/lib/atraso";
+import { duracaoEfetiva, quantidadeValida, totalDoItem } from "@/lib/cobranca";
+import { servicoVisivel } from "@/lib/visibilidade";
 
 export type Resultado = { ok: boolean; erro?: string; avisos?: string[] };
 
@@ -53,17 +57,23 @@ async function proximoNumero(tx: Prisma.TransactionClient): Promise<number> {
   return config.proximoNumeroPedido - 1;
 }
 
-/** Preço do serviço para a clínica — negociado, praça ou tabela (lib/preco.ts). */
-async function valorDoServico(clinicaId: string, servicoId: string): Promise<number> {
-  const [clinica, servico] = await Promise.all([
+/**
+ * Preço unitário do serviço para a clínica — negociado, tabela do perfil, praça
+ * ou tabela padrão (lib/preco.ts). `uf` é a do ENDEREÇO do atendimento quando
+ * a clínica atende em mais de um lugar; sem ela vale a do cadastro.
+ */
+async function valorDoServico(clinicaId: string, servicoId: string, uf?: string | null): Promise<number> {
+  const [clinica, servico, tabelaIds] = await Promise.all([
     prisma.clinica.findUnique({ where: { id: clinicaId }, select: { uf: true } }),
     prisma.servico.findUnique({ where: { id: servicoId }, select: { valorPadraoCentavos: true } }),
+    tabelasDaClinica(prisma, clinicaId),
   ]);
   const { valorCentavos } = await precoDoServico(prisma, {
     clinicaId,
     servicoId,
-    uf: clinica?.uf,
+    uf: uf ?? clinica?.uf,
     valorPadraoCentavos: servico?.valorPadraoCentavos ?? 0,
+    tabelaIds,
   });
   return valorCentavos;
 }
@@ -213,95 +223,164 @@ export async function criarPedido(_anterior: Resultado, dados: FormData): Promis
  * Solicitação aberta pela própria clínica no portal. Nasce SOLICITADO: é
  * pedido, não compromisso. A equipe confirma — e é essa confirmação que
  * separa o autoatendimento de um canal onde qualquer um marca qualquer coisa.
+ *
+ * Aceita VÁRIOS serviços numa visita só (ata de 01/10). Cada serviço vira um
+ * pedido — é assim que a operação aloca, cobra e repassa —, ligados por
+ * `grupoId` e encadeados no tempo: o segundo começa quando o primeiro termina.
+ * O bloco inteiro é conferido de uma vez, dentro de uma transação, para a
+ * visita nunca ficar pela metade.
  */
-export async function solicitarPedido(_anterior: Resultado, dados: FormData): Promise<Resultado> {
+export async function solicitarAgendamento(_anterior: Resultado, dados: FormData): Promise<Resultado> {
   const sessao = await exigirClinica();
 
-  const servicoId = String(dados.get("servicoId") ?? "");
-  const profissionalId = String(dados.get("profissionalId") ?? "") || null;
-  const dataISO = String(dados.get("data") ?? "");
-  const horaInicio = String(dados.get("horaInicio") ?? "");
-  if (!servicoId || !dataISO || !horaInicio) {
-    return { ok: false, erro: "Serviço, data e hora são obrigatórios." };
+  const clinica = await prisma.clinica.findUnique({
+    where: { id: sessao.clinicaId },
+    select: { uf: true, perfis: true, statusCadastro: true },
+  });
+  if (!clinica) return { ok: false, erro: "Clínica não encontrada." };
+  if (clinica.statusCadastro !== "APROVADO") {
+    return {
+      ok: false,
+      erro: "Seu cadastro ainda está em análise pela nossa equipe. Assim que for aprovado, o agendamento é liberado.",
+    };
   }
 
-  const [servico, config] = await Promise.all([
-    prisma.servico.findFirst({ where: { id: servicoId, ativo: true } }),
+  let pedidos: { servicoId: string; quantidade: number }[] = [];
+  try {
+    const bruto = JSON.parse(String(dados.get("itens") ?? "[]"));
+    if (Array.isArray(bruto)) {
+      pedidos = bruto.map((item) => ({
+        servicoId: String(item?.servicoId ?? ""),
+        quantidade: Number(item?.quantidade ?? 1),
+      }));
+    }
+  } catch {
+    pedidos = [];
+  }
+  if (pedidos.length === 0 || pedidos.length > 12 || pedidos.some((p) => !p.servicoId)) {
+    return { ok: false, erro: "Escolha ao menos um serviço." };
+  }
+  // O mesmo serviço duas vezes na visita é o caso do PRF: um por paciente, e
+  // o segundo paciente é outro agendamento. Quantidade existe para quem o
+  // serviço permite — repetir a linha seria burlar essa regra.
+  if (new Set(pedidos.map((p) => p.servicoId)).size !== pedidos.length) {
+    return { ok: false, erro: "Cada serviço entra uma vez por agendamento. Para outro paciente, faça outro agendamento." };
+  }
+
+  const dataISO = String(dados.get("data") ?? "");
+  const horaInicio = String(dados.get("horaInicio") ?? "");
+  if (!dataISO || !horaInicio) return { ok: false, erro: "Data e horário são obrigatórios." };
+
+  const enderecoId = String(dados.get("enderecoId") ?? "") || null;
+  const endereco = enderecoId
+    ? await prisma.enderecoClinica.findFirst({
+        where: { id: enderecoId, clinicaId: sessao.clinicaId, ativo: true },
+        select: { id: true, uf: true },
+      })
+    : null;
+  if (enderecoId && !endereco) return { ok: false, erro: "Endereço de atendimento não encontrado." };
+  const uf = endereco?.uf ?? clinica.uf;
+
+  const [servicos, config] = await Promise.all([
+    prisma.servico.findMany({ where: { id: { in: pedidos.map((p) => p.servicoId) }, ativo: true } }),
     parametros(),
   ]);
-  if (!servico) return { ok: false, erro: "Serviço indisponível." };
+  if (servicos.length !== pedidos.length) return { ok: false, erro: "Algum serviço está indisponível." };
+  const porId = new Map(servicos.map((s) => [s.id, s]));
+
+  for (const item of pedidos) {
+    const servico = porId.get(item.servicoId)!;
+    if (!servicoVisivel(servico, { perfis: clinica.perfis, uf })) {
+      return { ok: false, erro: `${servico.nome} não está disponível para o seu cadastro nesse endereço.` };
+    }
+    if (!quantidadeValida(servico, item.quantidade)) {
+      return { ok: false, erro: `Quantidade inválida para ${servico.nome}.` };
+    }
+  }
 
   const data = dataDeISO(dataISO);
   const limite = new Date(Date.now() + config.antecedenciaMinimaHoras * 60 * 60 * 1000);
   if (new Date(`${dataISO}T${horaInicio}:00-03:00`) < limite) {
     return {
       ok: false,
-      erro: `Agendamentos pelo portal precisam de ${config.antecedenciaMinimaHoras}h de antecedência. Para urgências, fale com a central.`,
+      erro: `Agendamentos pelo portal precisam de ${config.antecedenciaMinimaHoras}h de antecedência. Para horários antes disso, fale com a central pelo WhatsApp.`,
     };
   }
 
-  const valorServicoCentavos = await valorDoServico(sessao.clinicaId, servicoId);
+  // Valor e duração de cada item, e o instante em que ele começa dentro do bloco.
+  let cursor = paraMinutos(horaInicio);
+  const itens: {
+    servico: (typeof servicos)[number];
+    quantidade: number;
+    duracaoMin: number;
+    horaInicio: string;
+    valorServicoCentavos: number;
+  }[] = [];
+  for (const item of pedidos) {
+    const servico = porId.get(item.servicoId)!;
+    const duracaoMin = duracaoEfetiva(servico, item.quantidade);
+    const unitario = await valorDoServico(sessao.clinicaId, servico.id, uf);
+    itens.push({
+      servico,
+      quantidade: item.quantidade,
+      duracaoMin,
+      horaInicio: paraHora(cursor),
+      valorServicoCentavos: totalDoItem(unitario, item.quantidade),
+    });
+    cursor += duracaoMin;
+  }
+  const duracaoTotalMin = itens.reduce((soma, i) => soma + i.duracaoMin, 0);
+  const grupoId = crypto.randomUUID();
 
-  // O profissional escolhido fica GRAVADO no pedido, e não como frase em
-  // observações. Ele é o que a clínica pediu e o que a equipe vai confirmar —
-  // e é a agenda dele que o reagendamento pelo portal consulta depois.
-  //
-  // Isso segura o horário desse profissional enquanto o pedido está
-  // SOLICITADO: é reserva provisória, não alocação. O que separa as duas é o
-  // status, e é a equipe que faz a segunda. Segurar é de propósito — duas
-  // clínicas pedindo o mesmo horário e as duas recebendo "ok" é pior do que
-  // a segunda ver o horário indisponível na hora. `travarRecursos` garante
-  // que essa checagem e essa gravação são atômicas mesmo com duas clínicas
-  // pedindo o mesmo profissional no mesmo instante.
   const resultado = await prisma.$transaction(async (tx) => {
-    await travarRecursos(tx, { clinicaId: sessao.clinicaId, profissionalId });
+    // `travarRecursos` garante que essa checagem e a gravação são atômicas
+    // mesmo com duas clínicas pedindo no mesmo instante.
+    await travarRecursos(tx, { clinicaId: sessao.clinicaId });
 
     const impedimentos = await verificarAlocacao(
-      { clinicaId: sessao.clinicaId, profissionalId, data, horaInicio, duracaoMin: servico.duracaoMin },
+      { clinicaId: sessao.clinicaId, data, horaInicio, duracaoMin: duracaoTotalMin },
       tx
     );
     if (temBloqueio(impedimentos)) {
       return { ok: false as const, erro: "Esse horário acabou de ficar indisponível. Escolha outro." };
     }
 
-    const profissional = profissionalId
-      ? await tx.profissional.findFirst({ where: { id: profissionalId, ativo: true }, select: { id: true } })
-      : null;
-
-    const numero = await proximoNumero(tx);
-    const pedido = await tx.pedido.create({
-      data: {
-        numero,
-        clinicaId: sessao.clinicaId,
-        servicoId,
-        profissionalId: profissional?.id ?? null,
-        observacoes: String(dados.get("observacoes") ?? "") || null,
-        data,
-        horaInicio,
-        duracaoMin: servico.duracaoMin,
-        status: "SOLICITADO",
-        origem: "PORTAL_CLINICA",
-        valorServicoCentavos,
-        pacienteNome: String(dados.get("pacienteNome") ?? "") || null,
-        pacienteContato: String(dados.get("pacienteContato") ?? "") || null,
-        doutorNome: String(dados.get("doutorNome") ?? "").trim() || null,
-        criadoPorId: sessao.usuarioId,
-      },
-    });
-
-    return { ok: true as const, pedido };
+    const criados = [];
+    for (const item of itens) {
+      const numero = await proximoNumero(tx);
+      criados.push(
+        await tx.pedido.create({
+          data: {
+            numero,
+            clinicaId: sessao.clinicaId,
+            servicoId: item.servico.id,
+            enderecoId: endereco?.id ?? null,
+            quantidade: item.quantidade,
+            grupoId: itens.length > 1 ? grupoId : null,
+            observacoes: String(dados.get("observacoes") ?? "") || null,
+            data,
+            horaInicio: item.horaInicio,
+            duracaoMin: item.duracaoMin,
+            status: "SOLICITADO",
+            origem: "PORTAL_CLINICA",
+            valorServicoCentavos: item.valorServicoCentavos,
+            pacienteNome: String(dados.get("pacienteNome") ?? "") || null,
+            pacienteContato: String(dados.get("pacienteContato") ?? "") || null,
+            doutorNome: String(dados.get("doutorNome") ?? "").trim() || null,
+            criadoPorId: sessao.usuarioId,
+          },
+        })
+      );
+    }
+    return { ok: true as const, criados };
   });
 
   if (!resultado.ok) return resultado;
 
-  await registrarAuditoria(
-    sessao.usuarioId,
-    "Pedido",
-    resultado.pedido.id,
-    "solicitar",
-    `nº ${resultado.pedido.numero}`
-  );
-  await criarNegocio(resultado.pedido.id);
+  for (const pedido of resultado.criados) {
+    await registrarAuditoria(sessao.usuarioId, "Pedido", pedido.id, "solicitar", `nº ${pedido.numero}`);
+    await criarNegocio(pedido.id);
+  }
   atualizarTelas();
   return { ok: true };
 }

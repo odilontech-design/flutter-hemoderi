@@ -7,21 +7,23 @@ test("reconhece as famílias do catálogo real da Hemoderi", () => {
   assert.equal(familiaDoNome("Stickybone / PRF Block"), "PRF");
   assert.equal(familiaDoNome("I-PRF Day"), "PRF");
   assert.equal(familiaDoNome("PRF para Harmonização"), "PRF");
-  assert.equal(familiaDoNome("Piezosurgery Mectron Touch"), "Piezo");
-  assert.equal(familiaDoNome("LiteTouch – Laser de Alta Potência"), "Laser");
-  assert.equal(familiaDoNome("Laser Therapy EC + ILIB"), "Laser");
-  assert.equal(familiaDoNome("GBT Machine – AirFlow"), "Profilaxia");
-  assert.equal(familiaDoNome("Ultrassom Micro e Macrofocado – Atria®"), "Ultrassom");
-  assert.equal(familiaDoNome("Megaderme® – Radiofrequência Microagulhada"), "Radiofrequência");
-  assert.equal(familiaDoNome("Motor de Implante"), "Implante");
-  assert.equal(familiaDoNome("Sedação Consciente"), "Sedação");
-  assert.equal(familiaDoNome("Cobertura Fotográfica Odontológica"), "Fotografia");
+  assert.equal(familiaDoNome("Piezosurgery Mectron Touch"), "Piezosurgery");
+  assert.equal(familiaDoNome("LiteTouch – Laser de Alta Potência"), "LiteTouch");
+  assert.equal(familiaDoNome("Laser Therapy EC + ILIB"), "Laser Therapy EC");
+  assert.equal(familiaDoNome("Platinum Plataform"), "Platinum");
+  assert.equal(familiaDoNome("GBT Machine – AirFlow"), "AirFlow GBT Machine");
+  assert.equal(familiaDoNome("Ultrassom Micro e Macrofocado – Atria®"), "Ultrassom Micro Focado");
+  assert.equal(familiaDoNome("Megaderme® – Radiofrequência Microagulhada"), "Megaderme");
+  assert.equal(familiaDoNome("Motor de Implante"), "Motor de Implante");
+  assert.equal(familiaDoNome("Sedação Consciente"), "Sedação Consciente");
+  assert.equal(familiaDoNome("Bisturi Elétrico"), "Bisturi Elétrico");
+  assert.equal(familiaDoNome("Cobertura Fotográfica Odontológica"), "Cobertura Fotográfica");
 });
 
 test("nome que casa com duas famílias fica com o equipamento que define o procedimento", () => {
   // "Piezosurgery + Stickybone + Membranas" tem PRF dentro, mas o que manda
   // na agenda e no equipamento é o Piezo.
-  assert.equal(familiaDoNome("Piezosurgery + Stickybone + Membranas"), "Piezo");
+  assert.equal(familiaDoNome("Piezosurgery + Stickybone + Membranas"), "Piezosurgery");
 });
 
 test("serviço não reconhecido cai em Outros, não some", () => {
@@ -68,7 +70,7 @@ test("família de um item só é fundida em Outros — cabeçalho para uma linha
 test("sem nenhuma família com duas opções, o agrupamento é preservado", () => {
   // Fundir tudo aqui apagaria a única informação que a seção carrega.
   const grupos = agruparPorFamilia([{ nome: "Sedação Consciente" }, { nome: "Motor de Implante" }]);
-  assert.deepEqual(grupos.map((g) => g.familia).sort(), ["Implante", "Sedação"]);
+  assert.deepEqual(grupos.map((g) => g.familia).sort(), ["Motor de Implante", "Sedação Consciente"]);
 });
 
 test("dentro da família, os serviços saem em ordem alfabética", () => {
@@ -82,4 +84,22 @@ test("dentro da família, os serviços saem em ordem alfabética", () => {
     "Membranas – PRF",
     "PRF para Medicina",
   ]);
+});
+
+test("lasers de finalidade diferente ficam em categorias separadas", () => {
+  assert.notEqual(familiaDoNome("LiteTouch – Laser de Alta Potência"), familiaDoNome("Laser Therapy EC + ILIB"));
+  assert.notEqual(familiaDoNome("Platinum Plataform"), familiaDoNome("Laser Therapy EC + ILIB"));
+});
+
+test("no portal, equipamento com um procedimento só continua sendo categoria própria", () => {
+  const grupos = agruparPorFamilia(
+    [
+      { nome: "Membranas – PRF" },
+      { nome: "I-PRF Day" },
+      { nome: "Platinum Plataform" },
+      { nome: "Bisturi Elétrico" },
+    ],
+    { fundirSolitarias: false }
+  );
+  assert.deepEqual(grupos.map((g) => g.familia), ["PRF", "Bisturi Elétrico", "Platinum"]);
 });

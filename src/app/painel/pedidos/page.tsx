@@ -1,3 +1,4 @@
+import { resumoDoEndereco } from "@/lib/endereco";
 import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 import { exigirInterno } from "@/lib/sessao";
@@ -50,6 +51,7 @@ export default async function Esteira({
       take: 200,
       include: {
         clinica: { select: { nome: true, telefone: true } },
+        endereco: { select: { rotulo: true, endereco: true, numero: true, complemento: true, bairro: true, cidade: true, uf: true } },
         servico: { select: { nome: true } },
         profissional: { select: { nome: true } },
         relatorio: {
@@ -174,7 +176,15 @@ export default async function Esteira({
                   </div>
                   <div className="text-xs text-gray-700">
                     {formatarDataCurta(pedido.data)} às {pedido.horaInicio} · {pedido.servico.nome}
+                    {pedido.quantidade > 1 && <span className="text-gray-400"> × {pedido.quantidade}</span>}
                   </div>
+                  {/* Atendimento fora do endereço principal da clínica: é a
+                      informação que a logística precisa antes de rotear. */}
+                  {pedido.endereco && (
+                    <div className="text-[11px] text-amber-700 mt-0.5">
+                      Local: <strong>{pedido.endereco.rotulo}</strong> — {resumoDoEndereco(pedido.endereco)}
+                    </div>
+                  )}
                   <div className="text-[11px] text-gray-500 mt-0.5">
                     {pedido.clinica.nome} ·{" "}
                     {pedido.profissional ? (

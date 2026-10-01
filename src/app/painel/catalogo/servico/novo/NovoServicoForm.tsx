@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { Area, Campo, Rotulo, Selecao } from "@/components/ui";
 import { FormularioAcao } from "@/components/FormularioAcao";
 import { salvarServico } from "@/app/actions/cadastros";
+import { CamposDeCobranca } from "@/components/CamposDeCobranca";
 
 const ROTULO_CATEGORIA: Record<string, string> = {
   ODONTOLOGIA: "Odontologia",
@@ -91,6 +92,7 @@ export function NovoServicoForm({
           atravessa as categorias.
         </div>
       </div>
+      <CamposDeCobranca />
       <div>
         <Rotulo>Tipo de equipamento exigido</Rotulo>
         <Campo name="tipoEquipamento" list="tipos-equipamento" placeholder="ex.: Laser LiteTouch" />

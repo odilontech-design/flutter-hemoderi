@@ -6,6 +6,7 @@ import { FormularioAcao } from "@/components/FormularioAcao";
 import { BotaoAcao } from "@/components/BotaoAcao";
 import { Area, Botao, Campo, OCULTO_MOVEL, Rotulo, Selecao } from "@/components/ui";
 import { formatarPercent, formatarReais } from "@/lib/dinheiro";
+import { CamposDeCobranca } from "@/components/CamposDeCobranca";
 
 /** Centavos → texto editável ("1234,56"), o mesmo formato que TabelaPrecos usa. */
 function centavosParaTexto(centavos: number): string {
@@ -25,6 +26,12 @@ type Servico = {
   equipamentoIlimitado: boolean;
   tipoEquipamento: string | null;
   familia: string | null;
+  unidadeCobranca: "PACIENTE" | "PERIODO" | "HORA";
+  permiteQuantidade: boolean;
+  rotuloQuantidade: string | null;
+  quantidadeMaxima: number | null;
+  perfis: string[];
+  ufsIndisponiveis: string[];
   ativo: boolean;
 };
 
@@ -198,6 +205,7 @@ export function EditarServico({
                   ))}
                 </datalist>
               </div>
+              <CamposDeCobranca valores={servico} sufixoId={servico.id} />
               <div>
                 <Rotulo>Tipo de equipamento exigido</Rotulo>
                 <Campo

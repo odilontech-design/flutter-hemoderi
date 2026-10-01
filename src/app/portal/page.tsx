@@ -145,7 +145,10 @@ export default async function MeusAgendamentos() {
               <tr key={pedido.id} className="border-b border-gray-100 last:border-0">
                 <td className="py-2 pr-3 font-semibold">{formatarDataCurta(pedido.data)}</td>
                 <td className="py-2 pr-3">{pedido.horaInicio}</td>
-                <td className="py-2 pr-3 text-gray-600">{pedido.servico.nome}</td>
+                <td className="py-2 pr-3 text-gray-600">
+                  {pedido.servico.nome}
+                  {pedido.quantidade > 1 && <span className="text-gray-400"> × {pedido.quantidade}</span>}
+                </td>
                 <td className="py-2 pr-3 text-gray-600">
                   {!nomeDoProfissionalVisivel(pedido.data, pedido.horaInicio) ? (
                     <span title="O nome de quem vai atender aparece 24h antes do atendimento.">
@@ -235,7 +238,10 @@ export default async function MeusAgendamentos() {
             {historico.map((pedido) => (
               <tr key={pedido.id} className="border-b border-gray-100 last:border-0 align-top">
                 <td className="py-2 pr-3">{formatarDataCurta(pedido.data)}</td>
-                <td className="py-2 pr-3 text-gray-600">{pedido.servico.nome}</td>
+                <td className="py-2 pr-3 text-gray-600">
+                  {pedido.servico.nome}
+                  {pedido.quantidade > 1 && <span className="text-gray-400"> × {pedido.quantidade}</span>}
+                </td>
                 <td className="py-2 pr-3 text-gray-600">{pedido.profissional?.nome ?? "—"}</td>
                 <td className="py-2 pr-3">
                   <SeloStatus status={pedido.status} />

@@ -219,6 +219,24 @@ model Clinica {
 
   observacoes String?
 
+  /// Perfis APROVADOS do cliente (ata de 01/10): decidem quais serviços ele vê
+  /// no catálogo e quais tabelas de preço podem ser vinculadas. Mais de um
+  /// perfil é normal — o dentista que também dá curso. Vazio é o cadastro
+  /// legado, anterior à classificação: vê o que não é restrito a perfil.
+  perfis PerfilCliente[] @default([])
+
+  /// O que o próprio cliente disse ser no autocadastro. Só a equipe promove
+  /// isto a `perfis` — nove em cada dez dentistas também lecionam, e deixar o
+  /// cliente escolher a própria tabela de preço seria desconto por
+  /// autodeclaração.
+  perfilDeclarado PerfilCliente?
+
+  /// Triagem do cadastro. Cadastro feito pela equipe nasce APROVADO; o
+  /// autocadastro nasce PENDENTE e só agenda depois de revisado.
+  statusCadastro     StatusCadastro @default(APROVADO)
+  autocadastro       Boolean        @default(false)
+  cadastroRevisadoEm DateTime?
+
   ativa        Boolean   @default(true)
   criadaEm     DateTime  @default(now())
   atualizadaEm DateTime  @updatedAt
@@ -226,6 +244,11 @@ model Clinica {
 
   usuarios     Usuario[]
   precos       PrecoClinica[]
+  /// Tabelas de preço liberadas para esta clínica — uma ou várias.
+  tabelas      TabelaPreco[]
+  /// Endereços de atendimento ALÉM do principal (que mora nas colunas
+  /// acima). Cada pedido aponta para o seu.
+  enderecos    EnderecoClinica[]
   pedidos      Pedido[]
   faturas      Fatura[]
   avaliacoes   Avaliacao[]
@@ -318,12 +341,34 @@ model Servico {
   /// equipamentos ainda não tem o tipo cadastrado.
   tipoEquipamento String?
 
+  /// Em que o preço é cobrado: por paciente, por período ou por hora (ata de
+  /// 01/10). É o que a tela escreve ao lado do valor ("R$ 450 / hora") e o que
+  /// diz o que a quantidade significa.
+  unidadeCobranca UnidadeCobranca @default(PACIENTE)
+
+  /// Serviço com quantidade variável — Light Touch cobra por dente tratado ou
+  /// por paciente. Falso é o caso do PRF: um por paciente, e para outro
+  /// paciente é OUTRO agendamento, não um "2" no campo de quantidade.
+  permiteQuantidade Boolean @default(false)
+  /// O que se conta: "dentes", "pacientes". Aparece ao lado do campo.
+  rotuloQuantidade  String?
+  quantidadeMaxima  Int?
+
+  /// Perfis de cliente que enxergam o serviço. Vazio = todos. É como "PRF
+  /// curso" fica restrito a quem tem perfil de curso sem esconder o resto.
+  perfis           PerfilCliente[] @default([])
+  /// UFs em que a Hemoderi NÃO atende o serviço (o laser CO2 não roda no Rio).
+  /// Some do catálogo e do agendamento de quem está lá, em vez de virar
+  /// cancelamento depois.
+  ufsIndisponiveis String[]        @default([])
+
   ativo        Boolean   @default(true)
   criadoEm     DateTime  @default(now())
   atualizadoEm DateTime  @updatedAt
   desativadoEm DateTime?
 
   precos        PrecoClinica[]
+  precosTabela  PrecoTabela[]
   precosRegiao  PrecoRegiao[]
   solicitacoes  SolicitacaoPublica[]
   regrasRepasse RegraRepasse[]
@@ -331,6 +376,95 @@ model Servico {
 
   @@index([ativo])
   @@index([categoria])
+}
+
+enum UnidadeCobranca {
+  PACIENTE
+  PERIODO
+  HORA
+}
+
+/// Quem é o cliente, comercialmente. Define o que ele enxerga e a que tabela
+/// de preço tem direito. ODONTOLOGIA, MEDICINA e ESTETICA são as únicas
+/// escolhas do autocadastro; CURSO, MANDIC e PARCEIRO só a equipe atribui.
+enum PerfilCliente {
+  ODONTOLOGIA
+  MEDICINA
+  ESTETICA
+  CURSO
+  MANDIC
+  PARCEIRO
+}
+
+enum StatusCadastro {
+  PENDENTE
+  APROVADO
+  RECUSADO
+}
+
+/// Endereço de atendimento adicional de uma clínica — o "casa / trabalho" dos
+/// aplicativos de entrega. O principal fica nas colunas da própria Clinica;
+/// pedido sem `enderecoId` acontece nele.
+model EnderecoClinica {
+  id String @id @default(cuid())
+
+  clinicaId String
+  clinica   Clinica @relation(fields: [clinicaId], references: [id], onDelete: Cascade)
+
+  /// Como a clínica chama o lugar: "Unidade Moema", "Consultório do Rio".
+  rotulo String
+
+  cep         String
+  endereco    String
+  numero      String?
+  complemento String?
+  bairro      String?
+  cidade      String?
+  uf          String
+
+  ativo    Boolean  @default(true)
+  criadoEm DateTime @default(now())
+
+  pedidos Pedido[]
+
+  @@index([clinicaId])
+}
+
+/// Uma tabela de preço comercial — "Consultório particular", "Cursos",
+/// "Mandic". Diferente da praça (que varia por lugar), a tabela varia por
+/// QUEM compra. Uma clínica pode ter várias liberadas: o dentista que também
+/// dá curso enxerga o preço de cada serviço na tabela que lhe cabe.
+model TabelaPreco {
+  id        String         @id @default(cuid())
+  nome      String         @unique
+  descricao String?
+  /// Para quem a tabela foi pensada — só um rótulo para organizar a lista.
+  perfil    PerfilCliente?
+
+  ativa        Boolean  @default(true)
+  criadaEm     DateTime @default(now())
+  atualizadaEm DateTime @updatedAt
+
+  itens    PrecoTabela[]
+  clinicas Clinica[]
+}
+
+model PrecoTabela {
+  id String @id @default(cuid())
+
+  tabelaId String
+  tabela   TabelaPreco @relation(fields: [tabelaId], references: [id], onDelete: Cascade)
+
+  servicoId String
+  servico   Servico @relation(fields: [servicoId], references: [id], onDelete: Cascade)
+
+  valorCentavos Int
+
+  criadoEm     DateTime @default(now())
+  atualizadoEm DateTime @updatedAt
+
+  @@unique([tabelaId, servicoId])
+  @@index([tabelaId])
 }
 
 /// As três frentes do catálogo comercial da Hemoderi — a própria empresa
@@ -364,9 +498,9 @@ model RegiaoPreco {
   /// cadastro recusa a sobreposição por isso.
   ufs String[]
 
-  ativa        Boolean   @default(true)
-  criadaEm     DateTime  @default(now())
-  atualizadaEm DateTime  @updatedAt
+  ativa        Boolean  @default(true)
+  criadaEm     DateTime @default(now())
+  atualizadaEm DateTime @updatedAt
 
   precos PrecoRegiao[]
 
@@ -657,6 +791,20 @@ model Pedido {
   equipamentoId String?
   equipamento   Equipamento? @relation(fields: [equipamentoId], references: [id])
 
+  /// Onde acontece, quando NÃO é o endereço principal da clínica.
+  enderecoId String?
+  endereco   EnderecoClinica? @relation(fields: [enderecoId], references: [id])
+
+  /// Quantas unidades do serviço (dentes, pacientes, horas), quando o serviço
+  /// permite quantidade. `valorServicoCentavos` já é o total — preço unitário
+  /// vezes isto.
+  quantidade Int @default(1)
+
+  /// Pedidos criados no MESMO agendamento do portal (vários serviços numa
+  /// visita só). Só liga; cada serviço continua sendo um pedido, porque é
+  /// como a operação aloca, cobra e repassa.
+  grupoId String?
+
   /// Meia-noite UTC do dia do atendimento. Hora fica separada, em texto, pelo
   /// mesmo motivo de lib/data.ts: o dia do atendimento não pode escorregar
   /// porque o servidor da Vercel roda em UTC e a operação é no Brasil.
@@ -759,6 +907,7 @@ model Pedido {
   @@index([profissionalId, data])
   @@index([status])
   @@index([faturaId])
+  @@index([grupoId])
 }
 
 /// Recusa de uma alocação, ANTES do aceite.
@@ -834,8 +983,8 @@ model RelatorioAtendimento {
   glicemia           String?
   /// Óxido nitroso e oxigênio — só fazem sentido em sedação, e é para esses
   /// que o "não se aplica" existe na maior parte dos atendimentos.
-  oxidoNitroso String?
-  oxigenio     String?
+  oxidoNitroso       String?
+  oxigenio           String?
 
   /// O que foi executado além (ou no lugar) do serviço contratado — a
   /// membrana que virou stickybone. Quem declara é quem atendeu; quem
@@ -1108,9 +1257,9 @@ model Fatura {
   /// o valor da fatura continua bruto; o líquido = valorCentavos - descontoCentavos.
   descontoCentavos Int @default(0)
 
-  pedidos     Pedido[]
-  aplicacoes  AplicacaoCupom[]
-  cobrancas   CobrancaPix[]
+  pedidos    Pedido[]
+  aplicacoes AplicacaoCupom[]
+  cobrancas  CobrancaPix[]
 
   @@unique([clinicaId, competencia])
   @@index([status, vencimento])
@@ -1160,10 +1309,10 @@ model CupomDesconto {
   validoAte DateTime?
 
   /// Quantas vezes o cupom pode ser usado no total. Nulo = ilimitado.
-  limiteUsos Int?
+  limiteUsos     Int?
   /// Contador de usos efetivos (aplicados em fatura). O cupom está esgotado
   /// quando limiteUsos != null e usosRealizados >= limiteUsos.
-  usosRealizados Int @default(0)
+  usosRealizados Int  @default(0)
 
   ativo    Boolean  @default(true)
   criadoEm DateTime @default(now())
@@ -1192,7 +1341,7 @@ model AplicacaoCupom {
   /// valor nominal do cupom quando o desconto ultrapassa o valor da fatura.
   descontoCentavos Int
 
-  aplicadoEm   DateTime @default(now())
+  aplicadoEm    DateTime @default(now())
   aplicadoPorId String?
 
   @@index([cupomId])
@@ -1240,9 +1389,9 @@ model CobrancaPix {
   status StatusCobrancaPix @default(ATIVA)
 
   /// O payload do QR Code (BRCode / EMV). É o que gera a imagem do QR.
-  qrCode     String?
+  qrCode      String?
   /// Código copia-e-cola — o texto que o cliente cola no app do banco.
-  copiaECola String?
+  copiaECola  String?
   /// URL da imagem do QR Code retornada pela API.
   imagemQrUrl String?
 

@@ -2,13 +2,14 @@
 
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
-import { Prisma, type CategoriaServico } from "@prisma/client";
+import { Prisma, type CategoriaServico, type UnidadeCobranca } from "@prisma/client";
 import { exigirInterno } from "@/lib/sessao";
 import { gerarSlug } from "@/lib/slug";
 import { lerCentavos } from "@/lib/dinheiro";
 import { cepValido, cnpjValido, cpfValido } from "@/lib/documento";
 import { condicaoValida } from "@/lib/pagamento";
 import { lerUfs } from "@/lib/uf";
+import { lerPerfis } from "@/lib/visibilidade";
 import type { Resultado } from "./pedidos";
 
 /**
@@ -146,6 +147,26 @@ export async function alternarProfissional(id: string, ativo: boolean): Promise<
   return { ok: true };
 }
 
+/**
+ * Cobrança, quantidade e oferta do serviço (ata de 01/10). Sem quantidade
+ * variável, o rótulo e o máximo são limpos: um "dentes" órfão de um serviço
+ * que não conta mais dentes confundiria a próxima pessoa que abrisse o cadastro.
+ */
+function lerRegrasDeOferta(dados: FormData) {
+  const unidade = String(dados.get("unidadeCobranca") ?? "PACIENTE");
+  const permiteQuantidade = String(dados.get("permiteQuantidade") ?? "nao") === "sim";
+  const maxima = Math.trunc(Number(dados.get("quantidadeMaxima")));
+
+  return {
+    unidadeCobranca: (["PACIENTE", "PERIODO", "HORA"].includes(unidade) ? unidade : "PACIENTE") as UnidadeCobranca,
+    permiteQuantidade,
+    rotuloQuantidade: permiteQuantidade ? String(dados.get("rotuloQuantidade") ?? "").trim() || null : null,
+    quantidadeMaxima: permiteQuantidade && Number.isFinite(maxima) && maxima > 0 ? maxima : null,
+    perfis: lerPerfis(dados.getAll("perfis")),
+    ufsIndisponiveis: lerUfs(dados.getAll("ufsIndisponiveis").join(",")),
+  };
+}
+
 export async function salvarServico(_anterior: Resultado, dados: FormData): Promise<Resultado> {
   await exigirInterno();
 
@@ -183,6 +204,7 @@ export async function salvarServico(_anterior: Resultado, dados: FormData): Prom
     // Sem "exige equipamento", tipo não faz sentido — mantém o dado limpo em
     // vez de deixar um tipo órfão de um serviço que não usa mais equipamento.
     tipoEquipamento: exigeEquipamento ? String(dados.get("tipoEquipamento") ?? "").trim() || null : null,
+    ...lerRegrasDeOferta(dados),
   };
 
   if (id) {

@@ -6,6 +6,7 @@ import { formatarData } from "@/lib/data";
 import { codigoDoPedido } from "@/lib/numeracao";
 import { formatarReais } from "@/lib/dinheiro";
 import { enderecoEmUmaLinha } from "@/lib/relatorio";
+import { comEnderecoDoPedido } from "@/lib/endereco";
 import { FormularioRelatorio } from "./FormularioRelatorio";
 
 export const dynamic = "force-dynamic";
@@ -21,6 +22,7 @@ export default async function Relatorio({ params }: { params: { pedidoId: string
       clinica: {
         select: { nome: true, endereco: true, numero: true, bairro: true, cidade: true, uf: true },
       },
+      endereco: { select: { endereco: true, numero: true, bairro: true, cidade: true, uf: true } },
       servico: { select: { nome: true } },
       profissional: { select: { chavePix: true } },
       relatorio: true,
@@ -52,7 +54,7 @@ export default async function Relatorio({ params }: { params: { pedidoId: string
     // existe, tem precedência — reabrir o relatório precisa mostrar o que a
     // pessoa escreveu, não jogá-la de volta ao valor que ela corrigiu.
     clinicaNomeInformado: r?.clinicaNomeInformado ?? pedido.clinica.nome,
-    enderecoInformado: r?.enderecoInformado ?? enderecoEmUmaLinha(pedido.clinica),
+    enderecoInformado: r?.enderecoInformado ?? enderecoEmUmaLinha(comEnderecoDoPedido(pedido.clinica, pedido.endereco)),
     doutorNomeInformado: r?.doutorNomeInformado ?? pedido.doutorNome ?? "",
   };
 

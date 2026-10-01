@@ -17,17 +17,22 @@
  * equipamento que define o procedimento; o PRF ali é insumo.
  */
 const REGRAS: { familia: string; padrao: RegExp }[] = [
-  { familia: "Piezo", padrao: /piezo/i },
+  { familia: "Piezosurgery", padrao: /piezo/i },
   { familia: "PRF", padrao: /\bi?-?prf\b|stickybone|membranas/i },
-  { familia: "Laser", padrao: /laser|litetouch|ilib/i },
-  { familia: "Ultrassom", padrao: /ultrassom|atria/i },
-  { familia: "Radiofrequência", padrao: /radiofrequ|megaderme/i },
-  { familia: "Profilaxia", padrao: /airflow|gbt/i },
+  // Cada laser é uma categoria própria (ata de 01/10): LiteTouch, Platinum e
+  // Laser Therapy têm finalidade clínica diferente e agrupá-los sob "Laser"
+  // escondia justamente a escolha que o cliente precisa fazer.
+  { familia: "LiteTouch", padrao: /lite ?touch|light ?touch/i },
+  { familia: "Laser Therapy EC", padrao: /laser ?therapy|ilib/i },
+  { familia: "Laser", padrao: /laser/i },
+  { familia: "Ultrassom Micro Focado", padrao: /ultrassom|atria/i },
+  { familia: "Megaderme", padrao: /radiofrequ|megaderme/i },
+  { familia: "AirFlow GBT Machine", padrao: /airflow|gbt/i },
   { familia: "Platinum", padrao: /platinum/i },
-  { familia: "Implante", padrao: /implante/i },
-  { familia: "Bisturi", padrao: /bisturi/i },
-  { familia: "Sedação", padrao: /seda[çc]/i },
-  { familia: "Fotografia", padrao: /fotogr/i },
+  { familia: "Motor de Implante", padrao: /implante/i },
+  { familia: "Bisturi Elétrico", padrao: /bisturi/i },
+  { familia: "Sedação Consciente", padrao: /seda[çc]/i },
+  { familia: "Cobertura Fotográfica", padrao: /fotogr/i },
 ];
 
 export const OUTROS = "Outros";
@@ -46,9 +51,15 @@ export function familiaDoNome(nome: string): string {
  *
  * A fusão não acontece quando NENHUMA família tem duas opções: aí tudo
  * viraria "Outros" e o agrupamento deixaria de existir.
+ *
+ * O portal logado desliga a fusão (`fundirSolitarias: false`): lá cada
+ * equipamento é uma categoria, mesmo com um procedimento só — é a estrutura
+ * do catálogo oficial da Hemoderi, e o cliente que procura "Platinum" não
+ * pode achá-lo dentro de "Outros".
  */
 export function agruparPorFamilia<T extends { nome: string; familia?: string | null }>(
-  servicos: T[]
+  servicos: T[],
+  { fundirSolitarias = true }: { fundirSolitarias?: boolean } = {}
 ): { familia: string; servicos: T[] }[] {
   const grupos = new Map<string, T[]>();
 
@@ -63,7 +74,7 @@ export function agruparPorFamilia<T extends { nome: string; familia?: string | n
     ([familia, lista]) => familia !== OUTROS && lista.length > 1
   );
 
-  if (temFamiliaReal) {
+  if (fundirSolitarias && temFamiliaReal) {
     const solitarios: T[] = [];
     for (const [familia, lista] of [...grupos.entries()]) {
       if (familia !== OUTROS && lista.length === 1) {

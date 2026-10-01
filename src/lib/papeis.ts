@@ -8,7 +8,7 @@ import type { PapelUsuario, PerfilInterno } from "@prisma/client";
  */
 export const INICIO_POR_PAPEL: Record<PapelUsuario, string> = {
   INTERNO: "/painel",
-  CLINICA: "/portal",
+  CLINICA: "/portal/catalogo",
   PROFISSIONAL: "/profissional",
 };
 

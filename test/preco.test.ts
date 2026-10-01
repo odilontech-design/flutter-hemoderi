@@ -14,12 +14,24 @@ function bancoFalso({
   negociados = [],
   regioes = [],
   precosRegiao = [],
+  precosTabela = [],
 }: {
   negociados?: { clinicaId: string; servicoId: string; valorCentavos: number }[];
   regioes?: { id: string; nome: string; ufs: string[]; ativa?: boolean }[];
   precosRegiao?: { regiaoId: string; servicoId: string; valorCentavos: number }[];
+  precosTabela?: { tabelaId: string; servicoId: string; valorCentavos: number }[];
 } = {}) {
   return {
+    precoTabela: {
+      findMany: async ({ where }: never) => {
+        const w = where as { tabelaId: { in: string[] }; servicoId: string | { in: string[] } };
+        return precosTabela.filter(
+          (p) =>
+            w.tabelaId.in.includes(p.tabelaId) &&
+            (typeof w.servicoId === "string" ? p.servicoId === w.servicoId : w.servicoId.in.includes(p.servicoId))
+        );
+      },
+    },
     precoClinica: {
       findUnique: async ({ where }: never) => {
         const { clinicaId, servicoId } = (where as { clinicaId_servicoId: { clinicaId: string; servicoId: string } })
@@ -156,4 +168,68 @@ test("em lote, cada serviço resolve na sua própria camada", async () => {
       ["c", 30_000, "tabela"],
     ]
   );
+});
+
+test("a tabela do perfil vence a praça, mas perde para o negociado", async () => {
+  const banco = bancoFalso({
+    regioes: [SP],
+    precosRegiao: [{ regiaoId: SP.id, servicoId: SERVICO, valorCentavos: 42_000 }],
+    precosTabela: [{ tabelaId: "mandic", servicoId: SERVICO, valorCentavos: 35_000 }],
+  });
+  const base = { servicoId: SERVICO, uf: "SP", valorPadraoCentavos: TABELA, tabelaIds: ["mandic"] };
+
+  const doPerfil = await precoDoServico(banco, { clinicaId: "c1", ...base });
+  assert.equal(doPerfil.valorCentavos, 35_000);
+  assert.equal(doPerfil.origem, "perfil");
+
+  const comNegociado = await precoDoServico(
+    bancoFalso({
+      negociados: [{ clinicaId: "c1", servicoId: SERVICO, valorCentavos: 30_000 }],
+      precosTabela: [{ tabelaId: "mandic", servicoId: SERVICO, valorCentavos: 35_000 }],
+    }),
+    { clinicaId: "c1", ...base }
+  );
+  assert.equal(comNegociado.origem, "negociado");
+});
+
+test("com duas tabelas liberadas, a clínica paga a menor", async () => {
+  const preco = await precoDoServico(
+    bancoFalso({
+      precosTabela: [
+        { tabelaId: "particular", servicoId: SERVICO, valorCentavos: 45_000 },
+        { tabelaId: "curso", servicoId: SERVICO, valorCentavos: 38_000 },
+      ],
+    }),
+    { clinicaId: "c1", servicoId: SERVICO, valorPadraoCentavos: TABELA, tabelaIds: ["particular", "curso"] }
+  );
+  assert.equal(preco.valorCentavos, 38_000);
+});
+
+test("tabela liberada sem preço para o serviço não interfere — cai na praça", async () => {
+  const preco = await precoDoServico(
+    bancoFalso({
+      regioes: [SP],
+      precosRegiao: [{ regiaoId: SP.id, servicoId: SERVICO, valorCentavos: 42_000 }],
+      precosTabela: [{ tabelaId: "mandic", servicoId: "outro", valorCentavos: 1 }],
+    }),
+    { clinicaId: "c1", servicoId: SERVICO, uf: "SP", valorPadraoCentavos: TABELA, tabelaIds: ["mandic"] }
+  );
+  assert.equal(preco.origem, "regiao");
+});
+
+test("em lote, o preço do perfil também entra na cadeia", async () => {
+  const precos = await precosDosServicos(
+    bancoFalso({ precosTabela: [{ tabelaId: "mandic", servicoId: "a", valorCentavos: 500 }] }),
+    {
+      clinicaId: "c1",
+      tabelaIds: ["mandic"],
+      servicos: [
+        { id: "a", valorPadraoCentavos: 1_000 },
+        { id: "b", valorPadraoCentavos: 2_000 },
+      ],
+    }
+  );
+  assert.equal(precos.get("a")?.origem, "perfil");
+  assert.equal(precos.get("a")?.valorCentavos, 500);
+  assert.equal(precos.get("b")?.origem, "tabela");
 });

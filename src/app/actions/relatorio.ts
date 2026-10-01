@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
+import { comEnderecoDoPedido } from "@/lib/endereco";
 import { exigirProfissional } from "@/lib/sessao";
 import {
   ajudaCustoEmCentavos,
@@ -40,6 +41,7 @@ export async function enviarRelatorio(_anterior: Resultado, dados: FormData): Pr
       status: true,
       doutorNome: true,
       clinica: { select: { nome: true, endereco: true, numero: true, bairro: true, cidade: true, uf: true } },
+      endereco: { select: { endereco: true, numero: true, bairro: true, cidade: true, uf: true } },
       relatorio: { select: { aprovadoEm: true } },
     },
   });
@@ -101,7 +103,7 @@ export async function enviarRelatorio(_anterior: Resultado, dados: FormData): Pr
   const doutor = String(dados.get("doutorNomeInformado") ?? "").trim();
   const correcoesDoAgendamento = {
     clinicaNomeInformado: divergiu(pedido.clinica.nome, clinicaNome) ? clinicaNome : null,
-    enderecoInformado: divergiu(enderecoEmUmaLinha(pedido.clinica), endereco) ? endereco : null,
+    enderecoInformado: divergiu(enderecoEmUmaLinha(comEnderecoDoPedido(pedido.clinica, pedido.endereco)), endereco) ? endereco : null,
     doutorNomeInformado: divergiu(pedido.doutorNome, doutor) ? doutor : null,
   };
 

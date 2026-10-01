@@ -1,7 +1,7 @@
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { horariosDisponiveis } from "@/lib/alocacao";
+import { horariosDisponiveis, horariosDisponiveisConjunto } from "@/lib/alocacao";
 
 // Rota de dados vivos: nunca pré-renderizada no build.
 export const dynamic = "force-dynamic";
@@ -27,6 +27,28 @@ export async function GET(requisicao: Request) {
       : sessao.user.papel === "INTERNO"
         ? url.searchParams.get("clinicaId")
         : null;
+
+  // Vários serviços na mesma visita: "id:qtd,id:qtd", na ordem em que
+  // acontecem. A resposta é a do bloco inteiro.
+  const itensTexto = url.searchParams.get("itens");
+  if (clinicaId && itensTexto && data) {
+    const itens = itensTexto
+      .split(",")
+      .map((par) => {
+        const [id, qtd] = par.split(":");
+        return { servicoId: id ?? "", quantidade: Math.max(1, Math.trunc(Number(qtd)) || 1) };
+      })
+      .filter((item) => item.servicoId)
+      .slice(0, 12);
+
+    const resultado = await horariosDisponiveisConjunto({
+      clinicaId,
+      itens,
+      dataISO: data,
+      exigirAntecedencia: sessao.user.papel === "CLINICA",
+    });
+    return Response.json(resultado);
+  }
 
   if (!clinicaId || !servicoId || !data) {
     return Response.json({ horarios: [] });

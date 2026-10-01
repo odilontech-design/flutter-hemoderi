@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { comEnderecoDoPedido } from "@/lib/endereco";
 import {
   agendaDaOperacao,
   integracaoConfigurada,
@@ -35,6 +36,7 @@ const SELECAO = {
   googleEventoId: true,
   googleAgendaId: true,
   clinica: { select: { nome: true, endereco: true, cidade: true } },
+  endereco: { select: { endereco: true, cidade: true } },
   servico: { select: { nome: true } },
   profissional: { select: { nome: true, googleAgendaId: true } },
 } as const;
@@ -73,7 +75,8 @@ export async function sincronizarEvento(
   transporte: TransporteAgenda = transporteGoogle,
   agendaPadrao: string | null = agendaDaOperacao()
 ): Promise<void> {
-  const pedido = await prisma.pedido.findUnique({ where: { id: pedidoId }, select: SELECAO });
+  const encontrado = await prisma.pedido.findUnique({ where: { id: pedidoId }, select: SELECAO });
+  const pedido = encontrado && { ...encontrado, clinica: comEnderecoDoPedido(encontrado.clinica, encontrado.endereco) };
   if (!pedido) return;
 
   const plano = planejar(
