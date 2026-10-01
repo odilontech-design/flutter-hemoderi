@@ -96,11 +96,18 @@ function iniciais(nome: string): string {
   return (partes[0].charAt(0) + partes[partes.length - 1].charAt(0)).toUpperCase();
 }
 
+export type TrocaPerfil = {
+  href: string;
+  rotulo: string;
+  icone?: React.ReactNode;
+};
+
 export function MenuLateral({
   titulo,
   subtitulo,
   nomeUsuario,
   itens,
+  trocaPerfil,
 }: {
   titulo: string;
   /** Rótulo curto sob o título — "Portal da clínica", por exemplo. Opcional. */
@@ -108,6 +115,8 @@ export function MenuLateral({
   /** Quem está logado agora, mostrado no rodapé junto do botão de sair. */
   nomeUsuario: string;
   itens: ItemMenu[];
+  /** Link de troca de ambiente para usuários com duplo perfil (ex: Naiara). */
+  trocaPerfil?: TrocaPerfil;
 }) {
   const caminho = usePathname();
   const [aberto, setAberto] = useState(false);
@@ -237,6 +246,29 @@ export function MenuLateral({
             );
           })}
         </nav>
+
+        {trocaPerfil && (
+          <div className="border-t border-white/10 p-2">
+            <Link
+              href={trocaPerfil.href}
+              title={recolhido ? trocaPerfil.rotulo : undefined}
+              className={`flex items-center gap-2 px-3 py-2.5 rounded-lg text-xs text-white/50
+                hover:bg-white/10 hover:text-white/90 transition-colors ${recolhido ? "md:justify-center" : ""}`}
+            >
+              <span className="shrink-0 opacity-70">
+                {trocaPerfil.icone ?? (
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M8 3H5a2 2 0 0 0-2 2v3" />
+                    <path d="M21 8V5a2 2 0 0 0-2-2h-3" />
+                    <path d="M3 16v3a2 2 0 0 0 2 2h3" />
+                    <path d="M16 21h3a2 2 0 0 0 2-2v-3" />
+                  </svg>
+                )}
+              </span>
+              <span className={recolhido ? "md:hidden" : ""}>{trocaPerfil.rotulo}</span>
+            </Link>
+          </div>
+        )}
 
         <div className="border-t border-white/10">
           <div className={`flex items-center gap-2 p-3 ${recolhido ? "md:justify-center" : ""}`}>

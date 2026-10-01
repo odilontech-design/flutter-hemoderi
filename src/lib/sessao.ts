@@ -5,13 +5,21 @@ import { prisma } from "./prisma";
 import type { PerfilInterno } from "@prisma/client";
 import { inicioDe, perfilEfetivo } from "./papeis";
 
-export type SessaoInterno = { usuarioId: string; nome: string; perfil: PerfilInterno };
+export type SessaoInterno = {
+  usuarioId: string;
+  nome: string;
+  perfil: PerfilInterno;
+  /** Preenchido quando o usuário interno também é profissional (dual-perfil). */
+  profissionalId?: string;
+};
 export type SessaoClinica = { usuarioId: string; nome: string; clinicaId: string; clinicaNome: string };
 export type SessaoProfissional = {
   usuarioId: string;
   nome: string;
   profissionalId: string;
   profissionalNome: string;
+  /** true quando o usuário é INTERNO acessando o portal do profissional (dual-perfil). */
+  dualPerfil?: boolean;
 };
 
 async function usuarioDaSessao() {
@@ -51,7 +59,12 @@ export async function exigirInterno(): Promise<SessaoInterno> {
   if (!usuario || usuario.desativadoEm) redirect("/login");
   if (usuario.senhaProvisoria) redirect(ROTA_TROCAR_SENHA);
 
-  return { usuarioId: u.id, nome: u.name ?? "", perfil: perfilEfetivo(usuario.perfilInterno) };
+  return {
+    usuarioId: u.id,
+    nome: u.name ?? "",
+    perfil: perfilEfetivo(usuario.perfilInterno),
+    profissionalId: (u as any).profissionalId ?? undefined,
+  };
 }
 
 /**
@@ -96,10 +109,11 @@ export async function exigirClinica(): Promise<SessaoClinica> {
 
 export async function exigirProfissional(): Promise<SessaoProfissional> {
   const u = await usuarioDaSessao();
-  if (u.papel !== "PROFISSIONAL" || !u.profissionalId) redirect(inicioDe(u.papel));
+  const pu = u as any;
+  // Aceita usuários PROFISSIONAL normais e usuários INTERNO com profissionalId (dual-perfil).
+  const temAcesso = (u.papel === "PROFISSIONAL" || u.papel === "INTERNO") && pu.profissionalId;
+  if (!temAcesso) redirect(inicioDe(u.papel));
 
-  // Mesma lógica de exigirClinica: o login e o cadastro do profissional se
-  // desativam por caminhos diferentes, e os dois precisam cortar na hora.
   const usuario = await prisma.usuario.findUnique({
     where: { id: u.id },
     select: {
@@ -114,8 +128,9 @@ export async function exigirProfissional(): Promise<SessaoProfissional> {
   return {
     usuarioId: u.id,
     nome: u.name ?? "",
-    profissionalId: u.profissionalId,
+    profissionalId: pu.profissionalId,
     profissionalNome: usuario.profissional.nome,
+    dualPerfil: u.papel === "INTERNO",
   };
 }
 
