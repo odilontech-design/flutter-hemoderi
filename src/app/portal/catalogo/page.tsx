@@ -151,7 +151,7 @@ export default async function CatalogoDaClinica({ searchParams }: { searchParams
                     <div className="text-[10px] text-gray-500">
                       {servico.permiteQuantidade
                         ? `Você informa a quantidade${servico.rotuloQuantidade ? ` de ${servico.rotuloQuantidade}` : ""}.`
-                        : "Um por paciente — para outro paciente, faça outro agendamento."}
+                        : "Uma unidade por agendamento — para repetir, faça outro agendamento."}
                     </div>
 
                     <div className="mt-auto pt-2 border-t border-gray-100 flex items-baseline justify-between gap-2">

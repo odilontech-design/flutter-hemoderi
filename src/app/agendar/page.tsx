@@ -5,6 +5,7 @@ import { agruparPorFamilia } from "@/lib/familia";
 import { linkWhatsapp } from "@/lib/whatsapp-link";
 import { dataMinimaAgendamentoPublico } from "@/lib/data";
 import { VitrineAgendamento } from "./VitrineAgendamento";
+import { AgendamentoPausado } from "./AgendamentoPausado";
 
 export const dynamic = "force-dynamic";
 
@@ -24,6 +25,11 @@ export const metadata = {
  * comida: o cardápio vem antes da conta.
  */
 export default async function AgendamentoPublico({ searchParams }: { searchParams: { servico?: string } }) {
+  // Pausado na reunião de 01/10: o foco é o portal do cliente cadastrado, e o
+  // agendamento sem cadastro vira cancelamento quando o serviço não existe na
+  // praça da pessoa. Volta com AGENDAMENTO_PUBLICO_ATIVO=1, sem mexer no código.
+  if (process.env.AGENDAMENTO_PUBLICO_ATIVO !== "1") return <AgendamentoPausado />;
+
   const [servicos, config] = await Promise.all([
     prisma.servico.findMany({
       where: { ativo: true },

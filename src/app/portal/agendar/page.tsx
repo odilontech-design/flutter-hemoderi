@@ -32,8 +32,14 @@ export default async function Agendar({ searchParams }: { searchParams: { servic
         <Titulo>Agendar atendimento</Titulo>
         <div className="max-w-xl">
           <Aviso tom="alerta">
-            <div className="font-semibold mb-1">Seu cadastro ainda está em análise.</div>
-            Nossa equipe confere o seu perfil e libera o agendamento em seguida. Enquanto isso, o{" "}
+            <div className="font-semibold mb-1">
+              {clinica?.statusCadastro === "RECUSADO"
+                ? "Seu cadastro ainda não foi liberado."
+                : "Seu cadastro ainda está em análise."}
+            </div>
+            {clinica?.statusCadastro === "RECUSADO"
+              ? "Fale com a central para conferirmos os seus dados. Enquanto isso, o "
+              : "Nossa equipe confere o seu perfil e libera o agendamento em seguida. Enquanto isso, o "}
             <Link href="/portal/catalogo" className="font-semibold underline">
               catálogo
             </Link>{" "}

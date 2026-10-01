@@ -43,6 +43,14 @@ export default async function LayoutPortal({ children }: { children: React.React
               </Aviso>
             </div>
           )}
+          {clinica?.statusCadastro === "RECUSADO" && (
+            <div className="mb-4">
+              <Aviso tom="erro">
+                <div className="font-semibold mb-1">Não foi possível liberar o seu cadastro.</div>
+                Fale com a central para conferirmos os seus dados e liberar o agendamento.
+              </Aviso>
+            </div>
+          )}
           {children}
         </main>
       <BotaoWhatsapp contexto="portal da clínica" />

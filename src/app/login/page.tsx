@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { FormularioLogin } from "./FormularioLogin";
 
 export const dynamic = "force-dynamic";
@@ -13,6 +14,12 @@ export default function Login() {
         </div>
         <div className="bg-white rounded-2xl p-6">
           <FormularioLogin />
+        </div>
+        <div className="text-center text-xs text-white/70 mt-4">
+          Ainda não é cliente?{" "}
+          <Link href="/cadastro" className="font-semibold text-white underline">
+            Criar cadastro
+          </Link>
         </div>
         <div className="text-center text-[10px] text-white/30 mt-6">Dilon Tech</div>
       </div>

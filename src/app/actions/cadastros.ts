@@ -73,7 +73,12 @@ export async function salvarClinica(_anterior: Resultado, dados: FormData): Prom
   if (id) {
     await prisma.clinica.update({ where: { id }, data: comum });
   } else {
-    await prisma.clinica.create({ data: { ...comum, slug: await slugLivre(nome) } });
+    // O cadastro novo feito pela equipe já nasce com o perfil escolhido; na
+    // edição os perfis têm tela própria (Perfil e tabelas de preço) e não são
+    // tocados aqui — senão salvar o endereço apagaria a classificação.
+    await prisma.clinica.create({
+      data: { ...comum, slug: await slugLivre(nome), perfis: lerPerfis(dados.getAll("perfis")) },
+    });
   }
 
   revalidatePath("/painel/clinicas");

@@ -11,16 +11,23 @@ import { CONDICOES_PAGAMENTO } from "@/lib/pagamento";
 import { TabelaPrecos } from "./TabelaPrecos";
 import { formatarData } from "@/lib/data";
 import { ROTULO_FAIXA_NPS, faixaDaNota } from "@/lib/nps";
+import { PerfilDoCliente } from "../PerfilDoCliente";
+import { ROTULO_PERFIL_CLIENTE } from "@/lib/visibilidade";
+import { resumoDoEndereco } from "@/lib/endereco";
 
 export const dynamic = "force-dynamic";
 
 export default async function DetalheClinica({ params }: { params: { id: string } }) {
   await exigirInterno();
 
-  const [clinica, servicos, pesquisasNps] = await Promise.all([
+  const [clinica, servicos, pesquisasNps, tabelas] = await Promise.all([
     prisma.clinica.findUnique({
       where: { id: params.id },
-      include: { precos: true },
+      include: {
+        precos: true,
+        tabelas: { select: { id: true } },
+        enderecos: { where: { ativo: true }, orderBy: { criadoEm: "asc" } },
+      },
     }),
     prisma.servico.findMany({
       where: { ativo: true },
@@ -31,6 +38,11 @@ export default async function DetalheClinica({ params }: { params: { id: string 
       where: { clinicaId: params.id },
       orderBy: { janelaInicio: "desc" },
       take: 12,
+    }),
+    prisma.tabelaPreco.findMany({
+      where: { ativa: true },
+      orderBy: { nome: "asc" },
+      select: { id: true, nome: true, perfil: true },
     }),
   ]);
   if (!clinica) notFound();
@@ -99,6 +111,44 @@ export default async function DetalheClinica({ params }: { params: { id: string 
                 <Area name="observacoes" rows={2} defaultValue={clinica.observacoes ?? ""} />
               </div>
             </FormularioAcao>
+          </Cartao>
+
+          <Cartao>
+            <div className="font-display font-bold text-bordo text-sm mb-1">Perfil e tabelas de preço</div>
+            <div className="text-[11px] text-gray-500 mb-3 leading-relaxed">
+              {clinica.statusCadastro === "PENDENTE" && (
+                <strong className="text-amber-700">Cadastro em triagem — aprove na lista de clínicas. </strong>
+              )}
+              {clinica.perfilDeclarado && clinica.autocadastro && (
+                <>Declarou no autocadastro: <strong>{ROTULO_PERFIL_CLIENTE[clinica.perfilDeclarado]}</strong>. </>
+              )}
+              Aqui a equipe define o que o cliente enxerga e a que tabela tem direito.
+            </div>
+            <PerfilDoCliente
+              clinicaId={clinica.id}
+              perfis={clinica.perfis}
+              tabelasLiberadas={clinica.tabelas.map((t) => t.id)}
+              tabelas={tabelas}
+            />
+          </Cartao>
+
+          <Cartao>
+            <div className="font-display font-bold text-bordo text-sm mb-1">Endereços de atendimento</div>
+            <div className="text-[11px] text-gray-500 mb-3">
+              O principal é o do cadastro acima. Os demais a própria clínica cadastra no portal.
+            </div>
+            {clinica.enderecos.length === 0 ? (
+              <Vazio>Nenhum endereço adicional.</Vazio>
+            ) : (
+              <ul className="divide-y divide-gray-100">
+                {clinica.enderecos.map((e) => (
+                  <li key={e.id} className="py-2">
+                    <div className="text-xs font-semibold text-bordo">{e.rotulo}</div>
+                    <div className="text-[11px] text-gray-600">{resumoDoEndereco(e)}</div>
+                  </li>
+                ))}
+              </ul>
+            )}
           </Cartao>
 
           <CartaoDivulgacao slug={clinica.slug} nome={clinica.nome} />

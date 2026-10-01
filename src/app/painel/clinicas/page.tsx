@@ -5,11 +5,38 @@ import { Cartao, Tabela, Titulo, Vazio } from "@/components/ui";
 import { BotaoAcao } from "@/components/BotaoAcao";
 import { AcoesDeAcesso, SituacaoAcesso } from "@/components/AcessoDoCadastro";
 import { alternarClinica } from "@/app/actions/cadastros";
+import { ROTULO_PERFIL_CLIENTE } from "@/lib/visibilidade";
+import { TriagemCadastro } from "./TriagemCadastro";
 
 export const dynamic = "force-dynamic";
 
 export default async function Clinicas() {
   await exigirInterno();
+
+  const [tabelas, pendentes] = await Promise.all([
+    prisma.tabelaPreco.findMany({
+      where: { ativa: true },
+      orderBy: { nome: "asc" },
+      select: { id: true, nome: true, perfil: true },
+    }),
+    // A fila da triagem (ata de 01/10): autocadastros que ainda não foram
+    // conferidos. O mais antigo primeiro — quem espera há mais tempo.
+    prisma.clinica.findMany({
+      where: { statusCadastro: "PENDENTE" },
+      orderBy: { criadaEm: "asc" },
+      select: {
+        id: true,
+        nome: true,
+        cnpj: true,
+        telefone: true,
+        email: true,
+        cidade: true,
+        uf: true,
+        perfilDeclarado: true,
+        criadaEm: true,
+      },
+    }),
+  ]);
 
   const clinicas = await prisma.clinica.findMany({
     orderBy: [{ ativa: "desc" }, { nome: "asc" }],
@@ -39,6 +66,43 @@ export default async function Clinicas() {
         Clínicas contratantes
       </Titulo>
 
+      {pendentes.length > 0 && (
+        <Cartao className="mb-3 border-amber-200 bg-amber-50/40">
+          <div className="font-display font-bold text-bordo text-sm mb-1">
+            Cadastros aguardando triagem ({pendentes.length})
+          </div>
+          <div className="text-[11px] text-gray-500 leading-relaxed">
+            Clientes que se cadastraram sozinhos. Confira o perfil que declararam — o agendamento só é
+            liberado depois da sua aprovação.
+          </div>
+          <div className="divide-y divide-amber-200/70">
+            {pendentes.map((pendente) => (
+              <div key={pendente.id} className="py-4 first:pt-3 last:pb-0">
+                <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+                  <Link href={`/painel/clinicas/${pendente.id}`} className="font-semibold text-bordo hover:underline text-sm">
+                    {pendente.nome}
+                  </Link>
+                  <span className="text-[11px] text-gray-600">
+                    declarou:{" "}
+                    <strong>{pendente.perfilDeclarado ? ROTULO_PERFIL_CLIENTE[pendente.perfilDeclarado] : "—"}</strong>
+                  </span>
+                </div>
+                <div className="text-[11px] text-gray-500 mt-0.5">
+                  {[pendente.email, pendente.telefone, pendente.cnpj, [pendente.cidade, pendente.uf].filter(Boolean).join("/")]
+                    .filter(Boolean)
+                    .join(" · ")}
+                </div>
+                <TriagemCadastro
+                  clinicaId={pendente.id}
+                  perfilDeclarado={pendente.perfilDeclarado}
+                  tabelas={tabelas}
+                />
+              </div>
+            ))}
+          </div>
+        </Cartao>
+      )}
+
       <Cartao>
         {clinicas.length === 0 ? (
             <Vazio>Nenhuma clínica cadastrada.</Vazio>
@@ -54,6 +118,17 @@ export default async function Clinicas() {
                       {clinica.nome}
                     </Link>
                     <div className="text-[10px] text-gray-400">{clinica.telefone ?? "sem telefone"}</div>
+                    <div className="text-[10px] text-gray-500 mt-0.5">
+                      {clinica.perfis.length > 0
+                        ? clinica.perfis.map((p) => ROTULO_PERFIL_CLIENTE[p]).join(" · ")
+                        : "sem perfil"}
+                      {clinica.statusCadastro === "PENDENTE" && (
+                        <span className="ml-1.5 font-semibold text-amber-700">em triagem</span>
+                      )}
+                      {clinica.statusCadastro === "RECUSADO" && (
+                        <span className="ml-1.5 font-semibold text-red-600">recusado</span>
+                      )}
+                    </div>
                   </td>
                   <td className="py-2 pr-3 text-gray-500">
                     {clinica.cidade ?? "—"}

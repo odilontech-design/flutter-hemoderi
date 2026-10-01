@@ -308,7 +308,7 @@ export function FormularioAgendamento({
                       <div className="text-[10px] text-gray-400 mt-0.5">
                         {servico.permiteQuantidade
                           ? `${servico.duracaoMin} min${servico.unidadeCobranca === "HORA" ? " por hora contratada" : ""}`
-                          : `${servico.duracaoMin} min · um por paciente`}
+                          : `${servico.duracaoMin} min · uma unidade por agendamento`}
                       </div>
                     </div>
 
@@ -355,8 +355,8 @@ export function FormularioAgendamento({
               </span>
             </div>
             <div className="text-[10px] text-gray-400 mt-2">
-              Os serviços acontecem um depois do outro, na ordem em que foram adicionados. Outro
-              paciente no mesmo serviço é outro agendamento.
+              Os serviços acontecem um depois do outro, na ordem em que foram adicionados. Para repetir
+              um serviço (outro paciente, por exemplo), faça outro agendamento.
             </div>
           </div>
         </section>

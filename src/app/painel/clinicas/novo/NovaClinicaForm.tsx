@@ -7,6 +7,7 @@ import { CamposEndereco } from "@/components/CamposEndereco";
 import { CampoDocumento } from "@/components/CampoDocumento";
 import { salvarClinica } from "@/app/actions/cadastros";
 import { CONDICOES_PAGAMENTO } from "@/lib/pagamento";
+import { ROTULO_PERFIL_CLIENTE, TODOS_OS_PERFIS } from "@/lib/visibilidade";
 
 export function NovaClinicaForm() {
   const router = useRouter();
@@ -34,6 +35,22 @@ export function NovaClinicaForm() {
       </div>
 
       <CamposEndereco />
+      <div>
+        <Rotulo>Perfil do cliente</Rotulo>
+        <div className="flex flex-wrap gap-x-4 gap-y-1.5 mt-1">
+          {TODOS_OS_PERFIS.map((perfil) => (
+            <label key={perfil} className="flex items-center gap-1.5 text-xs text-gray-700">
+              <input type="checkbox" name="perfis" value={perfil} />
+              {ROTULO_PERFIL_CLIENTE[perfil]}
+            </label>
+          ))}
+        </div>
+        <div className="text-[10px] text-gray-400 mt-1">
+          Cadastro feito pela equipe já nasce aprovado. O perfil decide o que o cliente enxerga no
+          catálogo — curso e parceria só a equipe atribui. As tabelas de preço se liberam depois,
+          no cadastro da clínica.
+        </div>
+      </div>
       <div>
         <Rotulo>Salas de atendimento simultâneo</Rotulo>
         <Campo name="salas" type="number" min={1} defaultValue={1} />
