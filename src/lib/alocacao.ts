@@ -364,11 +364,19 @@ export async function horariosDisponiveisConjunto({
   itens,
   dataISO,
   exigirAntecedencia = false,
+  horas,
 }: {
   clinicaId: string;
   itens: { servicoId: string; quantidade: number }[];
   dataISO: string;
   exigirAntecedencia?: boolean;
+  /**
+   * Horários a conferir, em vez da grade de meia em meia hora. É o que permite
+   * escolher QUALQUER horário (ex.: 09:20) no relógio do formulário e ainda
+   * assim passar pelas mesmas travas: expediente, antecedência, sala da
+   * clínica e pool de equipamentos. Devolve só os que passam.
+   */
+  horas?: string[];
 }): Promise<{ horarios: string[]; duracaoTotalMin: number }> {
   if (itens.length === 0) return { horarios: [], duracaoTotalMin: 0 };
   const data = dataDeISO(dataISO);
@@ -401,7 +409,13 @@ export async function horariosDisponiveisConjunto({
     inicio: paraMinutos(config.horaAbertura),
     fim: paraMinutos(config.horaFechamento),
   };
-  const candidatos = horariosLivres({ janelas: [expediente], ocupacoes: [], duracaoMin: duracaoTotalMin });
+  const candidatos = horas
+    ? horas.filter((hora) => {
+        if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(hora)) return false;
+        const inicio = paraMinutos(hora);
+        return inicio >= expediente.inicio && inicio + duracaoTotalMin <= expediente.fim;
+      })
+    : horariosLivres({ janelas: [expediente], ocupacoes: [], duracaoMin: duracaoTotalMin });
 
   // Um pool por tipo de equipamento exigido — "sem tipo" é o pool de qualquer
   // equipamento disponível (mesma regra do agendamento de um serviço só).

@@ -62,6 +62,8 @@ export function FormularioAgendamento({
   locais,
   precosPorUf,
   antecedenciaHoras,
+  horaAbertura,
+  horaFechamento,
   clinicaNome,
   whatsappCentral,
   servicoInicialId,
@@ -70,6 +72,9 @@ export function FormularioAgendamento({
   locais: LocalDeAtendimento[];
   precosPorUf: Record<string, Record<string, number>>;
   antecedenciaHoras: number;
+  /** Expediente da operação ("08:00"): limita o relógio. */
+  horaAbertura: string;
+  horaFechamento: string;
   clinicaNome: string;
   whatsappCentral: string | null;
   servicoInicialId: string | null;
@@ -115,6 +120,10 @@ export function FormularioAgendamento({
   const [duracaoTotal, setDuracaoTotal] = useState(0);
   const [buscando, setBuscando] = useState(false);
   const [primeiroHorario, setPrimeiroHorario] = useState<string | null>(null);
+  // O horário vem do relógio do formulário — qualquer um, não só os da grade
+  // (ata de 02/10). `situacaoHora` diz se a agenda comporta esse horário.
+  const [hora, setHora] = useState("");
+  const [situacaoHora, setSituacaoHora] = useState<"livre" | "indisponivel" | "verificando" | null>(null);
 
   // Trocar de endereço pode tirar da lista o que a UF nova não atende.
   useEffect(() => {
@@ -154,6 +163,33 @@ export function FormularioAgendamento({
       cancelado = true;
     };
   }, [chaveDosItens, data]);
+
+  // Confere o horário digitado contra a agenda, com uma pequena espera para não
+  // consultar a cada minuto que a pessoa gira no relógio.
+  useEffect(() => {
+    if (!hora || !chaveDosItens || !data) {
+      setSituacaoHora(null);
+      return;
+    }
+    let cancelado = false;
+    setSituacaoHora("verificando");
+    const espera = setTimeout(() => {
+      const parametros = new URLSearchParams({ itens: chaveDosItens, data, hora });
+      fetch(`/api/horarios?${parametros}`)
+        .then((r) => r.json())
+        .then((json) => {
+          if (!cancelado) setSituacaoHora((json.horarios ?? []).includes(hora) ? "livre" : "indisponivel");
+        })
+        .catch(() => {
+          // Sem rede: não bloqueia — o servidor confere de novo ao enviar.
+          if (!cancelado) setSituacaoHora(null);
+        });
+    }, 350);
+    return () => {
+      cancelado = true;
+      clearTimeout(espera);
+    };
+  }, [hora, chaveDosItens, data]);
 
   useEffect(() => {
     if (estado.ok) router.push("/portal");
@@ -425,23 +461,66 @@ export function FormularioAgendamento({
               </div>
               {!data ? (
                 <div className="text-xs text-gray-400 py-2">Escolha a data.</div>
-              ) : buscando ? (
-                <div className="text-xs text-gray-400 py-2">Buscando horários…</div>
-              ) : horarios.length === 0 ? (
-                <Aviso tom="alerta">
-                  Nenhum horário livre nesse dia para {linhas.length > 1 ? "esses serviços juntos" : "esse serviço"}.
-                  Tente outra data — ou fale com a central pelo WhatsApp.
-                </Aviso>
               ) : (
-                <div className="flex flex-wrap gap-2">
-                  {horarios.map((hora) => (
-                    <label key={hora} className="cursor-pointer">
-                      <input type="radio" name="horaInicio" value={hora} required className="peer sr-only" />
-                      <span className="block text-xs font-semibold px-3.5 py-2.5 rounded-lg border border-gray-300 peer-checked:bg-bordo peer-checked:text-white peer-checked:border-bordo">
-                        {hora}
+                <div className="space-y-2">
+                  <Campo
+                    type="time"
+                    name="horaInicio"
+                    required
+                    value={hora}
+                    min={horaAbertura}
+                    max={horaFechamento}
+                    onChange={(e) => setHora(e.target.value)}
+                    className="!w-40"
+                  />
+                  <div className="text-[10px] leading-relaxed">
+                    {situacaoHora === "verificando" && <span className="text-gray-400">Conferindo a agenda…</span>}
+                    {situacaoHora === "livre" && (
+                      <span className="font-semibold text-green-700">
+                        Horário disponível{duracaoTotal > 0 ? ` · bloco de ${duracaoTotal} min` : ""}.
                       </span>
-                    </label>
-                  ))}
+                    )}
+                    {situacaoHora === "indisponivel" && (
+                      <span className="font-semibold text-amber-700">
+                        Esse horário não está disponível para {linhas.length > 1 ? "esses serviços juntos" : "esse serviço"}.
+                        Atendemos das {horaAbertura} às {horaFechamento}; tente outro horário ou fale com a central.
+                      </span>
+                    )}
+                    {situacaoHora === null && (
+                      <span className="text-gray-400">
+                        Escolha qualquer horário entre {horaAbertura} e {horaFechamento}.
+                      </span>
+                    )}
+                  </div>
+
+                  {buscando ? (
+                    <div className="text-[11px] text-gray-400">Buscando sugestões…</div>
+                  ) : horarios.length === 0 ? (
+                    <Aviso tom="alerta">
+                      Nenhum horário livre nesse dia para {linhas.length > 1 ? "esses serviços juntos" : "esse serviço"}.
+                      Tente outra data — ou fale com a central pelo WhatsApp.
+                    </Aviso>
+                  ) : (
+                    <div>
+                      <div className="text-[10px] text-gray-400 mb-1">Sugestões de horários livres:</div>
+                      <div className="flex flex-wrap gap-1.5">
+                        {horarios.map((sugestao) => (
+                          <button
+                            key={sugestao}
+                            type="button"
+                            onClick={() => setHora(sugestao)}
+                            className={`text-[11px] font-semibold px-2.5 py-1.5 rounded-lg border ${
+                              hora === sugestao
+                                ? "bg-bordo text-white border-bordo"
+                                : "border-gray-300 text-gray-600 hover:bg-gray-50"
+                            }`}
+                          >
+                            {sugestao}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
             </div>
@@ -506,7 +585,7 @@ export function FormularioAgendamento({
 
             {estado.erro && <Aviso tom="erro">{estado.erro}</Aviso>}
 
-            <Botao type="submit" disabled={horarios.length === 0}>
+            <Botao type="submit" disabled={!hora || situacaoHora === "indisponivel" || situacaoHora === "verificando"}>
               Solicitar agendamento
             </Botao>
             <div className="text-[10px] text-gray-400">

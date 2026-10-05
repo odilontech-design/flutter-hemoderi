@@ -41,11 +41,14 @@ export async function GET(requisicao: Request) {
       .filter((item) => item.servicoId)
       .slice(0, 12);
 
+    // `hora` confere UM horário digitado à mão; sem ele, devolve a grade.
+    const hora = url.searchParams.get("hora");
     const resultado = await horariosDisponiveisConjunto({
       clinicaId,
       itens,
       dataISO: data,
       exigirAntecedencia: sessao.user.papel === "CLINICA",
+      ...(hora ? { horas: [hora] } : {}),
     });
     return Response.json(resultado);
   }

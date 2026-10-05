@@ -4,7 +4,14 @@ import { revalidatePath } from "next/cache";
 import type { Prisma, StatusPedido } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { exigirClinica, exigirInterno, exigirProfissional, registrarAuditoria } from "@/lib/sessao";
-import { equipamentoLivre, parametros, temBloqueio, travarRecursos, verificarAlocacao } from "@/lib/alocacao";
+import {
+  equipamentoLivre,
+  horariosDisponiveisConjunto,
+  parametros,
+  temBloqueio,
+  travarRecursos,
+  verificarAlocacao,
+} from "@/lib/alocacao";
 import { calcularRepasse } from "@/lib/repasse";
 import { podeTransicionar, STATUS_ATIVOS } from "@/lib/pedido";
 import {
@@ -318,6 +325,23 @@ export async function solicitarAgendamento(_anterior: Resultado, dados: FormData
     return {
       ok: false,
       erro: `Agendamentos pelo portal precisam de ${config.antecedenciaMinimaHoras}h de antecedência. Para horários antes disso, fale com a central pelo WhatsApp.`,
+    };
+  }
+
+  // Qualquer horário vale (ata de 02/10: o relógio do formulário), desde que
+  // passe pelas mesmas travas da grade — expediente, antecedência, sala da
+  // clínica e equipamento. O servidor não confia no que o navegador conferiu.
+  const livres = await horariosDisponiveisConjunto({
+    clinicaId: sessao.clinicaId,
+    itens: pedidos,
+    dataISO,
+    exigirAntecedencia: true,
+    horas: [horaInicio],
+  });
+  if (!livres.horarios.includes(horaInicio)) {
+    return {
+      ok: false,
+      erro: "Esse horário não está disponível (fora do expediente ou já ocupado para esses serviços). Escolha outro.",
     };
   }
 
