@@ -51,3 +51,24 @@ export const STATUS_ATIVOS: StatusPedido[] = ["SOLICITADO", "CONFIRMADO", "ALOCA
 
 /** Status que a equipe precisa resolver hoje. */
 export const STATUS_PENDENTES: StatusPedido[] = ["SOLICITADO", "CONFIRMADO"];
+
+/**
+ * Os status que o CLIENTE enxerga (ata de 02/10): solicitado, confirmado e
+ * cancelado. "Alocado" é detalhe interno — para a clínica, o pedido está
+ * confirmado desde que a central o confirma, e quem vai atender só aparece
+ * na véspera. Depois do atendimento, a lista é a de procedimentos realizados.
+ */
+export function statusParaCliente(status: StatusPedido): StatusPedido {
+  if (status === "ALOCADO") return "CONFIRMADO";
+  return status;
+}
+
+export const ROTULO_STATUS_CLIENTE: Record<StatusPedido, string> = {
+  SOLICITADO: "Solicitado",
+  CONFIRMADO: "Confirmado",
+  ALOCADO: "Confirmado",
+  REALIZADO: "Realizado",
+  // Falta do paciente não é "faltou" para a clínica ler: o atendimento não aconteceu.
+  FALTOU: "Não realizado",
+  CANCELADO: "Cancelado",
+};

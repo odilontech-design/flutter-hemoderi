@@ -48,8 +48,7 @@ export default async function Reagendar({ params }: { params: { pedidoId: string
           <FormularioReagendamento
             pedidoId={pedido.id}
             servicoId={pedido.servico.id}
-            profissionalId={pedido.profissional?.id ?? null}
-            profissionalNome={mostrarProfissional ? pedido.profissional?.nome ?? null : null}
+            jaConfirmado={pedido.status !== "SOLICITADO"}
             dataMinima={dataMinimaAgendamentoPublico()}
           />
         )}

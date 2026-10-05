@@ -16,7 +16,7 @@ export async function adicionarEndereco(_anterior: Resultado, dados: FormData): 
   const sessao = await exigirClinica();
 
   const rotulo = String(dados.get("rotulo") ?? "").trim();
-  if (!rotulo) return { ok: false, erro: "Dê um nome ao endereço (ex.: Unidade Moema)." };
+  if (!rotulo) return { ok: false, erro: "Informe o nome da clínica ou consultório (ex.: Unidade Moema)." };
 
   const cep = String(dados.get("cep") ?? "").trim();
   if (!cepValido(cep)) return { ok: false, erro: "Informe um CEP válido: é dele que sai o endereço do atendimento." };
@@ -36,6 +36,7 @@ export async function adicionarEndereco(_anterior: Resultado, dados: FormData): 
       endereco,
       numero,
       complemento: String(dados.get("complemento") ?? "").trim() || null,
+      observacoes: String(dados.get("observacoes") ?? "").trim().slice(0, 500) || null,
       bairro: String(dados.get("bairro") ?? "").trim() || null,
       cidade: String(dados.get("cidade") ?? "").trim() || null,
       uf,

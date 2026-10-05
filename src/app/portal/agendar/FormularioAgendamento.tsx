@@ -4,7 +4,9 @@ import { useEffect, useMemo, useState } from "react";
 import { useFormState } from "react-dom";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Area, Aviso, Botao, Campo, Rotulo } from "@/components/ui";
+import { Area, Aviso, Botao, Campo, Rotulo, Selecao } from "@/components/ui";
+import { FORMAS_DE_PAGAMENTO } from "@/lib/pagamento";
+import { OUTRO_PROCEDIMENTO, PROCEDIMENTOS_NO_PACIENTE } from "@/lib/procedimentos";
 import { solicitarAgendamento, type Resultado } from "@/app/actions/pedidos";
 import { linkWhatsapp, mensagemDeUrgencia } from "@/lib/whatsapp-link";
 import { formatarReais } from "@/lib/dinheiro";
@@ -106,6 +108,7 @@ export function FormularioAgendamento({
   });
   const [data, setData] = useState("");
   const [doutorNome, setDoutorNome] = useState("");
+  const [procedimento, setProcedimento] = useState("");
   const [pacienteNome, setPacienteNome] = useState("");
   const [observacoes, setObservacoes] = useState("");
   const [horarios, setHorarios] = useState<string[]>([]);
@@ -415,7 +418,11 @@ export function FormularioAgendamento({
             )}
 
             <div>
-              <Rotulo>Horário de início</Rotulo>
+              <Rotulo>Horário agendado com o paciente</Rotulo>
+              <div className="text-[10px] text-gray-500 mb-2 leading-relaxed">
+                É o horário que o paciente vai chegar. Para locação de equipamento sem operador (motor de
+                implante, laser, ultrassom microfocado), considere o horário de entrega.
+              </div>
               {!data ? (
                 <div className="text-xs text-gray-400 py-2">Escolha a data.</div>
               ) : buscando ? (
@@ -437,6 +444,40 @@ export function FormularioAgendamento({
                   ))}
                 </div>
               )}
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <Rotulo>Procedimento a ser realizado no paciente</Rotulo>
+                <Selecao
+                  name="procedimentoPaciente"
+                  required
+                  value={procedimento}
+                  onChange={(e) => setProcedimento(e.target.value)}
+                >
+                  <option value="">Selecione…</option>
+                  {PROCEDIMENTOS_NO_PACIENTE.map((p) => (
+                    <option key={p} value={p}>
+                      {p}
+                    </option>
+                  ))}
+                  <option value={OUTRO_PROCEDIMENTO}>{OUTRO_PROCEDIMENTO}</option>
+                </Selecao>
+                {procedimento === OUTRO_PROCEDIMENTO && (
+                  <Campo name="procedimentoOutro" required maxLength={120} placeholder="Qual procedimento?" className="mt-2" />
+                )}
+              </div>
+              <div>
+                <Rotulo>Forma de pagamento</Rotulo>
+                <Selecao name="formaPagamento" required defaultValue="">
+                  <option value="">Selecione…</option>
+                  {FORMAS_DE_PAGAMENTO.map((forma) => (
+                    <option key={forma} value={forma}>
+                      {forma}
+                    </option>
+                  ))}
+                </Selecao>
+              </div>
             </div>
 
             <div>

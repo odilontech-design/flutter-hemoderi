@@ -11,15 +11,13 @@ const INICIAL: Resultado = { ok: false };
 export function FormularioReagendamento({
   pedidoId,
   servicoId,
-  profissionalId,
-  profissionalNome,
+  jaConfirmado,
   dataMinima,
 }: {
   pedidoId: string;
   servicoId: string;
-  /** Nulo quando a central ainda não definiu quem vai atender, ou quando falta mais de 24h. */
-  profissionalId: string | null;
-  profissionalNome: string | null;
+  /** Confirmado ou alocado: remarcar devolve o pedido para a aprovação da central. */
+  jaConfirmado: boolean;
   /** ISO — regra das 18h do dia anterior, a mesma do agendamento novo. */
   dataMinima: string;
 }) {
@@ -38,7 +36,6 @@ export function FormularioReagendamento({
     let cancelado = false;
     setBuscando(true);
     const parametros = new URLSearchParams({ servicoId, data, ignorarPedidoId: pedidoId });
-    if (profissionalId) parametros.set("profissionalId", profissionalId);
     fetch(`/api/horarios?${parametros}`)
       .then((r) => r.json())
       .then((json) => {
@@ -50,7 +47,7 @@ export function FormularioReagendamento({
     return () => {
       cancelado = true;
     };
-  }, [data, servicoId, profissionalId, pedidoId]);
+  }, [data, servicoId, pedidoId]);
 
   useEffect(() => {
     if (estado.ok) router.push("/portal");
@@ -61,14 +58,10 @@ export function FormularioReagendamento({
       <input type="hidden" name="pedidoId" value={pedidoId} />
 
       <Aviso>
-        {profissionalNome ? (
-          <>
-            Os horários abaixo são os que <strong>{profissionalNome}</strong> tem livres. O
-            profissional continua o mesmo.
-          </>
-        ) : (
-          <>Os horários abaixo são os que a sua clínica tem livres. A central define quem atende.</>
-        )}
+        Os horários abaixo são os que a sua clínica tem livres.{" "}
+        {jaConfirmado
+          ? "Ao remarcar, o atendimento volta para a confirmação da central, que reorganiza a equipe para a nova data."
+          : "A central confirma o novo horário."}
       </Aviso>
 
       <div>

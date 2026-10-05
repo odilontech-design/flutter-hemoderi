@@ -57,7 +57,7 @@ export default async function Esteira({
       take: 200,
       include: {
         clinica: { select: { nome: true, telefone: true } },
-        endereco: { select: { rotulo: true, endereco: true, numero: true, complemento: true, bairro: true, cidade: true, uf: true } },
+        endereco: { select: { rotulo: true, endereco: true, numero: true, complemento: true, bairro: true, cidade: true, uf: true, observacoes: true } },
         servico: { select: { nome: true } },
         profissional: { select: { nome: true } },
         relatorio: { include: INCLUIR_ADICIONAIS },
@@ -202,6 +202,7 @@ export default async function Esteira({
                   {pedido.endereco && (
                     <div className="text-[11px] text-amber-700 mt-0.5">
                       Local: <strong>{pedido.endereco.rotulo}</strong> — {resumoDoEndereco(pedido.endereco)}
+                      {pedido.endereco.observacoes && <span className="text-gray-500"> · Obs.: {pedido.endereco.observacoes}</span>}
                     </div>
                   )}
                   <div className="text-[11px] text-gray-500 mt-0.5">
@@ -214,6 +215,13 @@ export default async function Esteira({
                     {pedido.doutorNome && <> · Dr(a). {pedido.doutorNome}</>}
                     {pedido.pacienteNome && <> · paciente {pedido.pacienteNome}</>}
                   </div>
+                  {(pedido.procedimentoPaciente || pedido.formaPagamento) && (
+                    <div className="text-[11px] text-gray-500 mt-0.5">
+                      {pedido.procedimentoPaciente && <>Procedimento: {pedido.procedimentoPaciente}</>}
+                      {pedido.procedimentoPaciente && pedido.formaPagamento && " · "}
+                      {pedido.formaPagamento && <>Pagamento: <strong>{pedido.formaPagamento}</strong></>}
+                    </div>
+                  )}
                   {/* Alocado não quer dizer que alguém assumiu: desde a ata
                       de 21/09 o profissional confirma, e a esteira precisa
                       mostrar quem ainda não respondeu — é o pedido que corre
@@ -439,8 +447,10 @@ type PedidoDaEsteira = {
   pacienteNome: string | null;
   observacoes: string | null;
   aceitoEm: Date | null;
+  formaPagamento: string | null;
+  procedimentoPaciente: string | null;
   clinica: { nome: string };
-  endereco: { rotulo: string; endereco: string; numero: string | null; complemento: string | null; bairro: string | null; cidade: string | null; uf: string } | null;
+  endereco: { rotulo: string; endereco: string; numero: string | null; complemento: string | null; bairro: string | null; cidade: string | null; uf: string; observacoes: string | null } | null;
   servico: { nome: string };
   profissional: { nome: string } | null;
 };

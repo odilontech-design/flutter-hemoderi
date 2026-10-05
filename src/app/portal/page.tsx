@@ -1,17 +1,31 @@
 import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 import { exigirClinica } from "@/lib/sessao";
-import { Cartao, Kpi, SeloStatus, Tabela, Titulo, Vazio } from "@/components/ui";
+import { Cartao, Kpi, Tabela, Titulo, Vazio } from "@/components/ui";
 import { formatarDataCurta, hojeUTC, instanteDoAtendimento, nomeDoProfissionalVisivel } from "@/lib/data";
-import { STATUS_ATIVOS } from "@/lib/pedido";
+import { COR_STATUS, ROTULO_STATUS_CLIENTE, STATUS_ATIVOS, statusParaCliente } from "@/lib/pedido";
+import type { StatusPedido } from "@prisma/client";
 import { AcoesClinica } from "./AcoesClinica";
 import { AvaliarAtendimento } from "./AvaliarAtendimento";
 import { ResponderNps } from "./ResponderNps";
 import { formatarMedia, mediaDeNotas } from "@/lib/avaliacao";
-import { formatarReais } from "@/lib/dinheiro";
 import { linkAdicionarGoogleAgenda } from "@/lib/google-calendar-link";
 
 export const dynamic = "force-dynamic";
+
+/**
+ * O status como o CLIENTE lê (ata de 02/10): solicitado, confirmado ou
+ * cancelado. "Alocado" é detalhe interno e aparece como confirmado.
+ */
+function SeloStatusCliente({ status }: { status: StatusPedido }) {
+  return (
+    <span
+      className={`text-[10px] font-semibold px-2 py-1 rounded-full whitespace-nowrap ${COR_STATUS[statusParaCliente(status)]}`}
+    >
+      {ROTULO_STATUS_CLIENTE[status]}
+    </span>
+  );
+}
 
 /**
  * O que a clínica vê: os próprios pedidos, e só. O valor cobrado aparece,
@@ -34,7 +48,7 @@ export default async function MeusAgendamentos() {
     prisma.pedido.findMany({
       where: { clinicaId: sessao.clinicaId, status: { in: ["REALIZADO", "FALTOU", "CANCELADO"] } },
       orderBy: [{ data: "desc" }],
-      take: 30,
+      take: 60,
       include: {
         servico: { select: { nome: true } },
         profissional: { select: { nome: true } },
@@ -80,6 +94,10 @@ export default async function MeusAgendamentos() {
   ]);
 
   const minhaMedia = mediaDeNotas(notasDadas.map((a) => a.nota));
+  // "Procedimentos realizados" (ata de 02/10): o que aconteceu. Cancelados saem
+  // dessa lista e ficam recolhidos à parte.
+  const realizados = historico.filter((p) => p.status !== "CANCELADO");
+  const cancelados = historico.filter((p) => p.status === "CANCELADO");
 
   return (
     <>
@@ -135,12 +153,12 @@ export default async function MeusAgendamentos() {
         </Cartao>
       )}
 
-      <Cartao className="mb-3">
-        <div className="font-display font-bold text-bordo text-sm mb-3">Próximos</div>
+      <Cartao className="mb-3 border-bordo/40 shadow-sm">
+        <div className="font-display font-bold text-bordo text-sm mb-3">Próximos agendamentos</div>
         {proximos.length === 0 ? (
           <Vazio>Nenhum atendimento agendado.</Vazio>
         ) : (
-          <Tabela cabecalho={["Data", "Hora", "Serviço", "Profissional", "Paciente", "Status", ""]}>
+          <Tabela cabecalho={["Data", "Horário", "Serviço", "Profissional", "Paciente", "Pagamento", "Status", ""]}>
             {proximos.map((pedido) => (
               <tr key={pedido.id} className="border-b border-gray-100 last:border-0">
                 <td className="py-2 pr-3 font-semibold">{formatarDataCurta(pedido.data)}</td>
@@ -150,17 +168,21 @@ export default async function MeusAgendamentos() {
                   {pedido.quantidade > 1 && <span className="text-gray-400"> × {pedido.quantidade}</span>}
                 </td>
                 <td className="py-2 pr-3 text-gray-600">
+                  {/* O nome só aparece na véspera (ata de 02/10); antes disso,
+                      nem o valor entra no lugar — o histórico de consumo não
+                      é para negociar desconto. */}
                   {!nomeDoProfissionalVisivel(pedido.data, pedido.horaInicio) ? (
-                    <span title="O nome de quem vai atender aparece 24h antes do atendimento.">
-                      {formatarReais(pedido.valorServicoCentavos)}
+                    <span className="text-gray-400" title="O nome de quem vai atender aparece um dia antes do atendimento.">
+                      a confirmar
                     </span>
                   ) : (
                     pedido.profissional?.nome ?? <span className="text-gray-400">a definir</span>
                   )}
                 </td>
                 <td className="py-2 pr-3 text-gray-500">{pedido.pacienteNome ?? "—"}</td>
+                <td className="py-2 pr-3 text-gray-600">{pedido.formaPagamento ?? "—"}</td>
                 <td className="py-2 pr-3">
-                  <SeloStatus status={pedido.status} />
+                  <SeloStatusCliente status={pedido.status} />
                 </td>
                 <td className="py-2">
                   <div className="flex flex-wrap items-center gap-2">
@@ -230,12 +252,12 @@ export default async function MeusAgendamentos() {
       )}
 
       <Cartao className="mb-3">
-        <div className="font-display font-bold text-bordo text-sm mb-3">Histórico</div>
-        {historico.length === 0 ? (
-          <Vazio>Ainda sem histórico.</Vazio>
+        <div className="font-display font-bold text-bordo text-sm mb-3">Procedimentos realizados</div>
+        {realizados.length === 0 ? (
+          <Vazio>Nenhum procedimento realizado ainda.</Vazio>
         ) : (
           <Tabela cabecalho={["Data", "Serviço", "Profissional", "Status", "Sua avaliação"]}>
-            {historico.map((pedido) => (
+            {realizados.map((pedido) => (
               <tr key={pedido.id} className="border-b border-gray-100 last:border-0 align-top">
                 <td className="py-2 pr-3">{formatarDataCurta(pedido.data)}</td>
                 <td className="py-2 pr-3 text-gray-600">
@@ -244,7 +266,7 @@ export default async function MeusAgendamentos() {
                 </td>
                 <td className="py-2 pr-3 text-gray-600">{pedido.profissional?.nome ?? "—"}</td>
                 <td className="py-2 pr-3">
-                  <SeloStatus status={pedido.status} />
+                  <SeloStatusCliente status={pedido.status} />
                 </td>
                 <td className="py-2 min-w-[180px]">
                   {/* Só atendimento realizado com profissional se avalia:
@@ -264,6 +286,27 @@ export default async function MeusAgendamentos() {
           </Tabela>
         )}
       </Cartao>
+
+      {cancelados.length > 0 && (
+        <details className="mb-3 bg-white rounded-2xl border border-gray-200 px-5 py-3">
+          <summary className="cursor-pointer select-none text-xs font-semibold text-gray-500">
+            Agendamentos cancelados ({cancelados.length})
+          </summary>
+          <div className="mt-3">
+            <Tabela cabecalho={["Data", "Serviço", "Status"]}>
+              {cancelados.map((pedido) => (
+                <tr key={pedido.id} className="border-b border-gray-100 last:border-0">
+                  <td className="py-2 pr-3">{formatarDataCurta(pedido.data)}</td>
+                  <td className="py-2 pr-3 text-gray-600">{pedido.servico.nome}</td>
+                  <td className="py-2 pr-3">
+                    <SeloStatusCliente status={pedido.status} />
+                  </td>
+                </tr>
+              ))}
+            </Tabela>
+          </div>
+        </details>
+      )}
     </>
   );
 }

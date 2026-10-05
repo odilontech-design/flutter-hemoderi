@@ -55,6 +55,8 @@ export type LocalDeAtendimento = {
   rotulo: string;
   resumo: string;
   uf: string | null;
+  /** Referências para chegar (entrada de serviço, bloco…). Só os adicionais têm. */
+  observacoes?: string | null;
 };
 
 /**
@@ -66,6 +68,7 @@ export async function locaisDaClinica(clinicaId: string): Promise<LocalDeAtendim
   const clinica = await prisma.clinica.findUnique({
     where: { id: clinicaId },
     select: {
+      nome: true,
       endereco: true,
       numero: true,
       complemento: true,
@@ -81,13 +84,21 @@ export async function locaisDaClinica(clinicaId: string): Promise<LocalDeAtendim
   if (clinica.endereco || clinica.uf) {
     locais.push({
       id: "",
-      rotulo: "Endereço principal",
+      // O nome da clínica, e não o rótulo genérico "Endereço principal" (ata
+      // de 02/10): quem agenda reconhece o lugar pelo nome.
+      rotulo: clinica.nome,
       resumo: resumoDoEndereco(clinica),
       uf: clinica.uf,
     });
   }
   for (const extra of clinica.enderecos) {
-    locais.push({ id: extra.id, rotulo: extra.rotulo, resumo: resumoDoEndereco(extra), uf: extra.uf });
+    locais.push({
+      id: extra.id,
+      rotulo: extra.rotulo,
+      resumo: resumoDoEndereco(extra),
+      uf: extra.uf,
+      observacoes: extra.observacoes,
+    });
   }
   return locais;
 }

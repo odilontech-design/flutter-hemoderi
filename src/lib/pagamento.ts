@@ -23,3 +23,18 @@ export type CondicaoPagamento = (typeof CONDICOES_PAGAMENTO)[number];
 export function condicaoValida(valor: string): valor is CondicaoPagamento {
   return (CONDICOES_PAGAMENTO as readonly string[]).includes(valor);
 }
+
+/**
+ * Como o CLIENTE paga o atendimento — o que ele escolhe ao agendar (ata de
+ * 02/10). Começa com Pix, dinheiro e cheque; outras formas entram depois.
+ *
+ * Não confundir com `CONDICOES_PAGAMENTO`, o acordo interno da operação com a
+ * clínica (antecipado, faturado…), que o cliente não vê.
+ */
+export const FORMAS_DE_PAGAMENTO = ["Pix", "Dinheiro", "Cheque"] as const;
+
+export type FormaDePagamento = (typeof FORMAS_DE_PAGAMENTO)[number];
+
+export function formaDePagamentoValida(valor: string): valor is FormaDePagamento {
+  return (FORMAS_DE_PAGAMENTO as readonly string[]).includes(valor);
+}

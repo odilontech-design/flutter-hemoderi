@@ -130,13 +130,22 @@ export default async function CatalogoDaClinica({ searchParams }: { searchParams
         </Cartao>
       ) : (
         grupos.map((grupo) => (
-          <Cartao key={grupo.familia} className="mb-3">
-            <div className="font-display font-bold text-bordo text-sm mb-1">{grupo.familia}</div>
-            <div className="text-[10px] text-gray-400 mb-4">
-              {grupo.servicos.length} procedimento{grupo.servicos.length === 1 ? "" : "s"}
-            </div>
+          // Categorias recolhidas, que abrem ao clicar (ata de 02/10): com doze
+          // categorias abertas a página virava uma parede de cartões.
+          <details key={grupo.familia} className="group mb-3 bg-white rounded-2xl border border-gray-200 shadow-sm">
+            <summary className="flex cursor-pointer select-none items-center justify-between gap-3 px-5 py-4 list-none [&::-webkit-details-marker]:hidden">
+              <span className="min-w-0">
+                <span className="block font-display font-bold text-bordo text-sm">{grupo.familia}</span>
+                <span className="block text-[10px] text-gray-400 mt-0.5">
+                  {grupo.servicos.length} procedimento{grupo.servicos.length === 1 ? "" : "s"}
+                </span>
+              </span>
+              <span aria-hidden className="text-bordo text-xs transition-transform group-open:rotate-180">
+                ▾
+              </span>
+            </summary>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 px-5 pb-5">
               {grupo.servicos.map((servico) => {
                 const preco = precos.get(servico.id);
                 const valor = preco?.valorCentavos ?? servico.valorPadraoCentavos;
@@ -185,7 +194,7 @@ export default async function CatalogoDaClinica({ searchParams }: { searchParams
                 );
               })}
             </div>
-          </Cartao>
+          </details>
         ))
       )}
 

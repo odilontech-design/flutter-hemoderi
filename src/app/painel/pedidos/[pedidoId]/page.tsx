@@ -97,6 +97,18 @@ export default async function DetalheDoPedido({ params }: { params: { pedidoId: 
             <div className="text-gray-400">Repasse</div>
             <div className="text-gray-700">{formatarReais(pedido.valorRepasseCentavos)}</div>
           </div>
+          {pedido.procedimentoPaciente && (
+            <div>
+              <div className="text-gray-400">Procedimento no paciente</div>
+              <div className="text-gray-700">{pedido.procedimentoPaciente}</div>
+            </div>
+          )}
+          {pedido.formaPagamento && (
+            <div>
+              <div className="text-gray-400">Forma de pagamento (cliente)</div>
+              <div className="text-gray-700">{pedido.formaPagamento}</div>
+            </div>
+          )}
           <div>
             <div className="text-gray-400">Condição de pagamento</div>
             <div className="text-gray-700">{pedido.condicaoPagamento ?? "a definir"}</div>

@@ -433,6 +433,12 @@ model EnderecoClinica {
   cidade      String?
   uf          String
 
+  /// Referências para quem vai até lá (ata de 02/10): "entrada de serviço
+  /// pelos fundos", "bloco B, sala 12". UM campo de texto livre, de propósito:
+  /// a ideia de múltipla escolha (estacionamento, acessibilidade) foi
+  /// recusada porque faria o profissional deixar de conferir o endereço.
+  observacoes String?
+
   ativo    Boolean  @default(true)
   criadoEm DateTime @default(now())
 
@@ -847,6 +853,18 @@ model Pedido {
   /// o doutor é a pessoa que responde pelo caso, e é por ele que a equipe
   /// pergunta ao telefone — "o pedido da doutora Marina", não "o pedido 412".
   doutorNome String?
+
+  /// O procedimento que o doutor fará NO PACIENTE ("Implante", "Enxerto
+  /// ósseo"…), escolhido numa lista na última etapa do agendamento (ata de
+  /// 02/10). Não é o serviço contratado da Hemoderi: é a informação que
+  /// alimenta a inteligência de oferta de novos serviços. "Outros" guarda o
+  /// texto digitado.
+  procedimentoPaciente String?
+
+  /// Como o CLIENTE vai pagar: Pix, dinheiro ou cheque, escolhido por ele no
+  /// agendamento (ata de 02/10). Diferente de `condicaoPagamento`, que é o
+  /// acordo interno da operação com a clínica e o cliente não vê.
+  formaPagamento String?
 
   /// Como esta clínica paga ESTE atendimento: antecipado, na hora, faturado.
   /// Preenchido à mão pela equipe, porque depende do histórico de cada

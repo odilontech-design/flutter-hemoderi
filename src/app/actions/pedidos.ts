@@ -20,7 +20,9 @@ import {
 import { enfileirarMensagem } from "@/lib/integracoes/whatsapp";
 import { sincronizarEvento } from "@/lib/integracoes/google-agenda";
 import { criarNegocio, marcarNegocioGanho } from "@/lib/integracoes/pipedrive";
-import { condicaoValida } from "@/lib/pagamento";
+import { condicaoValida, formaDePagamentoValida } from "@/lib/pagamento";
+import { procedimentoEscolhido } from "@/lib/procedimentos";
+import { camposFaltando } from "@/lib/cadastro-completo";
 import { perfilPermite } from "@/lib/papeis";
 import { formatarReais, lerCentavos } from "@/lib/dinheiro";
 import { precoDoServico, tabelasDaClinica } from "@/lib/preco";
@@ -218,9 +220,18 @@ export async function solicitarAgendamento(_anterior: Resultado, dados: FormData
 
   const clinica = await prisma.clinica.findUnique({
     where: { id: sessao.clinicaId },
-    select: { uf: true, perfis: true, statusCadastro: true },
+    select: { uf: true, perfis: true, statusCadastro: true, cnpj: true, telefone: true, email: true },
   });
   if (!clinica) return { ok: false, erro: "Clínica não encontrada." };
+  // Cadastro incompleto não agenda (ata de 02/10): sem CNPJ, telefone e e-mail
+  // a central não consegue cobrar nem ligar de volta.
+  const faltando = camposFaltando(clinica);
+  if (faltando.length > 0) {
+    return {
+      ok: false,
+      erro: `O cadastro da clínica está incompleto (falta ${faltando.join(", ")}). Fale com a central para completar e liberar o agendamento.`,
+    };
+  }
   if (clinica.statusCadastro !== "APROVADO") {
     return {
       ok: false,
@@ -257,6 +268,20 @@ export async function solicitarAgendamento(_anterior: Resultado, dados: FormData
   // para a equipe, que agenda por telefone, é opcional — ver criarPedido.
   if (!String(dados.get("doutorNome") ?? "").trim()) {
     return { ok: false, erro: "Informe o(a) doutor(a) responsável." };
+  }
+
+  // Última etapa (ata de 02/10): o procedimento no paciente, em lista com
+  // "Outros", e a forma de pagamento. Os dois são obrigatórios.
+  const procedimentoPaciente = procedimentoEscolhido(
+    String(dados.get("procedimentoPaciente") ?? ""),
+    String(dados.get("procedimentoOutro") ?? "")
+  );
+  if (!procedimentoPaciente) {
+    return { ok: false, erro: "Escolha o procedimento que será realizado no paciente (se for outro, descreva)." };
+  }
+  const formaPagamento = String(dados.get("formaPagamento") ?? "");
+  if (!formaDePagamentoValida(formaPagamento)) {
+    return { ok: false, erro: "Escolha a forma de pagamento: Pix, dinheiro ou cheque." };
   }
 
   const enderecoId = String(dados.get("enderecoId") ?? "") || null;
@@ -355,6 +380,8 @@ export async function solicitarAgendamento(_anterior: Resultado, dados: FormData
             pacienteNome: String(dados.get("pacienteNome") ?? "") || null,
             pacienteContato: String(dados.get("pacienteContato") ?? "") || null,
             doutorNome: String(dados.get("doutorNome") ?? "").trim() || null,
+            procedimentoPaciente,
+            formaPagamento,
             criadoPorId: sessao.usuarioId,
           },
         })
@@ -793,21 +820,30 @@ type PedidoParaReagendar = {
 async function efetuarReagendamento(
   pedido: PedidoParaReagendar,
   novaData: Date,
-  horaInicio: string
+  horaInicio: string,
+  /**
+   * Mudar a DATA de um atendimento já confirmado exige nova aprovação (ata de
+   * 02/10): o pedido volta para "solicitado" e perde profissional e
+   * equipamento — quem foi alocado para o dia antigo não vale para o novo. É o
+   * caminho do portal; a equipe, que reagenda por conta própria, mantém tudo.
+   */
+  voltaParaTriagem = false
 ): Promise<Resultado> {
+  const profissionalId = voltaParaTriagem ? null : pedido.profissionalId;
+  const equipamentoId = voltaParaTriagem ? null : pedido.equipamentoId;
+
   const resultado = await prisma.$transaction(async (tx) => {
     await travarRecursos(tx, {
       clinicaId: pedido.clinicaId,
-      profissionalId: pedido.profissionalId,
-      tipoEquipamento:
-        pedido.equipamentoId && pedido.servico.exigeEquipamento ? pedido.servico.tipoEquipamento : null,
+      profissionalId,
+      tipoEquipamento: equipamentoId && pedido.servico.exigeEquipamento ? pedido.servico.tipoEquipamento : null,
     });
 
     const impedimentos = await verificarAlocacao(
       {
         clinicaId: pedido.clinicaId,
-        profissionalId: pedido.profissionalId,
-        equipamentoId: pedido.equipamentoId,
+        profissionalId,
+        equipamentoId,
         data: novaData,
         horaInicio,
         duracaoMin: pedido.duracaoMin,
@@ -824,7 +860,9 @@ async function efetuarReagendamento(
 
     await tx.pedido.update({
       where: { id: pedido.id },
-      data: { data: novaData, horaInicio },
+      data: voltaParaTriagem
+        ? { data: novaData, horaInicio, status: "SOLICITADO", profissionalId: null, equipamentoId: null, aceitoEm: null }
+        : { data: novaData, horaInicio },
     });
 
     return { ok: true as const };
@@ -837,8 +875,12 @@ async function efetuarReagendamento(
   await prisma.mensagemWhatsapp.deleteMany({
     where: { pedidoId: pedido.id, tipo: { in: ["CONFIRMACAO", "ALOCACAO", "LEMBRETE"] }, status: "PENDENTE" },
   });
-  await enfileirarMensagem(pedido.id, "CONFIRMACAO");
-  if (pedido.profissionalId) await enfileirarMensagem(pedido.id, "ALOCACAO");
+  // De volta à triagem não há o que confirmar nem alocar ainda: as mensagens
+  // saem quando a equipe aprovar a nova data.
+  if (!voltaParaTriagem) {
+    await enfileirarMensagem(pedido.id, "CONFIRMACAO");
+    if (pedido.profissionalId) await enfileirarMensagem(pedido.id, "ALOCACAO");
+  }
   await sincronizarEvento(pedido.id);
 
   atualizarTelas();
@@ -874,7 +916,14 @@ export async function reagendarPedido(_anterior: Resultado, dados: FormData): Pr
   }
 
   const dataAnterior = `${isoDeData(pedido.data)} ${pedido.horaInicio}`;
-  const resultado = await efetuarReagendamento(pedido, dataDeISO(dataISO), horaInicio);
+  // Pedido já confirmado ou alocado volta para a aprovação da equipe; o que
+  // ainda é só uma solicitação continua sendo (não há o que "voltar").
+  const resultado = await efetuarReagendamento(
+    pedido,
+    dataDeISO(dataISO),
+    horaInicio,
+    pedido.status !== "SOLICITADO"
+  );
   if (!resultado.ok) return resultado;
 
   await registrarAuditoria(

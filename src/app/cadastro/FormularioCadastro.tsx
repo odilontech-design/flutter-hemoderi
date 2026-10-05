@@ -88,7 +88,7 @@ export function FormularioCadastro() {
         </div>
       </div>
 
-      <CampoDocumento tipo="cnpj" name="cnpj" rotulo="CNPJ ou CPF (opcional)" />
+      <CampoDocumento tipo="cnpj" name="cnpj" rotulo="CNPJ ou CPF" obrigatorio />
 
       <div>
         <div className="font-display font-bold text-bordo text-sm mb-2">Onde atendemos você</div>

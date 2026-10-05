@@ -7,6 +7,7 @@ import { locaisDaClinica } from "@/lib/endereco";
 import { precosDosServicos, tabelasDaClinica } from "@/lib/preco";
 import { servicoVisivel } from "@/lib/visibilidade";
 import { Aviso, Titulo } from "@/components/ui";
+import { camposFaltando } from "@/lib/cadastro-completo";
 import { FormularioAgendamento, type ServicoDoCarrinho } from "./FormularioAgendamento";
 
 export const dynamic = "force-dynamic";
@@ -17,12 +18,33 @@ export default async function Agendar({ searchParams }: { searchParams: { servic
   const [clinica, locais, tabelaIds, config] = await Promise.all([
     prisma.clinica.findUnique({
       where: { id: sessao.clinicaId },
-      select: { perfis: true, statusCadastro: true },
+      select: { perfis: true, statusCadastro: true, cnpj: true, telefone: true, email: true },
     }),
     locaisDaClinica(sessao.clinicaId),
     tabelasDaClinica(prisma, sessao.clinicaId),
     parametros(),
   ]);
+
+  // Cadastro incompleto não agenda (ata de 02/10): sem CNPJ, telefone e e-mail
+  // a central não consegue cobrar nem ligar de volta.
+  const faltando = clinica ? camposFaltando(clinica) : [];
+  if (faltando.length > 0) {
+    return (
+      <>
+        <Titulo>Agendar atendimento</Titulo>
+        <div className="max-w-xl">
+          <Aviso tom="alerta">
+            <div className="font-semibold mb-1">Faltam dados no cadastro da clínica.</div>
+            Para agendar, precisamos de {faltando.join(", ")}. Fale com a central para completar — o{" "}
+            <Link href="/portal/catalogo" className="font-semibold underline">
+              catálogo
+            </Link>{" "}
+            continua disponível.
+          </Aviso>
+        </div>
+      </>
+    );
+  }
 
   // Cadastro em triagem vê o catálogo, mas ainda não agenda: a tabela de preço
   // e os serviços dependem do perfil que a equipe vai confirmar.

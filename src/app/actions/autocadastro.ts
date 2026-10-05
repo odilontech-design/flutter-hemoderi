@@ -44,7 +44,9 @@ export async function autocadastrar(_anterior: Resultado, dados: FormData): Prom
   if (telefone.replace(/\D/g, "").length < 10) return { ok: false, erro: "Informe um telefone com DDD." };
 
   const documento = String(dados.get("cnpj") ?? "").trim();
-  if (documento && !cnpjValido(documento) && !cpfValido(documento)) {
+  // Obrigatório (ata de 02/10): sem documento a central não emite a cobrança.
+  if (!documento) return { ok: false, erro: "Informe o CNPJ (ou CPF)." };
+  if (!cnpjValido(documento) && !cpfValido(documento)) {
     return { ok: false, erro: "CNPJ (ou CPF) inválido — confira se algum dígito ficou trocado." };
   }
 

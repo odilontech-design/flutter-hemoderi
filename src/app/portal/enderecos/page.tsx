@@ -42,6 +42,9 @@ export default async function Enderecos() {
                 <div className="min-w-0">
                   <div className="text-xs font-semibold text-bordo">{local.rotulo}</div>
                   <div className="text-[11px] text-gray-600 mt-0.5">{local.resumo || "—"}</div>
+                  {local.observacoes && (
+                    <div className="text-[11px] text-gray-400 mt-0.5">Obs.: {local.observacoes}</div>
+                  )}
                 </div>
                 {local.id ? (
                   <RemoverEndereco id={local.id} rotulo={local.rotulo} />
