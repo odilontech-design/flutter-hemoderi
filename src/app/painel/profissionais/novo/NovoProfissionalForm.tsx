@@ -5,8 +5,16 @@ import { Campo, Rotulo, Selecao } from "@/components/ui";
 import { FormularioAcao } from "@/components/FormularioAcao";
 import { CampoDocumento } from "@/components/CampoDocumento";
 import { salvarProfissional } from "@/app/actions/cadastros";
+import { ServicosAptos, type GrupoDeServicos } from "@/components/ServicosAptos";
+import { ESPECIALIDADES } from "@/lib/especialidades";
 
-export function NovoProfissionalForm({ gruposRepasse }: { gruposRepasse: { id: string; nome: string }[] }) {
+export function NovoProfissionalForm({
+  gruposRepasse,
+  servicos,
+}: {
+  gruposRepasse: { id: string; nome: string }[];
+  servicos: GrupoDeServicos[];
+}) {
   const router = useRouter();
 
   return (
@@ -42,8 +50,16 @@ export function NovoProfissionalForm({ gruposRepasse }: { gruposRepasse: { id: s
       </div>
       <div>
         <Rotulo>Especialidade</Rotulo>
-        <Campo name="especialidade" />
+        <Selecao name="especialidade" defaultValue="">
+          <option value="">Selecione…</option>
+          {ESPECIALIDADES.map((e) => (
+            <option key={e} value={e}>
+              {e}
+            </option>
+          ))}
+        </Selecao>
       </div>
+      <ServicosAptos grupos={servicos} selecionados={[]} />
       <div>
         <Rotulo>Agenda do Google (opcional)</Rotulo>
         <Campo name="googleAgendaId" type="email" placeholder="profissional@gmail.com" />

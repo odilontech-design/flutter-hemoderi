@@ -40,6 +40,7 @@ export async function enviarRelatorio(_anterior: Resultado, dados: FormData): Pr
     select: {
       id: true,
       status: true,
+      servicoId: true,
       doutorNome: true,
       clinica: { select: { nome: true, endereco: true, numero: true, bairro: true, cidade: true, uf: true } },
       endereco: { select: { endereco: true, numero: true, bairro: true, cidade: true, uf: true } },
@@ -87,6 +88,16 @@ export async function enviarRelatorio(_anterior: Resultado, dados: FormData): Pr
 
   const quantidade = Number(dados.get("quantidade") ?? 1);
 
+  // O serviço principal pode ser trocado pelo profissional (ata de 02/10).
+  // Igual ao agendado não é "troca" — fica nulo, e só divergência é guardada.
+  let servicoRealizadoId: string | null = null;
+  const escolhido = String(dados.get("servicoRealizadoId") ?? "");
+  if (compareceu && escolhido && escolhido !== pedido.servicoId) {
+    const existe = await prisma.servico.count({ where: { id: escolhido, ativo: true } });
+    if (!existe) return { ok: false, erro: "O serviço principal informado não está mais no catálogo. Reabra o relatório e confira." };
+    servicoRealizadoId = escolhido;
+  }
+
   // Serviços do catálogo feitos além do agendado. Só entram os que existem e
   // estão ativos — o id vem do navegador e não vale por si só. Num "não
   // compareceu" não houve o que executar a mais.
@@ -128,6 +139,7 @@ export async function enviarRelatorio(_anterior: Resultado, dados: FormData): Pr
     inicioReal: String(dados.get("inicioReal") ?? "") || null,
     fimReal: String(dados.get("fimReal") ?? "") || null,
     quantidade: Number.isFinite(quantidade) && quantidade > 0 ? Math.trunc(quantidade) : 1,
+    servicoRealizadoId,
     intercorrencia: String(dados.get("intercorrencia") ?? "") === "sim",
     observacoes: String(dados.get("observacoes") ?? "") || null,
     ...clinicos,
@@ -136,10 +148,8 @@ export async function enviarRelatorio(_anterior: Resultado, dados: FormData): Pr
     servicosAdicionais: String(dados.get("servicosAdicionais") ?? "").trim() || null,
     ajudaCustoCentavos,
     ajudaCustoJustificativa: String(dados.get("ajudaCustoJustificativa") ?? "").trim() || null,
-    // A chave confirmada no ato pode ser diferente da do cadastro (conta
-    // nova, chave trocada). É a que vale para ESTE repasse: conferir agora
-    // evita o pagamento devolvido três dias depois.
-    chavePixConfirmada: String(dados.get("chavePixConfirmada") ?? "").trim() || null,
+    // A chave PIX deixou de ser pedida a cada relatório (ata de 02/10): é
+    // única e fixa no cadastro do profissional, e é dela que sai o pagamento.
     // Os dados do agendamento como ele aconteceu (ata de 28/09). Guardados
     // SÓ quando divergem do que estava marcado: o formulário chega com o
     // agendado preenchido, e gravar o texto igual encheria a conferência do

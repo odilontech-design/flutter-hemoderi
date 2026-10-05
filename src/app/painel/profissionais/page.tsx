@@ -4,6 +4,7 @@ import { exigirInterno } from "@/lib/sessao";
 import { Cartao, Tabela, Titulo, Vazio } from "@/components/ui";
 import { ImportarProfissionais } from "./ImportarProfissionais";
 import { EditarProfissional } from "./EditarProfissional";
+import { agruparPorFamilia } from "@/lib/familia";
 
 export const dynamic = "force-dynamic";
 
@@ -19,10 +20,11 @@ export default async function Profissionais() {
     _count: true,
   });
 
-  const [profissionais, gruposRepasse] = await Promise.all([
+  const [profissionais, gruposRepasse, servicosDoCatalogo] = await Promise.all([
     prisma.profissional.findMany({
       orderBy: [{ ativo: "desc" }, { nome: "asc" }],
       include: {
+        servicosAptos: { select: { id: true } },
         _count: { select: { pedidos: true, disponibilidades: true } },
         // O acesso ao portal faz parte do cadastro, não de outra tela: a
         // pergunta "esse profissional já consegue ver a agenda dele?" nasce
@@ -34,7 +36,13 @@ export default async function Profissionais() {
       },
     }),
     prisma.grupoRepasse.findMany({ orderBy: { nome: "asc" }, select: { id: true, nome: true } }),
+    prisma.servico.findMany({
+      where: { ativo: true },
+      orderBy: { nome: "asc" },
+      select: { id: true, nome: true, familia: true },
+    }),
   ]);
+  const servicos = agruparPorFamilia(servicosDoCatalogo, { fundirSolitarias: false, ordemDoCatalogo: true });
 
   return (
     <>
@@ -85,6 +93,7 @@ export default async function Profissionais() {
                     notaMedia={media}
                     notaQtd={nota?._count ?? 0}
                     gruposRepasse={gruposRepasse}
+                    servicos={servicos}
                   />
                 );
               })}

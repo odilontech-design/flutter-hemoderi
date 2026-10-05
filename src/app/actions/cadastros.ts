@@ -116,7 +116,7 @@ export async function salvarProfissional(_anterior: Resultado, dados: FormData):
     email: String(dados.get("email") ?? "").toLowerCase().trim() || null,
     conselho: String(dados.get("conselho") ?? "") || null,
     registro: String(dados.get("registro") ?? "") || null,
-    especialidade: String(dados.get("especialidade") ?? "") || null,
+    especialidade: String(dados.get("especialidade") ?? "").trim() || null,
     chavePix: String(dados.get("chavePix") ?? "") || null,
     repassePercentPadrao: percent ? Number(percent) : null,
     // O valor fixo é o combinado atual da operação (ata de 14/09); o
@@ -132,10 +132,22 @@ export async function salvarProfissional(_anterior: Resultado, dados: FormData):
     grupoRepasseId: String(dados.get("grupoRepasseId") ?? "") || null,
   };
 
+  // Serviços aptos (ata de 02/10): só ids que existem; a lista inteira é
+  // substituída a cada salvamento, inclusive para esvaziar.
+  const idsPedidos = dados.getAll("servicosAptosIds").map(String).filter(Boolean);
+  const idsValidos = idsPedidos.length
+    ? (await prisma.servico.findMany({ where: { id: { in: idsPedidos } }, select: { id: true } })).map((x) => x.id)
+    : [];
+
   if (id) {
-    await prisma.profissional.update({ where: { id }, data: comum });
+    await prisma.profissional.update({
+      where: { id },
+      data: { ...comum, servicosAptos: { set: idsValidos.map((servicoId) => ({ id: servicoId })) } },
+    });
   } else {
-    await prisma.profissional.create({ data: comum });
+    await prisma.profissional.create({
+      data: { ...comum, servicosAptos: { connect: idsValidos.map((servicoId) => ({ id: servicoId })) } },
+    });
   }
 
   revalidatePath("/painel/profissionais");

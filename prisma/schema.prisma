@@ -384,6 +384,8 @@ model Servico {
   regrasRepasse         RegraRepasse[]
   pedidos               Pedido[]
   adicionaisDeRelatorio RelatorioServicoAdicional[]
+  aptos                 Profissional[]              @relation("ServicosAptosDoProfissional")
+  realizadoEmRelatorios RelatorioAtendimento[]      @relation("ServicoRealizadoNoRelatorio")
 
   @@index([ativo])
   @@index([categoria])
@@ -659,6 +661,12 @@ model Profissional {
   criadoEm     DateTime  @default(now())
   atualizadoEm DateTime  @updatedAt
   desativadoEm DateTime?
+
+  /// Os serviços que ele está apto a prestar (ata de 02/10). É o que filtra a
+  /// lista de quem pode ser alocado a cada serviço. VAZIO = ainda não
+  /// configurado: o profissional legado continua alocável a tudo até a equipe
+  /// definir, em vez de sumir de todas as listas de um dia para o outro.
+  servicosAptos Servico[] @relation("ServicosAptosDoProfissional")
 
   usuarios         Usuario[]
   disponibilidades Disponibilidade[]
@@ -1085,6 +1093,12 @@ model RelatorioAtendimento {
   devolvidoEm     DateTime?
   motivoDevolucao String?
   devolvidoPorId  String?
+
+  /// O serviço principal que de fato foi feito, quando diferente do agendado
+  /// (ata de 02/10: o relatório chega com o agendado preenchido e o
+  /// profissional troca se foi outro). Nulo = o mesmo do pedido.
+  servicoRealizadoId String?
+  servicoRealizado   Servico? @relation("ServicoRealizadoNoRelatorio", fields: [servicoRealizadoId], references: [id])
 
   /// Serviços do catálogo que o profissional executou ALÉM do agendado, com
   /// a quantidade de cada um. É a versão estruturada de `servicosAdicionais`:

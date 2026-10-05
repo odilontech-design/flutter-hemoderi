@@ -5,6 +5,7 @@ import { formatarReais } from "@/lib/dinheiro";
 
 export const INCLUIR_ADICIONAIS = {
   adicionais: { select: { quantidade: true, servico: { select: { nome: true } } } },
+  servicoRealizado: { select: { nome: true } },
 } satisfies Prisma.RelatorioAtendimentoInclude;
 
 export type RelatorioCompleto = Prisma.RelatorioAtendimentoGetPayload<{ include: typeof INCLUIR_ADICIONAIS }>;
@@ -50,10 +51,10 @@ export function RelatorioPreenchido({ relatorio }: { relatorio: RelatorioComplet
           <div className="text-gray-400">Enviado em</div>
           <div className="text-gray-700">{formatarDataHora(relatorio.enviadoEm)}</div>
         </div>
-        {relatorio.chavePixConfirmada && (
-          <div>
-            <div className="text-gray-400">Chave PIX confirmada</div>
-            <div className="text-gray-700">{relatorio.chavePixConfirmada}</div>
+        {relatorio.servicoRealizado && (
+          <div className="sm:col-span-2">
+            <div className="text-gray-400">Serviço principal realizado</div>
+            <div className="text-amber-800 font-semibold">{relatorio.servicoRealizado.nome} — diferente do agendado</div>
           </div>
         )}
       </div>

@@ -1,4 +1,5 @@
 import { INCLUIR_ADICIONAIS, RelatorioPreenchido } from "@/components/RelatorioPreenchido";
+import { aptoParaServico } from "@/lib/aptidao";
 import { resumoDoEndereco } from "@/lib/endereco";
 import { AcoesGrupo } from "./AcoesGrupo";
 import Link from "next/link";
@@ -66,7 +67,7 @@ export default async function Esteira({
     prisma.profissional.findMany({
       where: { ativo: true },
       orderBy: { nome: "asc" },
-      select: { id: true, nome: true },
+      select: { id: true, nome: true, servicosAptos: { select: { id: true } } },
     }),
     // O tamanho de cada fila, no mesmo recorte de pagamento que está na tela.
     // É o número que diz "tem trabalho ali" sem a pessoa precisar clicar em
@@ -170,9 +171,18 @@ export default async function Esteira({
                   membros={membros}
                   perfil={sessao.perfil}
                   podeEditarValor={perfilPermite(sessao.perfil, "COMERCIAL")}
-                  profissionais={profissionais.filter((prof) =>
-                    membros.every((m) => !indisponiveisPorPedido.get(m.id)?.has(prof.id))
-                  )}
+                  profissionais={profissionais
+                    .filter(
+                      (prof) =>
+                        membros.every((m) => !indisponiveisPorPedido.get(m.id)?.has(prof.id)) &&
+                        membros.every((m) =>
+                          aptoParaServico(
+                            prof.servicosAptos.map((x) => x.id),
+                            m.servicoId
+                          )
+                        )
+                    )
+                    .map(({ id, nome }) => ({ id, nome }))}
                 />
               );
             }
@@ -406,10 +416,17 @@ export default async function Esteira({
                 pedidoId={pedido.id}
                 status={pedido.status}
                 perfil={sessao.perfil}
-                profissionais={profissionais.filter((p) => {
-                  const indisponiveis = indisponiveisPorPedido.get(pedido.id);
-                  return !indisponiveis || p.id === pedido.profissionalId || !indisponiveis.has(p.id);
-                })}
+                profissionais={profissionais
+                  .filter((p) => {
+                    // Só quem está apto ao serviço (ata de 02/10); o que a
+                    // clínica pediu continua na lista para a equipe ver o conflito.
+                    if (p.id !== pedido.profissionalId && !aptoParaServico(p.servicosAptos.map((x) => x.id), pedido.servicoId)) {
+                      return false;
+                    }
+                    const indisponiveis = indisponiveisPorPedido.get(pedido.id);
+                    return !indisponiveis || p.id === pedido.profissionalId || !indisponiveis.has(p.id);
+                  })
+                  .map(({ id, nome }) => ({ id, nome }))}
                 profissionalSolicitadoId={pedido.profissionalId}
               />
             </Cartao>
@@ -434,6 +451,7 @@ function horaFinal(horaInicio: string, duracaoMin: number): string {
 
 type PedidoDaEsteira = {
   id: string;
+  servicoId: string;
   numero: number;
   data: Date;
   horaInicio: string;

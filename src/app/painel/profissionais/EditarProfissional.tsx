@@ -9,6 +9,8 @@ import { AcoesDeAcesso, SituacaoAcesso } from "@/components/AcessoDoCadastro";
 import { CampoDocumento } from "@/components/CampoDocumento";
 import { formatarPercent, formatarReais } from "@/lib/dinheiro";
 import { estrelas, formatarMedia } from "@/lib/avaliacao";
+import { ServicosAptos, type GrupoDeServicos } from "@/components/ServicosAptos";
+import { opcoesDeEspecialidade } from "@/lib/especialidades";
 
 type Profissional = {
   id: string;
@@ -26,6 +28,7 @@ type Profissional = {
   repassePercentPadrao: number | null;
   repasseFixoCentavos: number | null;
   ativo: boolean;
+  servicosAptos: { id: string }[];
   _count: { pedidos: number; disponibilidades: number };
   usuarios: { id: string; desativadoEm: Date | null; senhaProvisoria: boolean }[];
 };
@@ -46,11 +49,13 @@ export function EditarProfissional({
   notaMedia,
   notaQtd,
   gruposRepasse,
+  servicos,
 }: {
   profissional: Profissional;
   notaMedia: number | null;
   notaQtd: number;
   gruposRepasse: { id: string; nome: string }[];
+  servicos: GrupoDeServicos[];
 }) {
   const [aberto, setAberto] = useState(false);
 
@@ -168,8 +173,16 @@ export function EditarProfissional({
               </div>
               <div>
                 <Rotulo>Especialidade</Rotulo>
-                <Campo name="especialidade" defaultValue={profissional.especialidade ?? ""} />
+                <Selecao name="especialidade" defaultValue={profissional.especialidade ?? ""}>
+                  <option value="">Selecione…</option>
+                  {opcoesDeEspecialidade(profissional.especialidade).map((e) => (
+                    <option key={e} value={e}>
+                      {e}
+                    </option>
+                  ))}
+                </Selecao>
               </div>
+              <ServicosAptos grupos={servicos} selecionados={profissional.servicosAptos.map((x) => x.id)} />
               <div>
                 <Rotulo>Agenda do Google</Rotulo>
                 <Campo

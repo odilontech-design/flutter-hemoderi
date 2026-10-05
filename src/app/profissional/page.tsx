@@ -65,9 +65,9 @@ export default async function MinhaAgenda() {
 
   const meus = { profissionalId: sessao.profissionalId, status: "ALOCADO" as const };
   const dadosDoPedido = {
-    clinica: { select: { nome: true, endereco: true, numero: true, bairro: true, cidade: true } },
-    endereco: { select: { endereco: true, numero: true, bairro: true, cidade: true } },
-    servico: { select: { nome: true, duracaoMin: true } },
+    clinica: { select: { nome: true, endereco: true, numero: true, bairro: true, cidade: true, uf: true } },
+    endereco: { select: { endereco: true, numero: true, bairro: true, cidade: true, uf: true } },
+    servico: { select: { nome: true, duracaoMin: true, descricao: true } },
   };
 
   const [config, devolvidos, aguardandoAceite, deHoje, atrasados, proximos] = await Promise.all([
@@ -129,7 +129,7 @@ export default async function MinhaAgenda() {
                 <div className="text-xs font-semibold text-bordo">
                   {formatarDataCurta(pedido.data)} · {pedido.horaInicio} · {pedido.servico.nome}
                 </div>
-                <div className="text-[11px] text-gray-500 mb-2">
+                <div className="text-[11px] text-gray-500 mb-1">
                   {localRevelado(pedido.data, pedido.horaInicio, config.horasRevelarLocal) ? (
                     pedido.clinica.nome
                   ) : (
@@ -137,6 +137,30 @@ export default async function MinhaAgenda() {
                   )}{" "}
                   · {formatarReais(pedido.valorRepasseCentavos)}
                 </div>
+                {/* A cidade aparece já no aceite (ata de 02/10): aceitar às cegas
+                    inviabiliza planejar o dia quando há compromissos em lugares
+                    distantes. O endereço exato continua fechado até a janela de
+                    revelação — só a cidade e o que é o serviço. */}
+                {(() => {
+                  const onde = comEnderecoDoPedido(pedido.clinica, pedido.endereco);
+                  const cidade = [onde.cidade, onde.uf].filter(Boolean).join("/");
+                  return (
+                    <div className="text-[11px] text-gray-600 mb-2 space-y-0.5">
+                      {cidade && (
+                        <div>
+                          <strong>Cidade:</strong> {cidade}
+                        </div>
+                      )}
+                      <div>
+                        <strong>Serviço:</strong> {pedido.servico.nome}
+                        {pedido.quantidade > 1 ? ` × ${pedido.quantidade}` : ""} · {pedido.servico.duracaoMin} min
+                      </div>
+                      {pedido.servico.descricao && (
+                        <div className="text-gray-400 line-clamp-2">{pedido.servico.descricao}</div>
+                      )}
+                    </div>
+                  );
+                })()}
                 <AceiteAlocacao pedidoId={pedido.id} />
               </div>
             ))}

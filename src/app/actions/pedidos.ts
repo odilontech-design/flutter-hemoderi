@@ -23,6 +23,7 @@ import { criarNegocio, marcarNegocioGanho } from "@/lib/integracoes/pipedrive";
 import { condicaoValida, formaDePagamentoValida } from "@/lib/pagamento";
 import { procedimentoEscolhido } from "@/lib/procedimentos";
 import { camposFaltando } from "@/lib/cadastro-completo";
+import { aptoParaServico } from "@/lib/aptidao";
 import { perfilPermite } from "@/lib/papeis";
 import { formatarReais, lerCentavos } from "@/lib/dinheiro";
 import { precoDoServico, tabelasDaClinica } from "@/lib/preco";
@@ -471,6 +472,19 @@ const SELECAO_PARA_ALOCAR = {
  * agendamento, todos na mesma transação (ou aloca tudo, ou nada).
  */
 async function alocarNaTransacao(tx: Prisma.TransactionClient, pedido: PedidoParaAlocar, profissionalId: string) {
+  // Só aloca quem está apto ao serviço (ata de 02/10). A lista da esteira já
+  // filtra, mas o servidor não confia no que o navegador mostrou.
+  const profissional = await tx.profissional.findUnique({
+    where: { id: profissionalId },
+    select: { nome: true, servicosAptos: { select: { id: true } } },
+  });
+  if (profissional && !aptoParaServico(profissional.servicosAptos.map((x) => x.id), pedido.servicoId)) {
+    return {
+      ok: false as const,
+      erro: `${profissional.nome} não está habilitado(a) para este serviço. Ajuste os serviços dele no cadastro ou escolha outro profissional.`,
+    };
+  }
+
   await travarRecursos(tx, {
     clinicaId: pedido.clinicaId,
     profissionalId,

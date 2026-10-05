@@ -7,6 +7,8 @@ import { codigoDoPedido } from "@/lib/numeracao";
 import { formatarReais } from "@/lib/dinheiro";
 import { enderecoEmUmaLinha } from "@/lib/relatorio";
 import { comEnderecoDoPedido } from "@/lib/endereco";
+import { precosDosServicos, tabelasDaClinica } from "@/lib/preco";
+import { descricaoDoPreco } from "@/lib/cobranca";
 import { FormularioRelatorio } from "./FormularioRelatorio";
 
 export const dynamic = "force-dynamic";
@@ -23,8 +25,7 @@ export default async function Relatorio({ params }: { params: { pedidoId: string
         select: { nome: true, endereco: true, numero: true, bairro: true, cidade: true, uf: true },
       },
       endereco: { select: { endereco: true, numero: true, bairro: true, cidade: true, uf: true } },
-      servico: { select: { nome: true } },
-      profissional: { select: { chavePix: true } },
+      servico: { select: { id: true, nome: true } },
       relatorio: { include: { adicionais: { select: { servicoId: true, quantidade: true } } } },
     },
   });
@@ -35,8 +36,34 @@ export default async function Relatorio({ params }: { params: { pedidoId: string
   const catalogo = await prisma.servico.findMany({
     where: { ativo: true },
     orderBy: [{ familia: "asc" }, { nome: "asc" }],
-    select: { id: true, nome: true, familia: true },
+    select: {
+      id: true,
+      nome: true,
+      familia: true,
+      valorPadraoCentavos: true,
+      unidadeCobranca: true,
+      quantidadeIncluida: true,
+      valorAdicionalCentavos: true,
+      rotuloQuantidade: true,
+    },
   });
+
+  // O preço de TABELA de cada serviço para o cliente deste atendimento (ata de
+  // 02/10): negociado, tabela do perfil, praça ou padrão — o mesmo que o
+  // cliente vê. É só referência: o relatório reflete o que aconteceu e não
+  // altera o cadastro de preços de ninguém.
+  const ufDoAtendimento = comEnderecoDoPedido(pedido.clinica, pedido.endereco).uf;
+  const precosResolvidos = await precosDosServicos(prisma, {
+    clinicaId: pedido.clinicaId,
+    uf: ufDoAtendimento,
+    servicos: catalogo,
+    tabelaIds: await tabelasDaClinica(prisma, pedido.clinicaId),
+  });
+  const precos: Record<string, string> = {};
+  for (const servico of catalogo) {
+    const valor = precosResolvidos.get(servico.id)?.valorCentavos ?? servico.valorPadraoCentavos;
+    precos[servico.id] = descricaoDoPreco(valor, servico);
+  }
 
   // O formulário é controlado por texto (o "N/A" preenche o campo), então os
   // valores já enviados chegam como string — inclusive os que no banco são
@@ -99,11 +126,13 @@ export default async function Relatorio({ params }: { params: { pedidoId: string
           <FormularioRelatorio
             pedidoId={pedido.id}
             horaPrevista={pedido.horaInicio}
-            chavePixCadastro={pedido.relatorio?.chavePixConfirmada ?? pedido.profissional?.chavePix ?? null}
             jaEnviado={pedido.relatorio != null}
             valores={valores}
             quantidadeAgendada={pedido.quantidade}
-            catalogo={catalogo}
+            catalogo={catalogo.map(({ id, nome, familia }) => ({ id, nome, familia }))}
+            servicoAgendado={{ id: pedido.servico.id, nome: pedido.servico.nome }}
+            servicoRealizadoInicial={r?.servicoRealizadoId ?? pedido.servico.id}
+            precos={precos}
             adicionaisIniciais={r?.adicionais ?? []}
           />
         )}

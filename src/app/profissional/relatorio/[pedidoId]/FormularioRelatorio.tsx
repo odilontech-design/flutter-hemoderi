@@ -70,17 +70,35 @@ export type ServicoDoCatalogo = { id: string; nome: string; familia: string | nu
 type LinhaAdicional = { chave: number; servicoId: string; quantidade: string };
 
 /**
- * Serviços executados além do agendado: o profissional escolhe no catálogo e
- * informa quantos fez. Cada linha manda um par (serviço, quantidade) — listas
- * paralelas no FormData, lidas por lerServicosAdicionais no servidor.
+ * O que foi realizado, no topo do relatório (ata de 02/10): o serviço
+ * principal chega preenchido com o agendado e pode ser trocado; abaixo, os
+ * procedimentos extras, com a justificativa. O preço de tabela do cliente
+ * aparece embaixo de cada serviço como referência — o relatório reflete o que
+ * aconteceu, não altera o cadastro de ninguém.
+ *
+ * Cada linha de extra manda um par (serviço, quantidade) — listas paralelas
+ * no FormData, lidas por lerServicosAdicionais no servidor.
  */
-function ServicosAdicionais({
+function ServicosRealizados({
   catalogo,
+  precos,
+  servicoAgendado,
+  servicoRealizadoInicial,
+  quantidadeInicial,
+  quantidadeAgendada,
   iniciais,
+  justificativaInicial,
 }: {
   catalogo: ServicoDoCatalogo[];
+  precos: Record<string, string>;
+  servicoAgendado: { id: string; nome: string };
+  servicoRealizadoInicial: string;
+  quantidadeInicial: string;
+  quantidadeAgendada: number;
   iniciais: { servicoId: string; quantidade: number }[];
+  justificativaInicial: string;
 }) {
+  const [principal, setPrincipal] = useState(servicoRealizadoInicial);
   const [linhas, setLinhas] = useState<LinhaAdicional[]>(
     iniciais.map((a, i) => ({ chave: i, servicoId: a.servicoId, quantidade: String(a.quantidade) }))
   );
@@ -91,69 +109,118 @@ function ServicosAdicionais({
     const familia = s.familia ?? "Outros";
     porFamilia.set(familia, [...(porFamilia.get(familia) ?? []), s]);
   }
+  const opcoes = Array.from(porFamilia, ([familia, servicos]) => (
+    <optgroup key={familia} label={familia}>
+      {servicos.map((s) => (
+        <option key={s.id} value={s.id}>
+          {s.nome}
+        </option>
+      ))}
+    </optgroup>
+  ));
 
   const alterar = (chave: number, mudanca: Partial<LinhaAdicional>) =>
     setLinhas((atuais) => atuais.map((l) => (l.chave === chave ? { ...l, ...mudanca } : l)));
 
   return (
     <div className="rounded-xl border border-gray-200 p-3 space-y-3">
-      <div>
-        <div className="font-display font-bold text-bordo text-sm">Realizou mais serviços do que o agendado?</div>
-        <div className="text-[10px] text-gray-500 mt-0.5 leading-relaxed">
-          Adicione cada serviço feito a mais, com a quantidade. A central confere antes de virar valor.
-        </div>
-      </div>
+      <div className="font-display font-bold text-bordo text-sm">Serviços realizados</div>
 
-      {linhas.map((linha) => (
-        <div key={linha.chave} className="flex items-end gap-2">
-          <div className="flex-1 min-w-0">
-            <Rotulo>Serviço</Rotulo>
-            <Selecao
-              name="adicionalServicoId"
-              value={linha.servicoId}
-              onChange={(e) => alterar(linha.chave, { servicoId: e.target.value })}
-            >
-              <option value="">Escolha o serviço…</option>
-              {Array.from(porFamilia, ([familia, servicos]) => (
-                <optgroup key={familia} label={familia}>
-                  {servicos.map((s) => (
-                    <option key={s.id} value={s.id}>
-                      {s.nome}
-                    </option>
-                  ))}
-                </optgroup>
-              ))}
+      <div>
+        <div className="grid grid-cols-[1fr_5rem] gap-2 items-end">
+          <div className="min-w-0">
+            <Rotulo>Serviço principal</Rotulo>
+            <Selecao name="servicoRealizadoId" value={principal} onChange={(e) => setPrincipal(e.target.value)}>
+              {opcoes}
             </Selecao>
           </div>
-          <div className="w-20 shrink-0">
-            <Rotulo>Qtd.</Rotulo>
-            <Campo
-              name="adicionalQuantidade"
-              type="number"
-              min={1}
-              max={99}
-              value={linha.quantidade}
-              onChange={(e) => alterar(linha.chave, { quantidade: e.target.value })}
-            />
+          <div>
+            <Rotulo>Qtd. feita</Rotulo>
+            <Campo name="quantidade" type="number" min={1} defaultValue={quantidadeInicial} />
           </div>
-          <button
-            type="button"
-            aria-label="Remover serviço"
-            onClick={() => setLinhas((atuais) => atuais.filter((l) => l.chave !== linha.chave))}
-            className="shrink-0 text-xs font-semibold px-3 py-2 min-h-[40px] sm:min-h-0 rounded-lg border border-gray-300 text-gray-500 hover:bg-gray-50"
-          >
-            ✕
-          </button>
         </div>
-      ))}
+        {principal !== servicoAgendado.id && (
+          <div className="text-[10px] text-amber-700 mt-1">
+            Diferente do agendado ({servicoAgendado.nome}). Explique na justificativa abaixo.
+          </div>
+        )}
+        {precos[principal] && <div className="text-[10px] text-gray-500 mt-1">Preço de tabela: {precos[principal]}</div>}
+        {quantidadeAgendada > 1 && (
+          <div className="text-[10px] text-gray-400 mt-0.5">
+            Quantidade agendada: {quantidadeAgendada}. Corrija se foi diferente.
+          </div>
+        )}
+      </div>
 
-      <button
-        type="button"
-        onClick={() => setLinhas((atuais) => [...atuais, { chave: proxima.current++, servicoId: "", quantidade: "1" }])}
-        className="text-[11px] font-semibold text-bordo hover:underline"
-      >
-        + Adicionar serviço realizado
-      </button>
+      <div className="pt-3 border-t border-gray-100 space-y-3">
+        <div>
+          <div className="text-[11px] font-semibold text-gray-700">Realizou mais serviços do que o agendado?</div>
+          <div className="text-[10px] text-gray-500 mt-0.5 leading-relaxed">
+            Adicione cada serviço feito a mais, com a quantidade.
+          </div>
+        </div>
+
+        {linhas.map((linha) => (
+          <div key={linha.chave}>
+            <div className="flex items-end gap-2">
+              <div className="flex-1 min-w-0">
+                <Rotulo>Serviço</Rotulo>
+                <Selecao
+                  name="adicionalServicoId"
+                  value={linha.servicoId}
+                  onChange={(e) => alterar(linha.chave, { servicoId: e.target.value })}
+                >
+                  <option value="">Escolha o serviço…</option>
+                  {opcoes}
+                </Selecao>
+              </div>
+              <div className="w-20 shrink-0">
+                <Rotulo>Qtd.</Rotulo>
+                <Campo
+                  name="adicionalQuantidade"
+                  type="number"
+                  min={1}
+                  max={99}
+                  value={linha.quantidade}
+                  onChange={(e) => alterar(linha.chave, { quantidade: e.target.value })}
+                />
+              </div>
+              <button
+                type="button"
+                aria-label="Remover serviço"
+                onClick={() => setLinhas((atuais) => atuais.filter((l) => l.chave !== linha.chave))}
+                className="shrink-0 text-xs font-semibold px-3 py-2 min-h-[40px] sm:min-h-0 rounded-lg border border-gray-300 text-gray-500 hover:bg-gray-50"
+              >
+                ✕
+              </button>
+            </div>
+            {linha.servicoId && precos[linha.servicoId] && (
+              <div className="text-[10px] text-gray-500 mt-1">Preço de tabela: {precos[linha.servicoId]}</div>
+            )}
+          </div>
+        ))}
+
+        <button
+          type="button"
+          onClick={() => setLinhas((atuais) => [...atuais, { chave: proxima.current++, servicoId: "", quantidade: "1" }])}
+          className="text-[11px] font-semibold text-bordo hover:underline"
+        >
+          + Adicionar serviço realizado
+        </button>
+      </div>
+
+      <div className="pt-3 border-t border-gray-100">
+        <Rotulo>Justificativa dos serviços adicionais ou alterados</Rotulo>
+        <Area
+          name="servicosAdicionais"
+          rows={2}
+          defaultValue={justificativaInicial}
+          placeholder="Ex.: membrana virou stickybone; 2 membranas a mais"
+        />
+        <div className="text-[10px] text-gray-400 mt-1">
+          Deixe em branco se foi exatamente o que estava agendado. A central confere antes de virar valor.
+        </div>
+      </div>
     </div>
   );
 }
@@ -161,21 +228,26 @@ function ServicosAdicionais({
 export function FormularioRelatorio({
   pedidoId,
   horaPrevista,
-  chavePixCadastro,
   jaEnviado,
   valores,
   quantidadeAgendada,
   catalogo,
+  servicoAgendado,
+  servicoRealizadoInicial,
+  precos,
   adicionaisIniciais,
 }: {
   pedidoId: string;
   horaPrevista: string;
-  chavePixCadastro: string | null;
   jaEnviado: boolean;
   /** O que já foi enviado, quando é uma correção. */
   valores: ValoresRelatorio;
   quantidadeAgendada: number;
   catalogo: ServicoDoCatalogo[];
+  servicoAgendado: { id: string; nome: string };
+  servicoRealizadoInicial: string;
+  /** Preço de tabela de cada serviço para o cliente deste atendimento, já em texto. */
+  precos: Record<string, string>;
   adicionaisIniciais: { servicoId: string; quantidade: number }[];
 }) {
   const router = useRouter();
@@ -252,7 +324,18 @@ export function FormularioRelatorio({
 
       {compareceu === "sim" && (
         <>
-          <div className="grid grid-cols-3 gap-2">
+          <ServicosRealizados
+            catalogo={catalogo}
+            precos={precos}
+            servicoAgendado={servicoAgendado}
+            servicoRealizadoInicial={servicoRealizadoInicial}
+            quantidadeInicial={valores.quantidade || String(quantidadeAgendada)}
+            quantidadeAgendada={quantidadeAgendada}
+            iniciais={adicionaisIniciais}
+            justificativaInicial={valores.servicosAdicionais ?? ""}
+          />
+
+          <div className="grid grid-cols-2 gap-2">
             <div>
               <Rotulo>Início</Rotulo>
               <Campo name="inicioReal" type="time" defaultValue={valores.inicioReal || horaPrevista} />
@@ -261,19 +344,7 @@ export function FormularioRelatorio({
               <Rotulo>Fim</Rotulo>
               <Campo name="fimReal" type="time" defaultValue={valores.fimReal} />
             </div>
-            <div>
-              <Rotulo>Quantidade feita</Rotulo>
-              <Campo name="quantidade" type="number" min={1} defaultValue={valores.quantidade || quantidadeAgendada} />
-            </div>
           </div>
-
-          {quantidadeAgendada > 1 && (
-            <div className="text-[10px] text-gray-400 -mt-2">
-              Quantidade agendada: {quantidadeAgendada}. Corrija se foi diferente.
-            </div>
-          )}
-
-          <ServicosAdicionais catalogo={catalogo} iniciais={adicionaisIniciais} />
 
           <div className="border-t border-gray-100 pt-4">
             <div className="font-display font-bold text-bordo text-sm mb-1">Sinais vitais</div>
@@ -302,19 +373,6 @@ export function FormularioRelatorio({
             </Selecao>
           </div>
 
-          <div>
-            <Rotulo>Outro serviço ou ajuste fora do catálogo</Rotulo>
-            <Area
-              name="servicosAdicionais"
-              rows={2}
-              defaultValue={valores.servicosAdicionais}
-              placeholder="Ex.: membrana virou stickybone; 2 membranas a mais"
-            />
-            <div className="text-[10px] text-gray-400 mt-1">
-              Só para o que não está na lista acima. Deixe em branco se não houve.
-            </div>
-          </div>
-
           <div className="grid grid-cols-2 gap-2">
             <div>
               <Rotulo>Ajuda de custo (R$)</Rotulo>
@@ -340,14 +398,6 @@ export function FormularioRelatorio({
       <div>
         <Rotulo>Observações</Rotulo>
         <Area name="observacoes" rows={3} defaultValue={valores.observacoes} />
-      </div>
-
-      <div>
-        <Rotulo>Chave PIX para este repasse</Rotulo>
-        <Campo name="chavePixConfirmada" defaultValue={chavePixCadastro ?? ""} placeholder="CPF, e-mail ou telefone" />
-        <div className="text-[10px] text-gray-400 mt-1">
-          Vem do seu cadastro. Se mudou de conta, corrija aqui — vale para este pagamento.
-        </div>
       </div>
 
       {estado.erro && <Aviso tom="erro">{estado.erro}</Aviso>}
