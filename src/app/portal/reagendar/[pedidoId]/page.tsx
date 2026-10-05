@@ -52,8 +52,7 @@ export default async function Reagendar({ params }: { params: { pedidoId: string
             servicoId={pedido.servico.id}
             jaConfirmado={pedido.status !== "SOLICITADO"}
             dataMinima={dataMinimaAgendamentoPublico()}
-            horaAbertura={config.horaAbertura}
-            horaFechamento={config.horaFechamento}
+            antecedenciaHoras={config.antecedenciaMinimaHoras}
           />
         )}
       </Cartao>

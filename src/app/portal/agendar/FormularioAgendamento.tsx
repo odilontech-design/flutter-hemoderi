@@ -62,8 +62,6 @@ export function FormularioAgendamento({
   locais,
   precosPorUf,
   antecedenciaHoras,
-  horaAbertura,
-  horaFechamento,
   clinicaNome,
   whatsappCentral,
   servicoInicialId,
@@ -72,9 +70,6 @@ export function FormularioAgendamento({
   locais: LocalDeAtendimento[];
   precosPorUf: Record<string, Record<string, number>>;
   antecedenciaHoras: number;
-  /** Expediente da operação ("08:00"): limita o relógio. */
-  horaAbertura: string;
-  horaFechamento: string;
   clinicaNome: string;
   whatsappCentral: string | null;
   servicoInicialId: string | null;
@@ -468,8 +463,6 @@ export function FormularioAgendamento({
                     name="horaInicio"
                     required
                     value={hora}
-                    min={horaAbertura}
-                    max={horaFechamento}
                     onChange={(e) => setHora(e.target.value)}
                     className="!w-40"
                   />
@@ -482,13 +475,15 @@ export function FormularioAgendamento({
                     )}
                     {situacaoHora === "indisponivel" && (
                       <span className="font-semibold text-amber-700">
-                        Esse horário não está disponível para {linhas.length > 1 ? "esses serviços juntos" : "esse serviço"}.
-                        Atendemos das {horaAbertura} às {horaFechamento}; tente outro horário ou fale com a central.
+                        Esse horário não está disponível para {linhas.length > 1 ? "esses serviços juntos" : "esse serviço"}{" "}
+                        (já ocupado, com menos de {antecedenciaHoras}h de antecedência ou passando da meia-noite).
+                        Tente outro horário ou fale com a central.
                       </span>
                     )}
                     {situacaoHora === null && (
                       <span className="text-gray-400">
-                        Escolha qualquer horário entre {horaAbertura} e {horaFechamento}.
+                        Escolha qualquer horário do dia, com {antecedenciaHoras}h de antecedência. Antes disso, só
+                        pela central.
                       </span>
                     )}
                   </div>

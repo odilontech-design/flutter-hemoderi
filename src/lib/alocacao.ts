@@ -225,6 +225,7 @@ export async function horariosDisponiveis({
   exigirAntecedencia = false,
   horas,
   duracaoMin,
+  foraDoExpediente = false,
 }: {
   clinicaId: string;
   servicoId: string;
@@ -245,6 +246,8 @@ export async function horariosDisponiveis({
   horas?: string[];
   /** Duração do bloco quando difere da do serviço (ex.: serviço por hora com quantidade). */
   duracaoMin?: number;
+  /** Como em `horariosDisponiveisConjunto`: o horário digitado pode estar fora do expediente. */
+  foraDoExpediente?: boolean;
 }): Promise<string[]> {
   const data = dataDeISO(dataISO);
 
@@ -297,11 +300,16 @@ export async function horariosDisponiveis({
     .map((p) => intervaloDe(p.horaInicio, p.duracaoMin));
 
   const duracao = duracaoMin ?? servico.duracaoMin;
+  // Sem profissional definido e com o horário digitado à mão, a janela pode ser
+  // o dia inteiro; com profissional, vale o que ele declarou.
+  const janelasDaConferencia = foraDoExpediente && !profissionalId ? [{ inicio: 0, fim: 24 * 60 }] : janelas;
   const candidatos = horas
     ? horas.filter((hora) => {
         if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(hora)) return false;
         const alvo = intervaloDe(hora, duracao);
-        return cabeEmAlgumaJanela(alvo, janelas) && !ocupacoesDoProfissional.some((o) => haSobreposicao(alvo, o));
+        return (
+          cabeEmAlgumaJanela(alvo, janelasDaConferencia) && !ocupacoesDoProfissional.some((o) => haSobreposicao(alvo, o))
+        );
       })
     : horariosLivres({
         janelas,
@@ -382,6 +390,7 @@ export async function horariosDisponiveisConjunto({
   dataISO,
   exigirAntecedencia = false,
   horas,
+  foraDoExpediente = false,
 }: {
   clinicaId: string;
   itens: { servicoId: string; quantidade: number }[];
@@ -390,10 +399,17 @@ export async function horariosDisponiveisConjunto({
   /**
    * Horários a conferir, em vez da grade de meia em meia hora. É o que permite
    * escolher QUALQUER horário (ex.: 09:20) no relógio do formulário e ainda
-   * assim passar pelas mesmas travas: expediente, antecedência, sala da
-   * clínica e pool de equipamentos. Devolve só os que passam.
+   * assim passar pelas mesmas travas: antecedência, sala da clínica e pool de
+   * equipamentos. Devolve só os que passam.
    */
   horas?: string[];
+  /**
+   * Fora da grade, o horário digitado não precisa estar dentro do expediente
+   * (ata de 02/10): a clínica agenda a qualquer hora, desde que respeite a
+   * antecedência. A grade de SUGESTÕES continua dentro do expediente — oferecer
+   * 48 chips por dia não ajuda ninguém.
+   */
+  foraDoExpediente?: boolean;
 }): Promise<{ horarios: string[]; duracaoTotalMin: number }> {
   if (itens.length === 0) return { horarios: [], duracaoTotalMin: 0 };
   const data = dataDeISO(dataISO);
@@ -430,7 +446,8 @@ export async function horariosDisponiveisConjunto({
     ? horas.filter((hora) => {
         if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(hora)) return false;
         const inicio = paraMinutos(hora);
-        return inicio >= expediente.inicio && inicio + duracaoTotalMin <= expediente.fim;
+        const janela = foraDoExpediente ? { inicio: 0, fim: 24 * 60 } : expediente;
+        return inicio >= janela.inicio && inicio + duracaoTotalMin <= janela.fim;
       })
     : horariosLivres({ janelas: [expediente], ocupacoes: [], duracaoMin: duracaoTotalMin });
 

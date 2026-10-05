@@ -127,8 +127,6 @@ export default async function Agendar({ searchParams }: { searchParams: { servic
         locais={locais}
         precosPorUf={precosPorUf}
         antecedenciaHoras={config.antecedenciaMinimaHoras}
-        horaAbertura={config.horaAbertura}
-        horaFechamento={config.horaFechamento}
         clinicaNome={sessao.clinicaNome}
         whatsappCentral={config.whatsapp}
         servicoInicialId={searchParams.servico ?? null}

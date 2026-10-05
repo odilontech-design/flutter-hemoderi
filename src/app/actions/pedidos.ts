@@ -329,20 +329,21 @@ export async function solicitarAgendamento(_anterior: Resultado, dados: FormData
     };
   }
 
-  // Qualquer horário vale (ata de 02/10: o relógio do formulário), desde que
-  // passe pelas mesmas travas da grade — expediente, antecedência, sala da
-  // clínica e equipamento. O servidor não confia no que o navegador conferiu.
+  // Qualquer horário vale (ata de 02/10: o relógio do formulário), mesmo fora
+  // do expediente, desde que respeite a antecedência e passe pelas travas de
+  // sala da clínica e equipamento. O servidor não confia no que o navegador conferiu.
   const livres = await horariosDisponiveisConjunto({
     clinicaId: sessao.clinicaId,
     itens: pedidos,
     dataISO,
     exigirAntecedencia: true,
     horas: [horaInicio],
+    foraDoExpediente: true,
   });
   if (!livres.horarios.includes(horaInicio)) {
     return {
       ok: false,
-      erro: "Esse horário não está disponível (fora do expediente ou já ocupado para esses serviços). Escolha outro.",
+      erro: "Esse horário não está disponível (já ocupado para esses serviços). Escolha outro ou fale com a central.",
     };
   }
 
@@ -966,11 +967,12 @@ export async function reagendarPedido(_anterior: Resultado, dados: FormData): Pr
     exigirAntecedencia: true,
     duracaoMin: pedido.duracaoMin,
     horas: [horaInicio],
+    foraDoExpediente: true,
   });
   if (!livres.includes(horaInicio)) {
     return {
       ok: false,
-      erro: "Esse horário não está disponível (fora do expediente ou já ocupado). Escolha outro.",
+      erro: "Esse horário não está disponível (já ocupado). Escolha outro ou fale com a central.",
     };
   }
 
