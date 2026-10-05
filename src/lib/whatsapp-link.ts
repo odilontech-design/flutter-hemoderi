@@ -98,3 +98,18 @@ export function mensagemDeFeedback(pedido: {
     `Como foi a experiência? Sua avaliação ajuda a gente a mandar sempre o melhor profissional para a ${pedido.clinica}. É rapidinho, e você pode responder por aqui mesmo ou lá no portal.`,
   ].join("\n");
 }
+
+/**
+ * O aviso à clínica de que o profissional ainda não chegou (ata de 02/10): a
+ * clínica espera sem saber se alguém vem, e é a central quem avisa.
+ */
+export function mensagemDeAtraso(pedido: { clinica: string; servico?: string | null; hora: string; minutos: number }): string {
+  const oQue = pedido.servico ? ` de ${pedido.servico}` : "";
+  return [
+    `Olá! Aqui é da Hemoderi.`,
+    "",
+    `O atendimento${oQue} das ${pedido.hora} na ${pedido.clinica} está com um pequeno atraso: o profissional ainda não registrou a chegada (${pedido.minutos} min depois do horário combinado).`,
+    "",
+    `Já estamos acompanhando e te avisamos assim que ele chegar. Pedimos desculpas pelo transtorno!`,
+  ].join("\n");
+}

@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { ETAPAS, etapaDoPerfil, etapaPorChave } from "../src/lib/esteira";
+import { ETAPAS, etapaDoPerfil, etapaPorChave, etapasDoPerfil } from "../src/lib/esteira";
 
 test("cada setor abre na própria fila", () => {
   assert.equal(etapaDoPerfil("COMERCIAL").chave, "triagem");
@@ -67,4 +67,20 @@ test("chave desconhecida não vira etapa — quem chama decide o padrão", () =>
 
 test("a etapa `todos` não filtra nada", () => {
   assert.deepEqual(etapaPorChave("todos")?.onde, {});
+});
+
+test("cada perfil vê só as etapas do seu setor; gestão e responsável veem tudo", () => {
+  const chaves = (perfil: Parameters<typeof etapasDoPerfil>[0]) => etapasDoPerfil(perfil).map((e) => e.chave);
+  assert.deepEqual(chaves("LOGISTICA"), ["alocar", "alocados", "cancelados"]);
+  assert.deepEqual(chaves("POS_VENDA"), ["conferir", "devolvidos", "fechados"]);
+  assert.equal(chaves("COMERCIAL").includes("alocar"), false);
+  assert.equal(chaves("COMERCIAL").includes("triagem"), true);
+  assert.equal(etapasDoPerfil("RESPONSAVEL").length, ETAPAS.length);
+  assert.equal(etapasDoPerfil("GESTAO").length, ETAPAS.length);
+});
+
+test("a etapa de abertura de cada perfil está entre as que ele vê", () => {
+  for (const perfil of ["COMERCIAL", "ATENDENTE", "LOGISTICA", "POS_VENDA", "GESTAO", "RESPONSAVEL"] as const) {
+    assert.equal(etapasDoPerfil(perfil).some((e) => e.chave === etapaDoPerfil(perfil).chave), true, perfil);
+  }
 });

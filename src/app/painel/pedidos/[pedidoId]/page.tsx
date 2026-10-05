@@ -2,6 +2,12 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { exigirInterno } from "@/lib/sessao";
+import { perfilPermite } from "@/lib/papeis";
+import { STATUS_ATIVOS } from "@/lib/pedido";
+import { locaisDaClinica, resumoDoEndereco } from "@/lib/endereco";
+import { agruparPorFamilia } from "@/lib/familia";
+import { isoDeData } from "@/lib/data";
+import { EditarAgendamento } from "./EditarAgendamento";
 import { Cartao, SeloStatus, Titulo, Vazio } from "@/components/ui";
 import { codigoDoPedido } from "@/lib/numeracao";
 import { formatarData, formatarDataHora } from "@/lib/data";
@@ -23,13 +29,14 @@ export const dynamic = "force-dynamic";
  * os mesmos botões aqui criaria dois lugares para o mesmo clique.
  */
 export default async function DetalheDoPedido({ params }: { params: { pedidoId: string } }) {
-  await exigirInterno();
+  const sessao = await exigirInterno();
 
   const pedido = await prisma.pedido.findUnique({
     where: { id: params.pedidoId },
     include: {
       clinica: { select: { nome: true } },
       servico: { select: { nome: true } },
+      endereco: { select: { rotulo: true, endereco: true, numero: true, complemento: true, bairro: true, cidade: true, uf: true, observacoes: true } },
       profissional: { select: { nome: true } },
       relatorio: { include: INCLUIR_ADICIONAIS },
       avaliacao: { select: { nota: true, comentario: true } },
@@ -38,6 +45,21 @@ export default async function DetalheDoPedido({ params }: { params: { pedidoId: 
   if (!pedido) notFound();
 
   const relatorio = pedido.relatorio;
+
+  // Edição do resumo (ata de 02/10): só para quem atende o telefone e só
+  // enquanto o atendimento ainda está de pé.
+  const podeEditar = perfilPermite(sessao.perfil, "COMERCIAL", "ATENDENTE") && STATUS_ATIVOS.includes(pedido.status);
+  const [servicosDoCatalogo, locais] = podeEditar
+    ? await Promise.all([
+        prisma.servico.findMany({
+          where: { ativo: true },
+          orderBy: { nome: "asc" },
+          select: { id: true, nome: true, familia: true },
+        }),
+        locaisDaClinica(pedido.clinicaId),
+      ])
+    : [[], []];
+  const gruposDeServicos = agruparPorFamilia(servicosDoCatalogo, { fundirSolitarias: false, ordemDoCatalogo: true });
 
   return (
     <>
@@ -62,7 +84,7 @@ export default async function DetalheDoPedido({ params }: { params: { pedidoId: 
           <div>
             <div className="text-gray-400">Quando</div>
             <div className="text-gray-700">
-              {formatarData(pedido.data)} às {pedido.horaInicio} · {pedido.duracaoMin} min
+              {formatarData(pedido.data)} às {pedido.horaInicio}
             </div>
           </div>
           <div>
@@ -73,6 +95,15 @@ export default async function DetalheDoPedido({ params }: { params: { pedidoId: 
             <div className="text-gray-400">Clínica</div>
             <div className="text-gray-700">{pedido.clinica.nome}</div>
           </div>
+          {pedido.endereco && (
+            <div className="sm:col-span-2">
+              <div className="text-gray-400">Local do atendimento</div>
+              <div className="text-gray-700">
+                <strong>{pedido.endereco.rotulo}</strong> — {resumoDoEndereco(pedido.endereco)}
+                {pedido.endereco.observacoes && <span className="text-gray-500"> · Obs.: {pedido.endereco.observacoes}</span>}
+              </div>
+            </div>
+          )}
           <div>
             <div className="text-gray-400">Profissional</div>
             <div className="text-gray-700">{pedido.profissional?.nome ?? "sem profissional"}</div>
@@ -121,6 +152,28 @@ export default async function DetalheDoPedido({ params }: { params: { pedidoId: 
           )}
         </div>
       </Cartao>
+
+      {podeEditar && (
+        <EditarAgendamento
+          dados={{
+            id: pedido.id,
+            data: isoDeData(pedido.data),
+            horaInicio: pedido.horaInicio,
+            servicoId: pedido.servicoId,
+            quantidade: pedido.quantidade,
+            enderecoId: pedido.enderecoId ?? "",
+            doutorNome: pedido.doutorNome ?? "",
+            pacienteNome: pedido.pacienteNome ?? "",
+            pacienteContato: pedido.pacienteContato ?? "",
+            procedimentoPaciente: pedido.procedimentoPaciente ?? "",
+            formaPagamento: pedido.formaPagamento ?? "",
+            observacoes: pedido.observacoes ?? "",
+            status: pedido.status,
+          }}
+          grupos={gruposDeServicos}
+          locais={locais.map((l) => ({ id: l.id, rotulo: l.rotulo }))}
+        />
+      )}
 
       <Cartao className="mb-3">
         <div className="font-display font-bold text-bordo text-sm mb-3">Relatório de atendimento</div>

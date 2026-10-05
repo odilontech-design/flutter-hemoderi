@@ -48,3 +48,32 @@ export function formatarAtraso(minutos: number): string {
   const resto = minutos % 60;
   return resto === 0 ? `${horas}h` : `${horas}h${String(resto).padStart(2, "0")}`;
 }
+
+export type StatusDeChegada =
+  | { tipo: "chegou"; minutos: number; atrasado: boolean }
+  | { tipo: "atrasado"; minutos: number }
+  | { tipo: "aguardando" };
+
+/**
+ * Onde está o profissional em relação ao horário agendado, para o painel do
+ * dia (ata de 02/10: a agenda diária mostra com clareza quem chegou e quem
+ * está atrasado, porque na recepção os médicos confundiam o profissional com
+ * paciente).
+ *
+ *   • registrou a chegada → chegou (com o atraso, se passou da tolerância);
+ *   • não registrou e o horário + tolerância já passou → atrasado há N minutos;
+ *   • não registrou e ainda é cedo → aguardando.
+ */
+export function statusDeChegada(
+  data: Date,
+  horaInicio: string,
+  checkinEm: Date | null,
+  agora: Date = new Date()
+): StatusDeChegada {
+  if (checkinEm) {
+    const minutos = minutosDeAtraso(data, horaInicio, checkinEm);
+    return { tipo: "chegou", minutos, atrasado: minutos > TOLERANCIA_MINUTOS };
+  }
+  const minutos = Math.round((agora.getTime() - instanteDoAtendimento(data, horaInicio).getTime()) / 60_000);
+  return minutos > TOLERANCIA_MINUTOS ? { tipo: "atrasado", minutos } : { tipo: "aguardando" };
+}

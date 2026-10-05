@@ -3,6 +3,8 @@ import { prisma } from "@/lib/prisma";
 import { ETAPAS, etapaPorChave } from "@/lib/esteira";
 import { perfilPermite } from "@/lib/papeis";
 import { contar, contarAgendamentos, type Aviso } from "@/lib/avisos";
+import { statusDeChegada } from "@/lib/atraso";
+import { hojeUTC, instanteDoAtendimento } from "@/lib/data";
 
 const maisRecente = (datas: Date[]) => new Date(Math.max(...datas.map((d) => d.getTime()))).toISOString();
 
@@ -35,6 +37,26 @@ export async function avisosDoPainel(perfil: PerfilInterno): Promise<Aviso[]> {
       href: "/painel/pedidos?filtro=triagem",
       rotuloLink: "Ver solicitações →",
       marca: maisRecente(solicitados.map((p) => p.criadoEm)),
+    });
+  }
+
+  // Profissional que passou da tolerância sem registrar a chegada (ata de
+  // 02/10): a clínica espera sem saber se alguém vem, e quem avisa é a central.
+  // A marca é o horário do atendimento mais recente em atraso — um atraso novo
+  // reabre o aviso, o mesmo de antes não.
+  const deHoje = await prisma.pedido.findMany({
+    where: { data: hojeUTC(), status: "ALOCADO", profissionalId: { not: null }, checkinEm: null },
+    select: { data: true, horaInicio: true },
+  });
+  const atrasados = deHoje.filter((p) => statusDeChegada(p.data, p.horaInicio, null).tipo === "atrasado");
+  if (atrasados.length > 0) {
+    avisos.push({
+      chave: "atraso",
+      titulo: "Profissional atrasado",
+      texto: `${contar(atrasados.length, "profissional ainda não registrou", "profissionais ainda não registraram")} a chegada.`,
+      href: "/painel",
+      rotuloLink: "Ver a agenda do dia →",
+      marca: maisRecente(atrasados.map((p) => instanteDoAtendimento(p.data, p.horaInicio))),
     });
   }
 

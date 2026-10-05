@@ -8,9 +8,9 @@ import { prisma } from "@/lib/prisma";
 import { exigirInterno } from "@/lib/sessao";
 import { Cartao, SeloStatus, Titulo, Vazio } from "@/components/ui";
 import { codigoDoPedido } from "@/lib/numeracao";
-import { formatarDataCurta, formatarDataHora, paraHora, paraMinutos } from "@/lib/data";
+import { formatarDataCurta, formatarDataHora } from "@/lib/data";
 import { formatarReais } from "@/lib/dinheiro";
-import { ETAPAS, etapaDoPerfil, etapaPorChave } from "@/lib/esteira";
+import { etapaDoPerfil, etapasDoPerfil } from "@/lib/esteira";
 import { formatarAtraso, houveAtraso, minutosDeAtraso } from "@/lib/atraso";
 import { linkWhatsapp, mensagemDeFeedback } from "@/lib/whatsapp-link";
 import { profissionaisIndisponiveis } from "@/lib/alocacao";
@@ -46,7 +46,10 @@ export default async function Esteira({
   const sessao = await exigirInterno();
 
   const minhaEtapa = etapaDoPerfil(sessao.perfil);
-  const filtro = etapaPorChave(searchParams.filtro) ?? minhaEtapa;
+  // Cada perfil vê só as etapas do seu setor (ata de 02/10); pedir uma aba que
+  // não é sua pela URL cai na própria fila.
+  const etapasVisiveis = etapasDoPerfil(sessao.perfil);
+  const filtro = etapasVisiveis.find((e) => e.chave === searchParams.filtro) ?? minhaEtapa;
   const pagamento = condicaoValida(searchParams.pagamento ?? "") ? searchParams.pagamento! : "";
 
   const ondePagamento = pagamento ? { condicaoPagamento: pagamento } : {};
@@ -74,7 +77,7 @@ export default async function Esteira({
     // cada etapa para descobrir — e é o que faz a separação por setor render:
     // a Joyce vê quantos esperam alocação enquanto trabalha a triagem.
     Promise.all(
-      ETAPAS.map((etapa) => prisma.pedido.count({ where: { ...etapa.onde, ...ondePagamento } }))
+      etapasVisiveis.map((etapa) => prisma.pedido.count({ where: { ...etapa.onde, ...ondePagamento } }))
     ),
   ]);
 
@@ -120,7 +123,7 @@ export default async function Esteira({
       </Titulo>
 
       <div className="flex flex-wrap items-center gap-2 mb-2">
-        {ETAPAS.map((etapa, i) => {
+        {etapasVisiveis.map((etapa, i) => {
           const minha = etapa.chave === minhaEtapa.chave;
           const selecionada = etapa.chave === filtro.chave;
           return (
@@ -444,11 +447,6 @@ export default async function Esteira({
   );
 }
 
-/** Hora em que o serviço termina: início + duração. */
-function horaFinal(horaInicio: string, duracaoMin: number): string {
-  return paraHora(paraMinutos(horaInicio) + duracaoMin);
-}
-
 type PedidoDaEsteira = {
   id: string;
   servicoId: string;
@@ -492,7 +490,6 @@ function CartaoDoGrupo({
   const primeiro = membros[0];
   const total = membros.reduce((soma, m) => soma + m.valorServicoCentavos, 0);
   const contar = (status: StatusPedido) => membros.filter((m) => m.status === status).length;
-  const fim = membros[membros.length - 1];
 
   return (
     <Cartao className="!p-4 border-bordo/20">
@@ -502,7 +499,9 @@ function CartaoDoGrupo({
             Agendamento com {membros.length} serviços
           </div>
           <div className="text-xs text-gray-700 mt-1">
-            {formatarDataCurta(primeiro.data)} · {primeiro.horaInicio} a {horaFinal(fim.horaInicio, fim.duracaoMin)}
+            {/* Só o horário de início (ata de 02/10): o término calculado
+                somando durações não é o que acontece de fato e confundia. */}
+            {formatarDataCurta(primeiro.data)} às {primeiro.horaInicio}
           </div>
           {primeiro.endereco && (
             <div className="text-[11px] text-amber-700 mt-0.5">

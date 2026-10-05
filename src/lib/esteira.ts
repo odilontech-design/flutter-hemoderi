@@ -120,3 +120,31 @@ export function etapaDoPerfil(perfil: PerfilInterno): Etapa {
 export function etapaPorChave(chave: string | undefined): Etapa | undefined {
   return ETAPAS.find((etapa) => etapa.chave === chave);
 }
+
+/**
+ * As etapas que cada perfil vê na esteira (ata de 02/10): separação estrita de
+ * responsabilidades. A Ana aprova as solicitações, a Joyce cuida da logística
+ * e da alocação, a Stephanie confere os relatórios e as avaliações — cada uma
+ * olha a própria fila e o que precisa para acompanhar o resto, sem as abas dos
+ * outros setores competindo por atenção.
+ *
+ * Quem atende o telefone (comercial e atendente) mantém "Todos" só para
+ * consultar: a clínica liga perguntando por um pedido e a resposta não pode
+ * depender de pedir ajuda ao setor dono. O que se PODE FAZER continua sendo
+ * decidido no servidor, por ação (actions/pedidos.ts) — esconder a aba é
+ * organização, não segurança.
+ *
+ * Gestão e responsável veem tudo: supervisionam a operação inteira.
+ */
+const ETAPAS_DO_PERFIL: Partial<Record<PerfilInterno, string[]>> = {
+  COMERCIAL: ["triagem", "alocados", "fechados", "cancelados", "todos"],
+  ATENDENTE: ["triagem", "alocados", "fechados", "cancelados", "todos"],
+  LOGISTICA: ["alocar", "alocados", "cancelados"],
+  POS_VENDA: ["conferir", "devolvidos", "fechados"],
+};
+
+export function etapasDoPerfil(perfil: PerfilInterno): Etapa[] {
+  const chaves = ETAPAS_DO_PERFIL[perfil];
+  if (!chaves) return ETAPAS;
+  return ETAPAS.filter((etapa) => chaves.includes(etapa.chave));
+}

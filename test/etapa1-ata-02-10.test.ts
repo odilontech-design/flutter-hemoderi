@@ -50,3 +50,18 @@ test("especialidade legada continua nas opções até ser trocada", () => {
   assert.equal(opcoesDeEspecialidade("Implantodontia — avançada")[0], "Implantodontia — avançada");
   assert.equal(opcoesDeEspecialidade(null).includes("Cirurgia oral"), true);
 });
+
+import { statusDeChegada } from "../src/lib/atraso";
+import { instanteDoAtendimento } from "../src/lib/data";
+
+test("chegada: registrou, atrasou além da tolerância, aguardando", () => {
+  const data = new Date("2026-10-05T00:00:00.000Z");
+  const marca = instanteDoAtendimento(data, "15:00");
+  const em = (min: number) => new Date(marca.getTime() + min * 60_000);
+
+  assert.deepEqual(statusDeChegada(data, "15:00", em(5), em(30)), { tipo: "chegou", minutos: 5, atrasado: false });
+  assert.deepEqual(statusDeChegada(data, "15:00", em(25), em(30)), { tipo: "chegou", minutos: 25, atrasado: true });
+  assert.deepEqual(statusDeChegada(data, "15:00", null, em(5)), { tipo: "aguardando" });
+  assert.deepEqual(statusDeChegada(data, "15:00", null, em(20)), { tipo: "atrasado", minutos: 20 });
+  assert.deepEqual(statusDeChegada(data, "15:00", null, em(-60)), { tipo: "aguardando" });
+});

@@ -991,6 +991,194 @@ export async function reagendarPedidoInterno(pedidoId: string, dataISO: string, 
 }
 
 /**
+ * Edição do resumo do agendamento pela equipe (ata de 02/10): todos os campos
+ * podem ser corrigidos, porque os pedidos enviados por clientes chegavam com
+ * erros que a equipe limpava na mão.
+ *
+ * Duas famílias de campo:
+ *   • DADOS CRÍTICOS — data, horário, local e serviço. Mudar qualquer um
+ *     exige NOVA APROVAÇÃO: o pedido confirmado/alocado volta para
+ *     "solicitado" e perde profissional e equipamento (quem foi alocado para o
+ *     combinado antigo não vale para o novo).
+ *   • O RESTO — doutor, paciente, contato, procedimento, forma de pagamento,
+ *     observações e quantidade. Salvam direto, sem reaprovação.
+ *
+ * Só o comercial/atendente edita (é a mesa que conversa com a clínica).
+ */
+export async function editarAgendamento(_anterior: Resultado, dados: FormData): Promise<Resultado> {
+  const sessao = await exigirInterno();
+  if (!perfilPermite(sessao.perfil, "COMERCIAL", "ATENDENTE")) {
+    return { ok: false, erro: "Só o comercial edita o agendamento." };
+  }
+
+  const pedido = await prisma.pedido.findUnique({
+    where: { id: String(dados.get("pedidoId") ?? "") },
+    include: {
+      servico: {
+        select: {
+          id: true,
+          nome: true,
+          duracaoMin: true,
+          exigeEquipamento: true,
+          tipoEquipamento: true,
+          unidadeCobranca: true,
+          permiteQuantidade: true,
+          quantidadeMaxima: true,
+          quantidadeMinima: true,
+          quantidadeIncluida: true,
+          valorAdicionalCentavos: true,
+        },
+      },
+    },
+  });
+  if (!pedido) return { ok: false, erro: "Pedido não encontrado." };
+  if (!STATUS_ATIVOS.includes(pedido.status)) {
+    return { ok: false, erro: "Este atendimento já foi finalizado e não pode mais ser editado aqui." };
+  }
+
+  const dataISO = String(dados.get("data") ?? "");
+  const horaInicio = String(dados.get("horaInicio") ?? "");
+  if (!dataISO || !horaInicio) return { ok: false, erro: "Data e horário são obrigatórios." };
+
+  const servicoId = String(dados.get("servicoId") ?? "") || pedido.servicoId;
+  const servico =
+    servicoId === pedido.servicoId
+      ? pedido.servico
+      : await prisma.servico.findFirst({
+          where: { id: servicoId, ativo: true },
+          select: {
+            id: true,
+            nome: true,
+            duracaoMin: true,
+            exigeEquipamento: true,
+            tipoEquipamento: true,
+            unidadeCobranca: true,
+            permiteQuantidade: true,
+            quantidadeMaxima: true,
+            quantidadeMinima: true,
+            quantidadeIncluida: true,
+            valorAdicionalCentavos: true,
+          },
+        });
+  if (!servico) return { ok: false, erro: "Serviço indisponível." };
+
+  const quantidade = Number(dados.get("quantidade") ?? pedido.quantidade);
+  if (!quantidadeValida(servico, quantidade)) {
+    return { ok: false, erro: `Quantidade inválida para ${servico.nome}.` };
+  }
+
+  const enderecoId = String(dados.get("enderecoId") ?? "") || null;
+  const endereco = enderecoId
+    ? await prisma.enderecoClinica.findFirst({
+        where: { id: enderecoId, clinicaId: pedido.clinicaId, ativo: true },
+        select: { id: true, uf: true },
+      })
+    : null;
+  if (enderecoId && !endereco) return { ok: false, erro: "Endereço não encontrado para esta clínica." };
+
+  const forma = String(dados.get("formaPagamento") ?? "").trim();
+  if (forma && !formaDePagamentoValida(forma)) {
+    return { ok: false, erro: "Forma de pagamento: Pix, dinheiro ou cheque." };
+  }
+
+  const novaData = dataDeISO(dataISO);
+  const mudouData = isoDeData(pedido.data) !== dataISO || pedido.horaInicio !== horaInicio;
+  const mudouServico = servicoId !== pedido.servicoId;
+  const mudouLocal = (endereco?.id ?? null) !== (pedido.enderecoId ?? null);
+  const mudouQuantidade = quantidade !== pedido.quantidade;
+  const critico = mudouData || mudouServico || mudouLocal;
+  const reaprovar = critico && pedido.status !== "SOLICITADO";
+
+  // Serviço ou quantidade novos mudam duração e valor: recalcula pelo mesmo
+  // caminho do agendamento original. (Um valor editado à mão só é refeito
+  // quando algum desses dois muda.)
+  const duracaoMin = mudouServico || mudouQuantidade ? duracaoEfetiva(servico, quantidade) : pedido.duracaoMin;
+  let valorServicoCentavos = pedido.valorServicoCentavos;
+  if (mudouServico || mudouQuantidade || mudouLocal) {
+    const unitario = await valorDoServico(pedido.clinicaId, servicoId, endereco?.uf);
+    valorServicoCentavos = totalDoItem(unitario, quantidade, servico);
+  }
+
+  const profissionalId = reaprovar ? null : pedido.profissionalId;
+  const equipamentoId = reaprovar ? null : pedido.equipamentoId;
+
+  const resultado = await prisma.$transaction(async (tx) => {
+    if (critico) {
+      await travarRecursos(tx, {
+        clinicaId: pedido.clinicaId,
+        profissionalId,
+        tipoEquipamento: equipamentoId && servico.exigeEquipamento ? servico.tipoEquipamento : null,
+      });
+      const impedimentos = await verificarAlocacao(
+        {
+          clinicaId: pedido.clinicaId,
+          profissionalId,
+          equipamentoId,
+          data: novaData,
+          horaInicio,
+          duracaoMin,
+          ignorarPedidoId: pedido.id,
+        },
+        tx
+      );
+      if (temBloqueio(impedimentos)) {
+        return { ok: false as const, erro: impedimentos.filter((i) => i.bloqueante).map((i) => i.mensagem).join(" ") };
+      }
+    }
+
+    await tx.pedido.update({
+      where: { id: pedido.id },
+      data: {
+        data: novaData,
+        horaInicio,
+        servicoId,
+        quantidade,
+        duracaoMin,
+        valorServicoCentavos,
+        enderecoId: endereco?.id ?? null,
+        doutorNome: String(dados.get("doutorNome") ?? "").trim() || null,
+        pacienteNome: String(dados.get("pacienteNome") ?? "").trim() || null,
+        pacienteContato: String(dados.get("pacienteContato") ?? "").trim() || null,
+        procedimentoPaciente: String(dados.get("procedimentoPaciente") ?? "").trim().slice(0, 120) || null,
+        formaPagamento: forma || null,
+        observacoes: String(dados.get("observacoes") ?? "").trim() || null,
+        ...(reaprovar ? { status: "SOLICITADO" as const, profissionalId: null, equipamentoId: null, aceitoEm: null } : {}),
+      },
+    });
+    return { ok: true as const };
+  });
+  if (!resultado.ok) return resultado;
+
+  if (critico) {
+    // Confirmação e lembretes antigos não valem mais para o novo combinado.
+    await prisma.mensagemWhatsapp.deleteMany({
+      where: { pedidoId: pedido.id, tipo: { in: ["CONFIRMACAO", "ALOCACAO", "LEMBRETE"] }, status: "PENDENTE" },
+    });
+    await sincronizarEvento(pedido.id);
+  }
+
+  await registrarAuditoria(
+    sessao.usuarioId,
+    "Pedido",
+    pedido.id,
+    "editar-agendamento",
+    [
+      mudouData && `data/hora → ${dataISO} ${horaInicio}`,
+      mudouServico && `serviço → ${servico.nome}`,
+      mudouLocal && "local",
+      mudouQuantidade && `quantidade → ${quantidade}`,
+      reaprovar && "voltou para aprovação",
+    ]
+      .filter(Boolean)
+      .join(" · ") || "dados do resumo"
+  );
+
+  atualizarTelas();
+  revalidatePath(`/painel/pedidos/${pedido.id}`);
+  return { ok: true };
+}
+
+/**
  * Cancelamento pelo portal — até 30 minutos antes do atendimento (ata de
  * 21/09), desacoplado do prazo de reagendamento. Ver `dentroDoPrazoDeCancelamento`.
  */
