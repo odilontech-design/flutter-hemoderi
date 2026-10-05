@@ -13,6 +13,8 @@ export function FormularioReagendamento({
   servicoId,
   jaConfirmado,
   dataMinima,
+  horaAbertura,
+  horaFechamento,
 }: {
   pedidoId: string;
   servicoId: string;
@@ -20,6 +22,9 @@ export function FormularioReagendamento({
   jaConfirmado: boolean;
   /** ISO — regra das 18h do dia anterior, a mesma do agendamento novo. */
   dataMinima: string;
+  /** Expediente da operação ("08:00"): limita o relógio. */
+  horaAbertura: string;
+  horaFechamento: string;
 }) {
   const router = useRouter();
   const [estado, enviar] = useFormState(reagendarPedido, INICIAL);
@@ -27,6 +32,9 @@ export function FormularioReagendamento({
   const [data, setData] = useState("");
   const [horarios, setHorarios] = useState<string[]>([]);
   const [buscando, setBuscando] = useState(false);
+  // O horário vem do relógio do formulário — qualquer um, não só os da grade.
+  const [hora, setHora] = useState("");
+  const [situacaoHora, setSituacaoHora] = useState<"livre" | "indisponivel" | "verificando" | null>(null);
 
   useEffect(() => {
     if (!data) {
@@ -48,6 +56,33 @@ export function FormularioReagendamento({
       cancelado = true;
     };
   }, [data, servicoId, pedidoId]);
+
+  // Confere o horário digitado contra a agenda, com uma pequena espera para não
+  // consultar a cada minuto que a pessoa gira no relógio.
+  useEffect(() => {
+    if (!hora || !data) {
+      setSituacaoHora(null);
+      return;
+    }
+    let cancelado = false;
+    setSituacaoHora("verificando");
+    const espera = setTimeout(() => {
+      const parametros = new URLSearchParams({ servicoId, data, ignorarPedidoId: pedidoId, hora });
+      fetch(`/api/horarios?${parametros}`)
+        .then((r) => r.json())
+        .then((json) => {
+          if (!cancelado) setSituacaoHora((json.horarios ?? []).includes(hora) ? "livre" : "indisponivel");
+        })
+        .catch(() => {
+          // Sem rede: não bloqueia — o servidor confere de novo ao enviar.
+          if (!cancelado) setSituacaoHora(null);
+        });
+    }, 350);
+    return () => {
+      cancelado = true;
+      clearTimeout(espera);
+    };
+  }, [hora, data, servicoId, pedidoId]);
 
   useEffect(() => {
     if (estado.ok) router.push("/portal");
@@ -84,20 +119,59 @@ export function FormularioReagendamento({
         <Rotulo>Novo horário</Rotulo>
         {!data ? (
           <div className="text-xs text-gray-400 py-2">Escolha a data.</div>
-        ) : buscando ? (
-          <div className="text-xs text-gray-400 py-2">Buscando horários…</div>
-        ) : horarios.length === 0 ? (
-          <Aviso tom="alerta">Sem horário livre nesse dia. Tente outra data.</Aviso>
         ) : (
-          <div className="flex flex-wrap gap-2">
-            {horarios.map((hora) => (
-              <label key={hora} className="cursor-pointer">
-                <input type="radio" name="horaInicio" value={hora} required className="peer sr-only" />
-                <span className="block text-xs font-semibold px-3.5 py-2.5 rounded-lg border border-gray-300 peer-checked:bg-bordo peer-checked:text-white peer-checked:border-bordo">
-                  {hora}
+          <div className="space-y-2">
+            <Campo
+              type="time"
+              name="horaInicio"
+              required
+              value={hora}
+              min={horaAbertura}
+              max={horaFechamento}
+              onChange={(e) => setHora(e.target.value)}
+              className="!w-40"
+            />
+            <div className="text-[10px] leading-relaxed">
+              {situacaoHora === "verificando" && <span className="text-gray-400">Conferindo a agenda…</span>}
+              {situacaoHora === "livre" && <span className="font-semibold text-green-700">Horário disponível.</span>}
+              {situacaoHora === "indisponivel" && (
+                <span className="font-semibold text-amber-700">
+                  Esse horário não está disponível. Atendemos das {horaAbertura} às {horaFechamento}; tente outro
+                  horário ou fale com a central.
                 </span>
-              </label>
-            ))}
+              )}
+              {situacaoHora === null && (
+                <span className="text-gray-400">
+                  Escolha qualquer horário entre {horaAbertura} e {horaFechamento}.
+                </span>
+              )}
+            </div>
+
+            {buscando ? (
+              <div className="text-[11px] text-gray-400">Buscando sugestões…</div>
+            ) : horarios.length === 0 ? (
+              <Aviso tom="alerta">Sem horário livre nesse dia. Tente outra data.</Aviso>
+            ) : (
+              <div>
+                <div className="text-[10px] text-gray-400 mb-1">Sugestões de horários livres:</div>
+                <div className="flex flex-wrap gap-1.5">
+                  {horarios.map((sugestao) => (
+                    <button
+                      key={sugestao}
+                      type="button"
+                      onClick={() => setHora(sugestao)}
+                      className={`text-[11px] font-semibold px-2.5 py-1.5 rounded-lg border ${
+                        hora === sugestao
+                          ? "bg-bordo text-white border-bordo"
+                          : "border-gray-300 text-gray-600 hover:bg-gray-50"
+                      }`}
+                    >
+                      {sugestao}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         )}
       </div>
@@ -105,7 +179,7 @@ export function FormularioReagendamento({
       {estado.erro && <Aviso tom="erro">{estado.erro}</Aviso>}
 
       <div className="flex gap-2">
-        <Botao type="submit" disabled={horarios.length === 0}>
+        <Botao type="submit" disabled={!hora || situacaoHora === "indisponivel" || situacaoHora === "verificando"}>
           Confirmar novo horário
         </Botao>
         <Botao type="button" variante="secundario" onClick={() => router.push("/portal")}>

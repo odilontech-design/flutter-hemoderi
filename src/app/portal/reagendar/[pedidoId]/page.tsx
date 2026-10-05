@@ -5,6 +5,7 @@ import { Aviso, Cartao, Titulo } from "@/components/ui";
 import { dataMinimaAgendamentoPublico, formatarData, nomeDoProfissionalVisivel } from "@/lib/data";
 import { codigoDoPedido } from "@/lib/numeracao";
 import { STATUS_ATIVOS } from "@/lib/pedido";
+import { parametros } from "@/lib/alocacao";
 import { FormularioReagendamento } from "./FormularioReagendamento";
 
 export const dynamic = "force-dynamic";
@@ -22,6 +23,7 @@ export default async function Reagendar({ params }: { params: { pedidoId: string
   });
   if (!pedido) notFound();
 
+  const config = await parametros();
   const finalizado = !STATUS_ATIVOS.includes(pedido.status);
   // Mesma regra da listagem: quem vai atender só aparece com 24h de
   // antecedência — vale também aqui, onde a clínica está prestes a mexer no
@@ -50,6 +52,8 @@ export default async function Reagendar({ params }: { params: { pedidoId: string
             servicoId={pedido.servico.id}
             jaConfirmado={pedido.status !== "SOLICITADO"}
             dataMinima={dataMinimaAgendamentoPublico()}
+            horaAbertura={config.horaAbertura}
+            horaFechamento={config.horaFechamento}
           />
         )}
       </Cartao>

@@ -223,6 +223,8 @@ export async function horariosDisponiveis({
   dataISO,
   ignorarPedidoId,
   exigirAntecedencia = false,
+  horas,
+  duracaoMin,
 }: {
   clinicaId: string;
   servicoId: string;
@@ -235,6 +237,14 @@ export async function horariosDisponiveis({
   dataISO: string;
   ignorarPedidoId?: string;
   exigirAntecedencia?: boolean;
+  /**
+   * Horários a conferir, em vez da grade de meia em meia hora — o relógio do
+   * formulário aceita qualquer horário e ele passa pelas mesmas travas.
+   * Devolve só os que passam.
+   */
+  horas?: string[];
+  /** Duração do bloco quando difere da do serviço (ex.: serviço por hora com quantidade). */
+  duracaoMin?: number;
 }): Promise<string[]> {
   const data = dataDeISO(dataISO);
 
@@ -286,11 +296,18 @@ export async function horariosDisponiveis({
     .filter((p) => p.profissionalId === profissionalId)
     .map((p) => intervaloDe(p.horaInicio, p.duracaoMin));
 
-  const candidatos = horariosLivres({
-    janelas,
-    ocupacoes: ocupacoesDoProfissional,
-    duracaoMin: servico.duracaoMin,
-  });
+  const duracao = duracaoMin ?? servico.duracaoMin;
+  const candidatos = horas
+    ? horas.filter((hora) => {
+        if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(hora)) return false;
+        const alvo = intervaloDe(hora, duracao);
+        return cabeEmAlgumaJanela(alvo, janelas) && !ocupacoesDoProfissional.some((o) => haSobreposicao(alvo, o));
+      })
+    : horariosLivres({
+        janelas,
+        ocupacoes: ocupacoesDoProfissional,
+        duracaoMin: duracao,
+      });
 
   // O pool considerado é só o do TIPO que o serviço exige — um AirFlow não
   // substitui um laser LiteTouch. Sem tipo definido, cai no comportamento de
@@ -318,7 +335,7 @@ export async function horariosDisponiveis({
     : new Date();
 
   return candidatos.filter((hora) => {
-    const alvo = intervaloDe(hora, servico.duracaoMin);
+    const alvo = intervaloDe(hora, duracao);
 
     if (instanteDoAtendimento(data, hora) < limite) return false;
 

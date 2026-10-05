@@ -6,6 +6,7 @@ import { prisma } from "@/lib/prisma";
 import { exigirClinica, exigirInterno, exigirProfissional, registrarAuditoria } from "@/lib/sessao";
 import {
   equipamentoLivre,
+  horariosDisponiveis,
   horariosDisponiveisConjunto,
   parametros,
   temBloqueio,
@@ -950,6 +951,26 @@ export async function reagendarPedido(_anterior: Resultado, dados: FormData): Pr
     return {
       ok: false,
       erro: "O novo horário está fora do prazo: o site fecha a agenda de amanhã às 18h de hoje.",
+    };
+  }
+
+  // Qualquer horário vale (o relógio do formulário), desde que passe pelas
+  // mesmas travas da grade: expediente, antecedência, sala e equipamento. O
+  // próprio pedido não conta como conflito consigo mesmo.
+  const livres = await horariosDisponiveis({
+    clinicaId: pedido.clinicaId,
+    servicoId: pedido.servicoId,
+    profissionalId: null,
+    dataISO,
+    ignorarPedidoId: pedido.id,
+    exigirAntecedencia: true,
+    duracaoMin: pedido.duracaoMin,
+    horas: [horaInicio],
+  });
+  if (!livres.includes(horaInicio)) {
+    return {
+      ok: false,
+      erro: "Esse horário não está disponível (fora do expediente ou já ocupado). Escolha outro.",
     };
   }
 

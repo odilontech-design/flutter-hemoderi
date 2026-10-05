@@ -60,14 +60,15 @@ export async function GET(requisicao: Request) {
   // No reagendamento, o pedido não pode conflitar consigo mesmo. Só sai da
   // conta um pedido que pertence a quem está perguntando.
   const pedidoParaIgnorar = url.searchParams.get("ignorarPedidoId");
-  const ignorarPedidoId = pedidoParaIgnorar
-    ? (
-        await prisma.pedido.findFirst({
-          where: { id: pedidoParaIgnorar, clinicaId },
-          select: { id: true },
-        })
-      )?.id
-    : undefined;
+  const pedidoAtual = pedidoParaIgnorar
+    ? await prisma.pedido.findFirst({
+        where: { id: pedidoParaIgnorar, clinicaId },
+        select: { id: true, duracaoMin: true },
+      })
+    : null;
+  const ignorarPedidoId = pedidoAtual?.id;
+  // `hora` confere UM horário digitado à mão; sem ele, devolve a grade.
+  const horaDigitada = url.searchParams.get("hora");
 
   const horarios = await horariosDisponiveis({
     clinicaId,
@@ -78,6 +79,10 @@ export async function GET(requisicao: Request) {
     // A antecedência mínima vale para quem agenda sozinho; a equipe interna
     // encaixa urgência.
     exigirAntecedencia: sessao.user.papel === "CLINICA",
+    // No reagendamento o bloco tem a duração do PEDIDO, que pode diferir da do
+    // serviço (por hora, com quantidade).
+    ...(pedidoAtual ? { duracaoMin: pedidoAtual.duracaoMin } : {}),
+    ...(horaDigitada ? { horas: [horaDigitada] } : {}),
   });
 
   return Response.json({ horarios });
