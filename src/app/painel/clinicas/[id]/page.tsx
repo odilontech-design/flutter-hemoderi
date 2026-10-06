@@ -27,6 +27,8 @@ export default async function DetalheClinica({ params }: { params: { id: string 
         precos: true,
         tabelas: { select: { id: true } },
         enderecos: { where: { ativo: true }, orderBy: { criadoEm: "asc" } },
+        // Quem o CRM ligou a esta clínica (ata de 05/10).
+        pessoas: { include: { pessoa: true }, orderBy: { pessoa: { nome: "asc" } } },
       },
     }),
     prisma.servico.findMany({
@@ -58,6 +60,40 @@ export default async function DetalheClinica({ params }: { params: { id: string 
       >
         {clinica.nome}
       </Titulo>
+
+      {clinica.preCadastro && (
+        <Cartao className="mb-3 border-amber-200 bg-amber-50/40">
+          <div className="font-display font-bold text-bordo text-sm mb-1">Pré-cadastro do CRM</div>
+          <div className="text-[11px] text-gray-600 leading-relaxed">
+            Veio do PipeDrive ({clinica.tipoCrm ?? "sem tipo"} · {clinica.negociosFechadosCrm} negócio(s) fechado(s)).
+            Ainda não é cliente ativo: não aparece na agenda, nos pedidos nem nas pesquisas. Complete o cadastro
+            e ative em <Link href="/painel/clinicas?aba=pre" className="font-semibold text-bordo hover:underline">Pré-cadastros</Link>.
+          </div>
+        </Cartao>
+      )}
+
+      {clinica.pessoas.length > 0 && (
+        <Cartao className="mb-3">
+          <div className="font-display font-bold text-bordo text-sm mb-2">
+            Profissionais ligados a esta clínica ({clinica.pessoas.length})
+          </div>
+          <div className="divide-y divide-gray-100">
+            {clinica.pessoas.map(({ pessoa }) => (
+              <div key={pessoa.id} className="py-2 text-xs flex flex-wrap items-baseline justify-between gap-2">
+                <div>
+                  <span className="font-semibold text-gray-800">{pessoa.nome}</span>
+                  <span className="text-gray-500">
+                    {pessoa.telefone ? ` · ${pessoa.telefone}${pessoa.tipoTelefone ? ` (${pessoa.tipoTelefone.toLowerCase()})` : ""}` : " · sem telefone"}
+                    {pessoa.origemCrm ? ` · origem: ${pessoa.origemCrm}` : ""}
+                  </span>
+                  {pessoa.observacoes && <div className="text-[10px] text-amber-700">{pessoa.observacoes}</div>}
+                </div>
+                <div className="text-[10px] text-gray-400">{pessoa.negociosFechados} negócio(s) fechado(s)</div>
+              </div>
+            ))}
+          </div>
+        </Cartao>
+      )}
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
         <div className="space-y-3">

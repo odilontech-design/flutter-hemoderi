@@ -243,11 +243,29 @@ model Clinica {
   autocadastro       Boolean        @default(false)
   cadastroRevisadoEm DateTime?
 
+  /// Pré-cadastro vindo do CRM (PipeDrive, ata de 05/10): a equipe enxerga e
+  /// ativa quando o cliente aparece, mas não há acesso ao portal nem agenda.
+  /// Enquanto for pré-cadastro a clínica fica `ativa = false`, o que a tira de
+  /// todas as listas de operação (agenda, novo pedido, NPS, financeiro) sem
+  /// precisar tocar em cada uma. Ativar limpa a marca e liga a clínica.
+  preCadastro         Boolean @default(false)
+  /// Chave estável do CRM ("org:nome-normalizado"): é o que torna a importação
+  /// repetível sem duplicar. Nulo em quem nunca veio do CRM.
+  idCrm               String? @unique
+  /// Como a base do CRM enxerga o cadastro: clínica, consultório individual
+  /// ou profissional avulso. Só informativo — a equipe decide ao ativar.
+  tipoCrm             String?
+  /// Quantos negócios o PipeDrive tem para este cliente: é o que separa quem
+  /// já comprou de quem nunca fechou, e ordena a fila de ativação.
+  negociosFechadosCrm Int     @default(0)
+  negociosAbertosCrm  Int     @default(0)
+
   ativa        Boolean   @default(true)
   criadaEm     DateTime  @default(now())
   atualizadaEm DateTime  @updatedAt
   desativadaEm DateTime?
 
+  pessoas      VinculoPessoaClinica[]
   usuarios     Usuario[]
   precos       PrecoClinica[]
   /// Tabelas de preço liberadas para esta clínica — uma ou várias.
@@ -262,6 +280,62 @@ model Clinica {
   pesquisasNps PesquisaNps[]
 
   @@index([ativa])
+  @@index([preCadastro])
+}
+
+/// Uma pessoa do CRM — normalmente o dentista ou médico que atende numa ou
+/// mais clínicas. Existe separada da Clinica porque a mesma pessoa pode
+/// aparecer em várias (caso citado na reunião de 05/10) e porque, no primeiro
+/// acesso, o cliente se identifica como pessoa antes de completar o cadastro.
+/// A arquitetura final de pessoas e empresas ainda está em discussão com o
+/// André: este modelo guarda o que o CRM trouxe sem decidir nada por ele.
+model PessoaCliente {
+  id String @id @default(cuid())
+
+  /// "pes:<nome sem título>|<organização>" — a mesma pessoa na mesma
+  /// organização é um registro só, e reimportar não duplica.
+  idCrm String @unique
+
+  nome   String
+  /// Dr., Dra., Prof. — fica separado para o nome poder ser comparado limpo.
+  titulo String?
+
+  telefone     String?
+  /// "Celular" (serve para WhatsApp) ou "Fixo".
+  tipoTelefone String?
+  telefone2    String?
+  email        String?
+
+  /// Preenchidos no primeiro acesso (ata de 05/10): o CRM não traz conselho.
+  conselho         String?
+  registroConselho String?
+
+  origemCrm        String?
+  negociosFechados Int     @default(0)
+  negociosAbertos  Int     @default(0)
+  /// Pontos que a equipe precisa conferir (DDD assumido, mesmo nome em outra
+  /// clínica…).
+  observacoes      String?
+
+  criadaEm     DateTime @default(now())
+  atualizadaEm DateTime @updatedAt
+
+  vinculos VinculoPessoaClinica[]
+}
+
+/// Quem atende em qual clínica. N:N de propósito: a mesma pessoa em mais de
+/// uma clínica é o caso real, não a exceção.
+model VinculoPessoaClinica {
+  id String @id @default(cuid())
+
+  pessoaId String
+  pessoa   PessoaCliente @relation(fields: [pessoaId], references: [id], onDelete: Cascade)
+
+  clinicaId String
+  clinica   Clinica @relation(fields: [clinicaId], references: [id], onDelete: Cascade)
+
+  @@unique([pessoaId, clinicaId])
+  @@index([clinicaId])
 }
 
 /// NPS de baixa frequência (reunião de 14/09): a cada 60 dias, para a
@@ -854,18 +928,18 @@ model Pedido {
 
   /// Valor cobrado da clínica, congelado na criação — pelo mesmo motivo da
   /// duração: reajuste de tabela não reescreve o que já foi combinado.
-  valorServicoCentavos Int @default(0)
+  valorServicoCentavos Int  @default(0)
   /// Valor devido ao profissional, congelado na alocação. Fica no pedido
   /// além de no repasse porque a alocação acontece antes do atendimento e a
   /// equipe precisa saber o custo antes de fechar o mês.
-  valorRepasseCentavos Int @default(0)
+  valorRepasseCentavos Int  @default(0)
   /// Ajuda de custo PREVISTA, definida pela logística ao alocar (ata de
   /// 05/10): o deslocamento depende da distância e do transporte, e a logística
   /// é quem sabe. Chega pré-preenchida no relatório do profissional, que
   /// confirma ou corrige. Nulo = nada combinado. Num agendamento com vários
   /// serviços alocados ao mesmo profissional, vai só no primeiro — o
   /// deslocamento é um só.
-  ajudaCustoCentavos Int?
+  ajudaCustoCentavos   Int?
 
   /// Identificação mínima do paciente, só o necessário para a clínica
   /// reconhecer o atendimento na agenda dela. Dado de saúde não entra aqui:

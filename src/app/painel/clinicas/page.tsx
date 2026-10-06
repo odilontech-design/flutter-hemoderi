@@ -7,11 +7,18 @@ import { AcoesDeAcesso, SituacaoAcesso } from "@/components/AcessoDoCadastro";
 import { alternarClinica } from "@/app/actions/cadastros";
 import { ROTULO_PERFIL_CLIENTE } from "@/lib/visibilidade";
 import { TriagemCadastro } from "./TriagemCadastro";
+import { PreCadastros } from "./PreCadastros";
 
 export const dynamic = "force-dynamic";
 
-export default async function Clinicas() {
-  await exigirInterno();
+export default async function Clinicas({
+  searchParams,
+}: {
+  searchParams: { aba?: string; busca?: string; pagina?: string; clientes?: string };
+}) {
+  const sessao = await exigirInterno();
+  const abaPre = searchParams.aba === "pre";
+  const totalPre = await prisma.clinica.count({ where: { preCadastro: true } });
 
   const [tabelas, pendentes] = await Promise.all([
     prisma.tabelaPreco.findMany({
@@ -38,7 +45,12 @@ export default async function Clinicas() {
     }),
   ]);
 
-  const clinicas = await prisma.clinica.findMany({
+  const clinicas = abaPre
+    ? []
+    : await prisma.clinica.findMany({
+    // Pré-cadastros do CRM têm aba própria: são milhares e não são clientes
+    // ativos ainda.
+    where: { preCadastro: false },
     orderBy: [{ ativa: "desc" }, { nome: "asc" }],
     include: {
       _count: { select: { pedidos: true } },
@@ -66,7 +78,35 @@ export default async function Clinicas() {
         Clínicas contratantes
       </Titulo>
 
-      {pendentes.length > 0 && (
+      <div className="flex flex-wrap items-center gap-2 mb-4">
+        <Link
+          href="/painel/clinicas"
+          className={`text-[11px] font-semibold px-3 py-2.5 sm:py-1.5 rounded-full border ${
+            !abaPre ? "bg-bordo text-white border-bordo" : "bg-white text-gray-600 border-gray-300 hover:bg-gray-50"
+          }`}
+        >
+          Clientes
+        </Link>
+        {(totalPre > 0 || abaPre) && (
+          <Link
+            href="/painel/clinicas?aba=pre"
+            className={`text-[11px] font-semibold px-3 py-2.5 sm:py-1.5 rounded-full border ${
+              abaPre ? "bg-bordo text-white border-bordo" : "bg-white text-gray-600 border-gray-300 hover:bg-gray-50"
+            }`}
+          >
+            Pré-cadastros do CRM · {totalPre}
+          </Link>
+        )}
+        {sessao.perfil === "RESPONSAVEL" && (
+          <Link href="/painel/clinicas/importar-crm" className="ml-auto text-[11px] font-semibold text-bordo hover:underline">
+            Importar base do CRM →
+          </Link>
+        )}
+      </div>
+
+      {abaPre && <PreCadastros busca={searchParams.busca} pagina={searchParams.pagina} soClientes={searchParams.clientes === "1"} />}
+
+      {!abaPre && pendentes.length > 0 && (
         <Cartao className="mb-3 border-amber-200 bg-amber-50/40">
           <div className="font-display font-bold text-bordo text-sm mb-1">
             Cadastros aguardando triagem ({pendentes.length})
@@ -103,7 +143,7 @@ export default async function Clinicas() {
         </Cartao>
       )}
 
-      <Cartao>
+      {!abaPre && <Cartao>
         {clinicas.length === 0 ? (
             <Vazio>Nenhuma clínica cadastrada.</Vazio>
           ) : (
@@ -175,7 +215,7 @@ export default async function Clinicas() {
               ))}
             </Tabela>
           )}
-      </Cartao>
+      </Cartao>}
     </>
   );
 }

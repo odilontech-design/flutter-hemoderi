@@ -90,7 +90,25 @@ export async function alternarClinica(id: string, ativa: boolean): Promise<Resul
   await exigirInterno();
   await prisma.clinica.update({
     where: { id },
-    data: { ativa, desativadaEm: ativa ? null : new Date() },
+    // Ligar uma clínica a tira da condição de pré-cadastro do CRM.
+    data: { ativa, desativadaEm: ativa ? null : new Date(), ...(ativa ? { preCadastro: false } : {}) },
+  });
+  revalidatePath("/painel/clinicas");
+  return { ok: true };
+}
+
+/**
+ * Ativa um pré-cadastro vindo do CRM: a clínica passa a existir de verdade
+ * (agenda, novos pedidos, pesquisas). O acesso ao portal continua sendo gerado
+ * à parte — aqui só se liga o cadastro.
+ */
+export async function ativarPreCadastro(id: string): Promise<Resultado> {
+  await exigirInterno();
+  const clinica = await prisma.clinica.findUnique({ where: { id }, select: { preCadastro: true } });
+  if (!clinica?.preCadastro) return { ok: false, erro: "Este cadastro não é um pré-cadastro." };
+  await prisma.clinica.update({
+    where: { id },
+    data: { preCadastro: false, ativa: true, desativadaEm: null },
   });
   revalidatePath("/painel/clinicas");
   return { ok: true };
