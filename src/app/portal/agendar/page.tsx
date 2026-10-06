@@ -16,7 +16,7 @@ export const dynamic = "force-dynamic";
 export default async function Agendar({ searchParams }: { searchParams: { servico?: string } }) {
   const sessao = await exigirClinica();
 
-  const [clinica, locais, tabelaIds, config] = await Promise.all([
+  const [clinica, locais, tabelaIds, config, doutores] = await Promise.all([
     prisma.clinica.findUnique({
       where: { id: sessao.clinicaId },
       select: { perfis: true, statusCadastro: true, cnpj: true, telefone: true, email: true },
@@ -24,6 +24,12 @@ export default async function Agendar({ searchParams }: { searchParams: { servic
     locaisDaClinica(sessao.clinicaId),
     tabelasDaClinica(prisma, sessao.clinicaId),
     parametros(),
+    // Os doutores cadastrados em Configurações, sugeridos no campo do doutor.
+    prisma.vinculoPessoaClinica.findMany({
+      where: { clinicaId: sessao.clinicaId },
+      orderBy: { pessoa: { nome: "asc" } },
+      select: { pessoa: { select: { nome: true } } },
+    }),
   ]);
 
   // Cadastro incompleto não agenda (ata de 02/10): sem CNPJ, telefone e e-mail
@@ -132,6 +138,7 @@ export default async function Agendar({ searchParams }: { searchParams: { servic
         whatsappCentral={config.whatsapp}
         servicoInicialId={searchParams.servico ?? null}
         telefoneClinica={formatarTelefone(clinica?.telefone ?? "")}
+        doutores={doutores.map((d) => d.pessoa.nome)}
       />
     </>
   );

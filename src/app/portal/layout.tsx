@@ -4,7 +4,13 @@ import { exigirClinica } from "@/lib/sessao";
 import { prisma } from "@/lib/prisma";
 import { BotaoWhatsapp } from "@/components/BotaoWhatsapp";
 import { Aviso } from "@/components/ui";
-import { IconeAgendamentos, IconeCatalogo, IconeClinicas, IconeRelatorios } from "@/components/icones/MenuIcones";
+import {
+  IconeAgendamentos,
+  IconeCatalogo,
+  IconeClinicas,
+  IconeConfiguracoes,
+  IconeRelatorios,
+} from "@/components/icones/MenuIcones";
 
 export const dynamic = "force-dynamic";
 
@@ -16,6 +22,7 @@ const ITENS = [
   { href: "/portal", icone: <IconeAgendamentos />, rotulo: "Meus agendamentos" },
   { href: "/portal/historico", icone: <IconeRelatorios />, rotulo: "Histórico e avaliações" },
   { href: "/portal/enderecos", icone: <IconeClinicas />, rotulo: "Meus endereços" },
+  { href: "/portal/configuracoes", icone: <IconeConfiguracoes />, rotulo: "Configurações" },
 ];
 
 export default async function LayoutPortal({ children }: { children: React.ReactNode }) {

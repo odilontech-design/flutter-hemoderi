@@ -26,6 +26,13 @@ export default async function EditarAgendamentoDoPortal({ params }: { params: { 
   });
   if (!pedido) notFound();
 
+  // Os doutores cadastrados em Configurações, sugeridos no campo do doutor.
+  const doutores = await prisma.vinculoPessoaClinica.findMany({
+    where: { clinicaId: sessao.clinicaId },
+    orderBy: { pessoa: { nome: "asc" } },
+    select: { pessoa: { select: { nome: true } } },
+  });
+
   return (
     <>
       <Titulo
@@ -51,6 +58,7 @@ export default async function EditarAgendamentoDoPortal({ params }: { params: { 
               — a central confirma a nova data de novo.
             </div>
             <EditarAgendamentoPortal
+              doutores={doutores.map((d) => d.pessoa.nome)}
               dados={{
                 id: pedido.id,
                 doutorNome: pedido.doutorNome ?? "",

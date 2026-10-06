@@ -26,7 +26,7 @@ function separarProcedimento(salvo: string): { escolha: string; outro: string } 
   return { escolha: salvo, outro: "" };
 }
 
-export function EditarAgendamentoPortal({ dados }: { dados: Dados }) {
+export function EditarAgendamentoPortal({ dados, doutores = [] }: { dados: Dados; doutores?: string[] }) {
   const router = useRouter();
   const inicial = separarProcedimento(dados.procedimentoPaciente);
   const [procedimento, setProcedimento] = useState(inicial.escolha);
@@ -42,7 +42,12 @@ export function EditarAgendamentoPortal({ dados }: { dados: Dados }) {
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <div>
           <Rotulo>Doutor(a) responsável</Rotulo>
-          <Campo name="doutorNome" required defaultValue={dados.doutorNome} />
+          <Campo name="doutorNome" required defaultValue={dados.doutorNome} list="doutores-da-clinica" autoComplete="off" />
+          <datalist id="doutores-da-clinica">
+            {doutores.map((nome) => (
+              <option key={nome} value={nome} />
+            ))}
+          </datalist>
         </div>
         <div>
           <Rotulo>Contato da clínica para confirmação</Rotulo>

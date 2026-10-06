@@ -8,6 +8,7 @@ import { precosDosServicos, tabelasDaClinica } from "@/lib/preco";
 import { locaisDaClinica } from "@/lib/endereco";
 import { servicoVisivel } from "@/lib/visibilidade";
 import { descricaoDoPreco } from "@/lib/cobranca";
+import { descritivoDaFamilia } from "@/lib/catalogo-familias";
 
 export const dynamic = "force-dynamic";
 
@@ -142,12 +143,26 @@ export default async function CatalogoDaClinica({ searchParams }: { searchParams
           <Vazio>Nenhum serviço disponível no momento para o seu cadastro.</Vazio>
         </Cartao>
       ) : (
-        grupos.map((grupo) => (
+        grupos.map((grupo) => {
+          const descritivo = descritivoDaFamilia(grupo.familia);
+          return (
           // Categorias recolhidas, que abrem ao clicar (ata de 02/10): com doze
           // categorias abertas a página virava uma parede de cartões.
           <details key={grupo.familia} className="group mb-3 bg-white rounded-2xl border border-gray-200 shadow-sm">
             <summary className="flex cursor-pointer select-none items-center justify-between gap-3 px-5 py-4 list-none [&::-webkit-details-marker]:hidden">
-              <span className="min-w-0">
+              {/* A foto da capa da seção no catálogo institucional (pedido de
+                  06/10) acompanha o título: a clínica reconhece o equipamento
+                  antes de ler o nome. */}
+              {descritivo && (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={descritivo.imagem}
+                  alt=""
+                  loading="lazy"
+                  className="h-14 w-14 shrink-0 rounded-xl border border-gray-100 bg-white object-contain"
+                />
+              )}
+              <span className="min-w-0 flex-1">
                 <span className="block font-display font-bold text-bordo text-sm">{grupo.familia}</span>
                 <span className="block text-[10px] text-gray-400 mt-0.5">
                   {grupo.servicos.length} procedimento{grupo.servicos.length === 1 ? "" : "s"}
@@ -157,6 +172,41 @@ export default async function CatalogoDaClinica({ searchParams }: { searchParams
                 ▾
               </span>
             </summary>
+
+            {descritivo && (
+              <div className="px-5 pb-4">
+                <div className="rounded-xl border border-gray-100 bg-bege/60 p-4 flex flex-col md:flex-row gap-4">
+                  <figure className="md:w-56 shrink-0 m-0">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={descritivo.imagem}
+                      alt={descritivo.legenda}
+                      loading="lazy"
+                      className="w-full max-h-64 rounded-lg bg-white object-contain border border-gray-100"
+                    />
+                    <figcaption className="text-[10px] text-gray-500 mt-1.5 leading-snug">{descritivo.legenda}</figcaption>
+                  </figure>
+                  <div className="flex-1 min-w-0 grid grid-cols-1 lg:grid-cols-2 gap-x-6 gap-y-3 content-start">
+                    {descritivo.blocos.map((bloco) => (
+                      <div key={bloco.titulo} className="min-w-0">
+                        <div className="text-[11px] font-semibold text-bordo mb-1">{bloco.titulo}</div>
+                        {bloco.texto && <p className="text-[11px] text-gray-600 leading-relaxed">{bloco.texto}</p>}
+                        {bloco.itens && (
+                          <ul className="text-[11px] text-gray-600 leading-relaxed space-y-0.5 list-disc pl-4">
+                            {bloco.itens.map((item) => (
+                              <li key={item}>{item}</li>
+                            ))}
+                          </ul>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+                {descritivo.observacao && (
+                  <p className="text-[10px] text-gray-400 mt-2 leading-relaxed">{descritivo.observacao}</p>
+                )}
+              </div>
+            )}
 
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 px-5 pb-5">
               {grupo.servicos.map((servico) => {
@@ -228,7 +278,8 @@ export default async function CatalogoDaClinica({ searchParams }: { searchParams
               })}
             </div>
           </details>
-        ))
+          );
+        })
       )}
 
       <div className="text-[10px] text-gray-400 leading-relaxed">

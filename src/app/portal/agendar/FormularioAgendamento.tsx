@@ -66,6 +66,7 @@ export function FormularioAgendamento({
   whatsappCentral,
   servicoInicialId,
   telefoneClinica,
+  doutores,
 }: {
   grupos: Grupo[];
   locais: LocalDeAtendimento[];
@@ -76,6 +77,8 @@ export function FormularioAgendamento({
   servicoInicialId: string | null;
   /** O telefone do cadastro, que já vem preenchido no contato da clínica. */
   telefoneClinica: string;
+  /** Doutores cadastrados na clínica (Configurações): sugeridos no campo do doutor. */
+  doutores: string[];
 }) {
   const router = useRouter();
   const [estado, enviar] = useFormState(solicitarAgendamento, INICIAL);
@@ -565,8 +568,23 @@ export function FormularioAgendamento({
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
                 <Rotulo>Doutor(a) responsável</Rotulo>
-                <Campo name="doutorNome" required value={doutorNome} onChange={(e) => setDoutorNome(e.target.value)} />
-                <div className="text-[10px] text-gray-400 mt-1">É por este nome que a central pergunta.</div>
+                <Campo
+                  name="doutorNome"
+                  required
+                  list="doutores-da-clinica"
+                  autoComplete="off"
+                  value={doutorNome}
+                  onChange={(e) => setDoutorNome(e.target.value)}
+                />
+                <datalist id="doutores-da-clinica">
+                  {doutores.map((nome) => (
+                    <option key={nome} value={nome} />
+                  ))}
+                </datalist>
+                <div className="text-[10px] text-gray-400 mt-1">
+                  É por este nome que a central pergunta.
+                  {doutores.length > 0 ? " Escolha da lista ou digite outro." : " Cadastre os doutores em Configurações."}
+                </div>
               </div>
               <div>
                 <Rotulo>Contato da clínica para confirmação</Rotulo>
