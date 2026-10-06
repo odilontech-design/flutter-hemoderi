@@ -88,7 +88,24 @@ export function lerCsv(texto: string): string[][] {
   }
   linha.push(celula);
   if (linha.some((x) => x !== "")) linhas.push(linha);
-  return linhas;
+  return desembrulharLinhas(linhas);
+}
+
+/**
+ * CSV que passou pelo Excel em português: ele abre o arquivo de vírgulas com
+ * ponto e vírgula como separador, joga cada linha inteira na coluna A e, ao
+ * salvar de novo, embrulha a linha toda numa célula só (aspas dobradas). O
+ * resultado é um arquivo de UMA coluna cujo conteúdo é o CSV original — às
+ * vezes com o primeiro campo sem aspas. Quando é isso, cada célula é lida como
+ * uma linha de CSV de novo. Só vale se o desembrulhado tem mais de uma coluna;
+ * um CSV legítimo de uma coluna fica como está.
+ */
+function desembrulharLinhas(linhas: string[][]): string[][] {
+  if (linhas.length < 2 || !linhas.every((l) => l.length === 1)) return linhas;
+  if (!/[,;\t]/.test(linhas[0][0])) return linhas;
+  const interna = lerCsv(linhas[0][0]);
+  if (interna.length === 0 || interna[0].length < 2) return linhas;
+  return linhas.flatMap((l) => lerCsv(l[0]));
 }
 
 /** Linhas do CSV como objetos, pelo nome (sem acento/caixa) do cabeçalho. */

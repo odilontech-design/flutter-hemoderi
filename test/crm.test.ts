@@ -184,3 +184,21 @@ test("decodificação: UTF-8, Windows-1252 (acento) e UTF-16", () => {
 test("plano: arquivo errado mostra as colunas que o arquivo tem", () => {
   assert.throws(() => montarPlanoCrm(ORG, "Nome;Telefone\nAna;1"), /Colunas encontradas: Nome \| Telefone/);
 });
+
+test("csv: arquivo que passou pelo Excel (linha inteira numa célula só) é desembrulhado", () => {
+  // O Excel em português consome o 1º par de aspas, joga a linha na coluna A e embrulha ao salvar.
+  const excel = (t: string) =>
+    t
+      .split("\n")
+      .filter(Boolean)
+      .map((l) => '"' + l.replace(/^"([^"]*)"/, "$1").replace(/"/g, '""') + '"')
+      .join("\r\n");
+  assert.deepEqual(lerCsv(excel('"a","b","c"\n"1","","3"')), [["a", "b", "c"], ["1", "", "3"]]);
+  assert.deepEqual(montarPlanoCrm(ORG, excel(PES)).resumo, montarPlanoCrm(ORG, PES).resumo);
+  assert.deepEqual(montarPlanoCrm(excel(ORG), excel(PES)).resumo, montarPlanoCrm(ORG, PES).resumo);
+});
+
+test("csv: arquivo legítimo de uma coluna não é desembrulhado", () => {
+  assert.deepEqual(lerCsv("nome\nAna\nBruno"), [["nome"], ["Ana"], ["Bruno"]]);
+  assert.deepEqual(lerCsv('nome\n"Silva, Ana"\nBruno'), [["nome"], ["Silva, Ana"], ["Bruno"]]);
+});
