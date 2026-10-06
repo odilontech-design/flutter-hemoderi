@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import {
   ArquivoCrmInvalido,
   chave,
+  decodificarCsv,
   lerCsv,
   lerEndereco,
   lerTelefones,
@@ -157,4 +158,29 @@ test("plano: toda pessoa aponta para uma clínica que existe, e organização se
   const sozinha = plano.clinicas.find((c) => c.nome === "Organização Sem Pessoa")!;
   assert.ok(sozinha.avisos.some((a) => a.includes("nenhuma pessoa")));
   assert.equal(plano.resumo.clinicasSemProfissional, 1);
+});
+
+test("csv: ponto e vírgula (Excel em português) e tabulação são detectados", () => {
+  assert.deepEqual(lerCsv('"a";"b, c";"d"\n1;2;3'), [["a", "b, c", "d"], ["1", "2", "3"]]);
+  assert.deepEqual(lerCsv("a\tb\n1\t2"), [["a", "b"], ["1", "2"]]);
+  // vírgula dentro de aspas não decide o separador
+  assert.deepEqual(lerCsv('"a, b";"c"\n1;2'), [["a, b", "c"], ["1", "2"]]);
+});
+
+test("plano: o CSV de pessoas salvo com ponto e vírgula importa igual", () => {
+  const comPontoEVirgula = PES.replace(/","/g, '";"');
+  assert.deepEqual(montarPlanoCrm(ORG, comPontoEVirgula).resumo, montarPlanoCrm(ORG, PES).resumo);
+});
+
+test("decodificação: UTF-8, Windows-1252 (acento) e UTF-16", () => {
+  const texto = "Organização - Nome;Endereço";
+  assert.equal(decodificarCsv(new TextEncoder().encode(texto).buffer as ArrayBuffer), texto);
+  const cp1252 = Uint8Array.from(Buffer.from(texto, "latin1"));
+  assert.equal(decodificarCsv(cp1252.buffer as ArrayBuffer), texto);
+  const utf16 = Buffer.concat([Buffer.from([0xff, 0xfe]), Buffer.from(texto, "utf16le")]);
+  assert.equal(decodificarCsv(Uint8Array.from(utf16).buffer as ArrayBuffer), texto);
+});
+
+test("plano: arquivo errado mostra as colunas que o arquivo tem", () => {
+  assert.throws(() => montarPlanoCrm(ORG, "Nome;Telefone\nAna;1"), /Colunas encontradas: Nome \| Telefone/);
 });

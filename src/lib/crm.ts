@@ -15,15 +15,53 @@
 // ─── CSV ────────────────────────────────────────────────────────────────────
 
 /**
- * CSV com aspas: campo pode ter vírgula, aspas duplas ("") e quebra de linha
- * dentro. Aceita BOM e CRLF. Devolve linhas de células cruas.
+ * O separador do CSV, pela primeira linha (fora de aspas): vírgula é o que o
+ * PipeDrive exporta, mas o Excel em português grava ponto e vírgula quando o
+ * arquivo é aberto e salvo de novo, e quem cola de planilha traz tabulação.
+ */
+function detectarSeparador(texto: string): string {
+  const contagem: Record<string, number> = { ",": 0, ";": 0, "\t": 0 };
+  let dentroDeAspas = false;
+  for (const c of texto) {
+    if (c === '"') dentroDeAspas = !dentroDeAspas;
+    else if (!dentroDeAspas) {
+      if (c === "\n" || c === "\r") break;
+      if (c in contagem) contagem[c]++;
+    }
+  }
+  return Object.entries(contagem).sort((x, y) => y[1] - x[1])[0][1] > 0
+    ? Object.entries(contagem).sort((x, y) => y[1] - x[1])[0][0]
+    : ",";
+}
+
+/**
+ * Bytes do arquivo para texto. UTF-8 é o normal; o Excel antigo grava em
+ * Windows-1252 (acento vira lixo se lido como UTF-8) e alguns "Unicode" são
+ * UTF-16. Tenta nessa ordem, em vez de pedir ao usuário que saiba a diferença.
+ */
+export function decodificarCsv(bytes: ArrayBuffer): string {
+  const u = new Uint8Array(bytes);
+  if (u.length >= 2 && u[0] === 0xff && u[1] === 0xfe) return new TextDecoder("utf-16le").decode(u);
+  if (u.length >= 2 && u[0] === 0xfe && u[1] === 0xff) return new TextDecoder("utf-16be").decode(u);
+  try {
+    return new TextDecoder("utf-8", { fatal: true }).decode(u);
+  } catch {
+    return new TextDecoder("windows-1252").decode(u);
+  }
+}
+
+/**
+ * CSV com aspas: campo pode ter o separador, aspas duplas ("") e quebra de
+ * linha dentro. Aceita BOM, CRLF e os separadores vírgula, ponto e vírgula e
+ * tabulação (detectado). Devolve linhas de células cruas.
  */
 export function lerCsv(texto: string): string[][] {
   const linhas: string[][] = [];
   let celula = "";
   let linha: string[] = [];
   let dentroDeAspas = false;
-  const t = texto.replace(/^﻿/, "");
+  const t = texto.replace(/^\uFEFF/, "");
+  const separador = detectarSeparador(t);
 
   for (let i = 0; i < t.length; i++) {
     const c = t[i];
@@ -37,7 +75,7 @@ export function lerCsv(texto: string): string[][] {
       continue;
     }
     if (c === '"') dentroDeAspas = true;
-    else if (c === ",") {
+    else if (c === separador) {
       linha.push(celula);
       celula = "";
     } else if (c === "\n" || c === "\r") {
@@ -54,16 +92,17 @@ export function lerCsv(texto: string): string[][] {
 }
 
 /** Linhas do CSV como objetos, pelo nome (sem acento/caixa) do cabeçalho. */
-function comoRegistros(texto: string): { registros: Record<string, string>[]; cabecalhos: string[] } {
+function comoRegistros(texto: string): { registros: Record<string, string>[]; cabecalhos: string[]; originais: string[] } {
   const linhas = lerCsv(texto);
-  if (linhas.length === 0) return { registros: [], cabecalhos: [] };
+  if (linhas.length === 0) return { registros: [], cabecalhos: [], originais: [] };
+  const originais = linhas[0].map((h) => h.trim());
   const cabecalhos = linhas[0].map((h) => chave(h));
   const registros = linhas.slice(1).map((l) => {
     const r: Record<string, string> = {};
     cabecalhos.forEach((h, i) => (r[h] = (l[i] ?? "").trim()));
     return r;
   });
-  return { registros, cabecalhos };
+  return { registros, cabecalhos, originais };
 }
 
 // ─── Normalização ───────────────────────────────────────────────────────────
@@ -292,14 +331,18 @@ export function montarPlanoCrm(csvOrganizacoes: string, csvPessoas: string): Pla
   const o = comoRegistros(csvOrganizacoes);
   const p = comoRegistros(csvPessoas);
 
-  const exigir = (cabecalhos: string[], coluna: string, arquivo: string) => {
-    if (!cabecalhos.includes(chave(coluna))) {
-      throw new ArquivoCrmInvalido(`${arquivo}: falta a coluna "${coluna}". É a exportação de ${arquivo.toLowerCase()} do PipeDrive?`);
+  const exigir = (leitura: { cabecalhos: string[]; originais: string[] }, coluna: string, arquivo: string) => {
+    if (!leitura.cabecalhos.includes(chave(coluna))) {
+      const achadas = leitura.originais.slice(0, 4).join(" | ");
+      throw new ArquivoCrmInvalido(
+        `${arquivo}: falta a coluna "${coluna}". É a exportação de ${arquivo.toLowerCase()} do PipeDrive?` +
+          (achadas ? ` Colunas encontradas: ${achadas}…` : " O arquivo está vazio.")
+      );
     }
   };
-  exigir(o.cabecalhos, "Organização - Nome", "Organizações");
-  exigir(p.cabecalhos, "Pessoa - Nome", "Pessoas");
-  exigir(p.cabecalhos, "Pessoa - Organização", "Pessoas");
+  exigir(o, "Organização - Nome", "Organizações");
+  exigir(p, "Pessoa - Nome", "Pessoas");
+  exigir(p, "Pessoa - Organização", "Pessoas");
 
   // Organizações: mesmo nome normalizado = uma clínica só (negócios somados).
   type OrgBruta = { nome: string; endereco: string; fechados: number; abertos: number; cadastros: number };

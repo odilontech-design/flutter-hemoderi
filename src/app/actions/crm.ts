@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { exigirResponsavel, registrarAuditoria } from "@/lib/sessao";
-import { ArquivoCrmInvalido, montarPlanoCrm, type EstadoImportacaoCrm } from "@/lib/crm";
+import { ArquivoCrmInvalido, decodificarCsv, montarPlanoCrm, type EstadoImportacaoCrm } from "@/lib/crm";
 import { executarPlanoCrm } from "@/lib/crm-importacao";
 
 const LIMITE_ARQUIVO_BYTES = 3 * 1024 * 1024;
@@ -11,7 +11,7 @@ const LIMITE_ARQUIVO_BYTES = 3 * 1024 * 1024;
 async function lerArquivo(valor: FormDataEntryValue | null, nome: string): Promise<string | { erro: string }> {
   if (!(valor instanceof File) || valor.size === 0) return { erro: `Escolha o arquivo de ${nome}.` };
   if (valor.size > LIMITE_ARQUIVO_BYTES) return { erro: `O arquivo de ${nome} passou de 3 MB.` };
-  return valor.text();
+  return decodificarCsv(await valor.arrayBuffer());
 }
 
 /**
