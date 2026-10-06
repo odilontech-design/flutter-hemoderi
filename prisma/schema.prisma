@@ -859,6 +859,13 @@ model Pedido {
   /// além de no repasse porque a alocação acontece antes do atendimento e a
   /// equipe precisa saber o custo antes de fechar o mês.
   valorRepasseCentavos Int @default(0)
+  /// Ajuda de custo PREVISTA, definida pela logística ao alocar (ata de
+  /// 05/10): o deslocamento depende da distância e do transporte, e a logística
+  /// é quem sabe. Chega pré-preenchida no relatório do profissional, que
+  /// confirma ou corrige. Nulo = nada combinado. Num agendamento com vários
+  /// serviços alocados ao mesmo profissional, vai só no primeiro — o
+  /// deslocamento é um só.
+  ajudaCustoCentavos Int?
 
   /// Identificação mínima do paciente, só o necessário para a clínica
   /// reconhecer o atendimento na agenda dela. Dado de saúde não entra aqui:

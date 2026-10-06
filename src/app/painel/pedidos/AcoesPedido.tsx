@@ -8,6 +8,7 @@ import {
   alocarPedido,
   cancelarPedido,
   confirmarPedido,
+  definirAjudaDeCusto,
   desalocarPedido,
   marcarResultadoInterno,
   reagendarPedidoInterno,
@@ -101,6 +102,63 @@ export function AcaoComMotivo({
 }
 
 /**
+ * Ajuda de custo prevista (ata de 05/10): a logística é quem sabe a distância e
+ * o transporte, então o valor nasce aqui, na alocação, e chega pré-preenchido no
+ * relatório do profissional. Opcional — vazio é "nada combinado".
+ */
+export function CampoAjudaDeCusto({
+  valor,
+  onChange,
+  className = "",
+}: {
+  valor: string;
+  onChange: (valor: string) => void;
+  className?: string;
+}) {
+  return (
+    <Campo
+      aria-label="Ajuda de custo prevista (R$)"
+      title="Ajuda de custo prevista (opcional)"
+      inputMode="decimal"
+      placeholder="Ajuda de custo R$"
+      value={valor}
+      onChange={(e) => onChange(e.target.value)}
+      className={`!w-32 !py-1.5 text-xs ${className}`}
+    />
+  );
+}
+
+/**
+ * Ajuda de custo de um atendimento já alocado: corrige sem derrubar o aceite.
+ * Autônomo (faz a própria chamada) para servir tanto ao cartão do pedido quanto
+ * à linha de cada serviço dentro do cartão de um agendamento com vários.
+ */
+export function EditarAjudaDeCusto({ pedidoId, inicial }: { pedidoId: string; inicial: number | null }) {
+  const [valor, setValor] = useState(inicial != null ? (inicial / 100).toFixed(2).replace(".", ",") : "");
+  const [pendente, iniciar] = useTransition();
+  const [erro, setErro] = useState<string | null>(null);
+  return (
+    <div className="flex flex-wrap items-center gap-1.5">
+      <CampoAjudaDeCusto valor={valor} onChange={setValor} />
+      <Botao
+        variante="secundario"
+        disabled={pendente}
+        onClick={() => {
+          setErro(null);
+          iniciar(async () => {
+            const resultado = await definirAjudaDeCusto(pedidoId, valor);
+            if (!resultado.ok) setErro(resultado.erro ?? "Não foi possível salvar.");
+          });
+        }}
+      >
+        Salvar ajuda
+      </Botao>
+      {erro && <span className="text-[11px] text-red-600">{erro}</span>}
+    </div>
+  );
+}
+
+/**
  * Nova data e horário antes de reagendar — sem checar disponibilidade no
  * navegador (a `reagendarPedidoInterno` já confere e recusa com o motivo, o
  * mesmo caminho que o "Novo agendamento" interno usa). Fecha sem confirmar,
@@ -173,6 +231,7 @@ export function AcoesPedido({
   perfil,
   profissionais,
   profissionalSolicitadoId,
+  ajudaCustoCentavos = null,
 }: {
   pedidoId: string;
   status: StatusPedido;
@@ -180,12 +239,15 @@ export function AcoesPedido({
   profissionais: { id: string; nome: string }[];
   /** Quem a clínica pediu no portal, quando pediu alguém. */
   profissionalSolicitadoId?: string | null;
+  /** Ajuda de custo prevista já definida na alocação. */
+  ajudaCustoCentavos?: number | null;
 }) {
   const [pendente, iniciar] = useTransition();
   const [mensagem, setMensagem] = useState<{ texto: string; erro: boolean } | null>(null);
   // Já vem preenchido com quem a clínica pediu: confirmar o que foi pedido é
   // o caso comum, e obrigar a reencontrar o nome na lista é atrito à toa.
   const [profissionalId, setProfissionalId] = useState(profissionalSolicitadoId ?? "");
+  const [ajudaCusto, setAjudaCusto] = useState("");
 
   function executar(acao: () => Promise<{ ok: boolean; erro?: string; avisos?: string[] }>) {
     setMensagem(null);
@@ -232,9 +294,10 @@ export function AcoesPedido({
               </option>
             ))}
           </Selecao>
+          <CampoAjudaDeCusto valor={ajudaCusto} onChange={setAjudaCusto} />
           <Botao
             disabled={pendente || !profissionalId}
-            onClick={() => executar(() => alocarPedido(pedidoId, profissionalId))}
+            onClick={() => executar(() => alocarPedido(pedidoId, profissionalId, ajudaCusto))}
           >
             Alocar
           </Botao>
@@ -253,6 +316,9 @@ export function AcoesPedido({
           >
             Registrar falta
           </Botao>
+          {podeAlocar && (
+            <EditarAjudaDeCusto pedidoId={pedidoId} inicial={ajudaCustoCentavos} />
+          )}
           {podeAlocar && (
             <AcaoComMotivo
               rotulo="Desalocar"

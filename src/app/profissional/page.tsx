@@ -48,6 +48,11 @@ function linkCalendarioDoPedido(pedido: PedidoParaCalendario, revelado: boolean)
 
 export const dynamic = "force-dynamic";
 
+/** "· ajuda de custo R$ 150,00" quando a logística combinou uma na alocação. */
+function ajudaDeCusto(centavos: number | null) {
+  return centavos != null ? ` · ajuda de custo ${formatarReais(centavos)}` : "";
+}
+
 /**
  * A agenda do profissional, em quatro blocos que não se sobrepõem: o que
  * espera resposta, o que é hoje, o que ficou para trás sem relatório e o que
@@ -146,6 +151,7 @@ export default async function MinhaAgenda() {
                     <span className="italic text-gray-400">{LOCAL_FECHADO}</span>
                   )}{" "}
                   · valor do profissional: {formatarReais(pedido.valorRepasseCentavos)}
+                  {ajudaDeCusto(pedido.ajudaCustoCentavos)}
                 </div>
                 {/* A cidade aparece já no aceite (ata de 02/10): aceitar às cegas
                     inviabiliza planejar o dia quando há compromissos em lugares
@@ -189,6 +195,7 @@ export default async function MinhaAgenda() {
                 </div>
                 <div className="text-[11px] text-gray-500 mb-2">
                   {pedido.servico.nome} · valor do profissional: {formatarReais(pedido.valorRepasseCentavos)}
+                  {ajudaDeCusto(pedido.ajudaCustoCentavos)}
                 </div>
                 <div className="flex flex-wrap items-center gap-2">
                   {pedido.checkinEm ? (
@@ -310,6 +317,7 @@ export default async function MinhaAgenda() {
                             <span className="italic text-gray-400">{LOCAL_FECHADO}</span>
                           )}{" "}
                           · valor do profissional: {formatarReais(pedido.valorRepasseCentavos)}
+                          {ajudaDeCusto(pedido.ajudaCustoCentavos)}
                           {!pedido.aceitoEm && <span className="ml-1 font-semibold text-amber-700">· aguardando seu aceite</span>}
                         </div>
                       </div>

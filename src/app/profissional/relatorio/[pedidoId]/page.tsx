@@ -90,7 +90,12 @@ export default async function Relatorio({ params }: { params: { pedidoId: string
     oxidoNitroso: r?.oxidoNitroso ?? "",
     oxigenio: r?.oxigenio ?? "",
     servicosAdicionais: r?.servicosAdicionais ?? "",
-    ajudaCusto: r?.ajudaCustoCentavos != null ? (r.ajudaCustoCentavos / 100).toFixed(2).replace(".", ",") : "",
+    // Primeira vez: já vem a ajuda de custo que a logística combinou na
+    // alocação (ata de 05/10). Relatório já enviado mostra o que foi declarado.
+    ajudaCusto: (() => {
+      const centavos = r ? r.ajudaCustoCentavos : pedido.ajudaCustoCentavos;
+      return centavos != null ? (centavos / 100).toFixed(2).replace(".", ",") : "";
+    })(),
     ajudaCustoJustificativa: r?.ajudaCustoJustificativa ?? "",
     recebimento: r?.recebimento ?? "",
     formaRecebimento: r?.formaRecebimento ?? "",
@@ -118,6 +123,11 @@ export default async function Relatorio({ params }: { params: { pedidoId: string
           <div className="text-xs text-gray-500">
             Valor do profissional: <strong>{formatarReais(pedido.valorRepasseCentavos)}</strong>
           </div>
+          {pedido.ajudaCustoCentavos != null && (
+            <div className="text-xs text-gray-500">
+              Ajuda de custo prevista pela logística: <strong>{formatarReais(pedido.ajudaCustoCentavos)}</strong>
+            </div>
+          )}
         </div>
         {pedido.relatorio?.devolvidoEm && !pedido.relatorio.aprovadoEm && (
           <div className="mb-4">

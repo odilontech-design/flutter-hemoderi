@@ -32,6 +32,7 @@ import { condicaoValida, formaDePagamentoValida } from "@/lib/pagamento";
 import { procedimentoEscolhido } from "@/lib/procedimentos";
 import { camposFaltando } from "@/lib/cadastro-completo";
 import { aptoParaServico } from "@/lib/aptidao";
+import { ajudaCustoEmCentavos } from "@/lib/relatorio";
 import { perfilPermite } from "@/lib/papeis";
 import { formatarReais, lerCentavos } from "@/lib/dinheiro";
 import { precoDoServico, tabelasDaClinica } from "@/lib/preco";
@@ -506,7 +507,12 @@ const SELECAO_PARA_ALOCAR = {
  * `alocarPedido` roda sozinho e o que `alocarGrupo` roda para cada serviço do
  * agendamento, todos na mesma transação (ou aloca tudo, ou nada).
  */
-async function alocarNaTransacao(tx: Prisma.TransactionClient, pedido: PedidoParaAlocar, profissionalId: string) {
+async function alocarNaTransacao(
+  tx: Prisma.TransactionClient,
+  pedido: PedidoParaAlocar,
+  profissionalId: string,
+  ajudaCustoCentavos: number | null = null
+) {
   // Só aloca quem está apto ao serviço (ata de 02/10). A lista da esteira já
   // filtra, mas o servidor não confia no que o navegador mostrou.
   const profissional = await tx.profissional.findUnique({
@@ -568,6 +574,7 @@ async function alocarNaTransacao(tx: Prisma.TransactionClient, pedido: PedidoPar
       equipamentoId,
       status: "ALOCADO",
       valorRepasseCentavos: repasse.valorCentavos,
+      ajudaCustoCentavos,
     },
   });
 
@@ -585,11 +592,24 @@ async function aposAlocar(usuarioId: string, pedidoId: string, repasseOrigem: st
   await sincronizarEvento(pedidoId);
 }
 
-export async function alocarPedido(pedidoId: string, profissionalId: string): Promise<Resultado> {
+/**
+ * A ajuda de custo digitada pela logística ("150", "150,50"). Vazio é nenhuma
+ * ajuda combinada; texto que não vira dinheiro é erro de digitação e não pode
+ * virar zero em silêncio.
+ */
+function lerAjudaDeCusto(texto: string | undefined): { ok: true; centavos: number | null } | { ok: false; erro: string } {
+  const centavos = ajudaCustoEmCentavos(texto ?? "");
+  if (centavos === undefined) return { ok: false, erro: "Ajuda de custo: use só números, como 150,00." };
+  return { ok: true, centavos };
+}
+
+export async function alocarPedido(pedidoId: string, profissionalId: string, ajudaCusto?: string): Promise<Resultado> {
   const sessao = await exigirInterno();
   if (!perfilPermite(sessao.perfil, "LOGISTICA")) {
     return { ok: false, erro: "Só a logística aloca profissionais." };
   }
+  const ajuda = lerAjudaDeCusto(ajudaCusto);
+  if (!ajuda.ok) return ajuda;
 
   const pedido = await prisma.pedido.findUnique({ where: { id: pedidoId }, include: SELECAO_PARA_ALOCAR });
   if (!pedido) return { ok: false, erro: "Pedido não encontrado." };
@@ -597,12 +617,47 @@ export async function alocarPedido(pedidoId: string, profissionalId: string): Pr
     return { ok: false, erro: "Só é possível alocar um pedido confirmado." };
   }
 
-  const resultado = await prisma.$transaction((tx) => alocarNaTransacao(tx, pedido, profissionalId));
+  const resultado = await prisma.$transaction((tx) => alocarNaTransacao(tx, pedido, profissionalId, ajuda.centavos));
   if (!resultado.ok) return resultado;
 
   await aposAlocar(sessao.usuarioId, pedido.id, resultado.repasseOrigem);
   atualizarTelas();
   return { ok: true, avisos: resultado.avisos };
+}
+
+/**
+ * Corrige a ajuda de custo prevista de um atendimento já alocado (ata de
+ * 05/10) — a distância muda, o transporte muda, e desalocar só para isso
+ * derrubaria o aceite do profissional. Antes do relatório: depois dele, o que
+ * vale é o que o profissional declarou e a central conferiu.
+ */
+export async function definirAjudaDeCusto(pedidoId: string, ajudaCusto: string): Promise<Resultado> {
+  const sessao = await exigirInterno();
+  if (!perfilPermite(sessao.perfil, "LOGISTICA")) {
+    return { ok: false, erro: "Só a logística define a ajuda de custo." };
+  }
+  const ajuda = lerAjudaDeCusto(ajudaCusto);
+  if (!ajuda.ok) return ajuda;
+
+  const pedido = await prisma.pedido.findUnique({
+    where: { id: pedidoId },
+    select: { status: true, relatorio: { select: { id: true } } },
+  });
+  if (!pedido) return { ok: false, erro: "Pedido não encontrado." };
+  if (pedido.status !== "ALOCADO" || pedido.relatorio) {
+    return { ok: false, erro: "A ajuda de custo só muda enquanto o atendimento está alocado e sem relatório." };
+  }
+
+  await prisma.pedido.update({ where: { id: pedidoId }, data: { ajudaCustoCentavos: ajuda.centavos } });
+  await registrarAuditoria(
+    sessao.usuarioId,
+    "Pedido",
+    pedidoId,
+    "ajuda-de-custo",
+    ajuda.centavos == null ? "removida" : `R$ ${(ajuda.centavos / 100).toFixed(2)}`
+  );
+  atualizarTelas();
+  return { ok: true };
 }
 
 class ErroDoGrupo extends Error {}
@@ -614,12 +669,14 @@ class ErroDoGrupo extends Error {}
  * logística e deixava a visita pela metade quando o segundo esbarrava em algo.
  * Numa transação só: se um serviço não puder ser alocado, nenhum é.
  */
-export async function alocarGrupo(grupoId: string, profissionalId: string): Promise<Resultado> {
+export async function alocarGrupo(grupoId: string, profissionalId: string, ajudaCusto?: string): Promise<Resultado> {
   const sessao = await exigirInterno();
   if (!perfilPermite(sessao.perfil, "LOGISTICA")) {
     return { ok: false, erro: "Só a logística aloca profissionais." };
   }
   if (!profissionalId) return { ok: false, erro: "Escolha o profissional." };
+  const ajuda = lerAjudaDeCusto(ajudaCusto);
+  if (!ajuda.ok) return ajuda;
 
   const pedidos = await prisma.pedido.findMany({
     where: { grupoId, status: "CONFIRMADO" },
@@ -633,8 +690,78 @@ export async function alocarGrupo(grupoId: string, profissionalId: string): Prom
     resultados = await prisma.$transaction(
       async (tx) => {
         const feitos = [];
+        for (const [posicao, pedido] of pedidos.entries()) {
+          // O deslocamento é um só para a visita: a ajuda de custo vai no
+          // primeiro serviço, não repetida em cada um.
+          const r = await alocarNaTransacao(tx, pedido, profissionalId, posicao === 0 ? ajuda.centavos : null);
+          if (!r.ok) throw new ErroDoGrupo(`Pedido nº ${pedido.numero}: ${r.erro}`);
+          feitos.push({ pedido, ...r });
+        }
+        return feitos;
+      },
+      { timeout: 30_000 }
+    );
+  } catch (erro) {
+    if (erro instanceof ErroDoGrupo) return { ok: false, erro: erro.message };
+    throw erro;
+  }
+
+  for (const r of resultados) await aposAlocar(sessao.usuarioId, r.pedido.id, r.repasseOrigem);
+  atualizarTelas();
+  return { ok: true, avisos: resultados.flatMap((r) => r.avisos) };
+}
+
+export type AtribuicaoDeServico = { pedidoId: string; profissionalId: string; ajudaCusto?: string };
+
+/**
+ * Aloca CADA serviço confirmado do agendamento a um profissional diferente (ata
+ * de 05/10): numa visita com mais de um serviço, quem faz o AirFlow nem sempre é
+ * quem faz a frenectomia. Mesma regra do alocarGrupo — numa transação só, ou
+ * aloca tudo ou nada —, mas com o profissional e a ajuda de custo escolhidos por
+ * serviço. Serviço que não está na lista fica como está (confirmado, esperando).
+ */
+export async function alocarServicos(grupoId: string, atribuicoes: AtribuicaoDeServico[]): Promise<Resultado> {
+  const sessao = await exigirInterno();
+  if (!perfilPermite(sessao.perfil, "LOGISTICA")) {
+    return { ok: false, erro: "Só a logística aloca profissionais." };
+  }
+  if (atribuicoes.length === 0) return { ok: false, erro: "Escolha o profissional de ao menos um serviço." };
+  if (new Set(atribuicoes.map((a) => a.pedidoId)).size !== atribuicoes.length) {
+    return { ok: false, erro: "O mesmo serviço apareceu duas vezes na alocação." };
+  }
+
+  const ajudas = new Map<string, number | null>();
+  for (const a of atribuicoes) {
+    if (!a.profissionalId) return { ok: false, erro: "Escolha o profissional de cada serviço da lista." };
+    const ajuda = lerAjudaDeCusto(a.ajudaCusto);
+    if (!ajuda.ok) return ajuda;
+    ajudas.set(a.pedidoId, ajuda.centavos);
+  }
+
+  // O servidor não confia na lista do navegador: só entram serviços CONFIRMADOS
+  // deste agendamento.
+  const pedidos = await prisma.pedido.findMany({
+    where: { grupoId, status: "CONFIRMADO", id: { in: atribuicoes.map((a) => a.pedidoId) } },
+    orderBy: [{ data: "asc" }, { horaInicio: "asc" }],
+    include: SELECAO_PARA_ALOCAR,
+  });
+  if (pedidos.length !== atribuicoes.length) {
+    return { ok: false, erro: "Algum serviço não está mais confirmado neste agendamento. Recarregue a página." };
+  }
+  const profissionalDe = new Map(atribuicoes.map((a) => [a.pedidoId, a.profissionalId]));
+
+  let resultados;
+  try {
+    resultados = await prisma.$transaction(
+      async (tx) => {
+        const feitos = [];
         for (const pedido of pedidos) {
-          const r = await alocarNaTransacao(tx, pedido, profissionalId);
+          const r = await alocarNaTransacao(
+            tx,
+            pedido,
+            profissionalDe.get(pedido.id) as string,
+            ajudas.get(pedido.id) ?? null
+          );
           if (!r.ok) throw new ErroDoGrupo(`Pedido nº ${pedido.numero}: ${r.erro}`);
           feitos.push({ pedido, ...r });
         }
@@ -709,7 +836,7 @@ export async function desalocarPedido(pedidoId: string, motivo: string): Promise
       where: { id: pedidoId },
       // aceitoEm volta a nulo: o próximo profissional tem de confirmar de
       // novo, e não herdar o "sim" de quem saiu do caso.
-      data: { profissionalId: null, equipamentoId: null, valorRepasseCentavos: 0, aceitoEm: null },
+      data: { profissionalId: null, equipamentoId: null, valorRepasseCentavos: 0, ajudaCustoCentavos: null, aceitoEm: null },
     });
     // A mensagem de alocação é apagada para que o próximo profissional
     // alocado receba a dele — a unicidade é por pedido × tipo.

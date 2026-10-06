@@ -14,7 +14,7 @@ import { etapaDoPerfil, etapasDoPerfil } from "@/lib/esteira";
 import { formatarAtraso, houveAtraso, minutosDeAtraso } from "@/lib/atraso";
 import { linkWhatsapp, mensagemDeFeedback } from "@/lib/whatsapp-link";
 import { profissionaisIndisponiveis } from "@/lib/alocacao";
-import { AcoesPedido } from "./AcoesPedido";
+import { AcoesPedido, EditarAjudaDeCusto } from "./AcoesPedido";
 import { CondicaoPagamento } from "./CondicaoPagamento";
 import { ConferenciaRelatorio } from "./ConferenciaRelatorio";
 import { FiltroPagamento } from "./FiltroPagamento";
@@ -186,6 +186,24 @@ export default async function Esteira({
                         )
                     )
                     .map(({ id, nome }) => ({ id, nome }))}
+                  // Para "um profissional por serviço" (ata de 05/10): cada
+                  // serviço com os que estão aptos a ele e livres no horário dele.
+                  profissionaisPorServico={Object.fromEntries(
+                    membros
+                      .filter((m) => m.status === "CONFIRMADO")
+                      .map((m) => [
+                        m.id,
+                        profissionais
+                          .filter(
+                            (prof) =>
+                              aptoParaServico(
+                                prof.servicosAptos.map((x) => x.id),
+                                m.servicoId
+                              ) && !indisponiveisPorPedido.get(m.id)?.has(prof.id)
+                          )
+                          .map(({ id, nome }) => ({ id, nome })),
+                      ])
+                  )}
                 />
               );
             }
@@ -412,6 +430,11 @@ export default async function Esteira({
                       repasse {formatarReais(pedido.valorRepasseCentavos)}
                     </div>
                   )}
+                  {pedido.ajudaCustoCentavos != null && (
+                    <div className="text-[10px] text-gray-400">
+                      ajuda de custo {formatarReais(pedido.ajudaCustoCentavos)}
+                    </div>
+                  )}
                 </div>
               </div>
 
@@ -431,6 +454,7 @@ export default async function Esteira({
                   })
                   .map(({ id, nome }) => ({ id, nome }))}
                 profissionalSolicitadoId={pedido.profissionalId}
+                ajudaCustoCentavos={pedido.ajudaCustoCentavos}
               />
             </Cartao>
             );
@@ -463,6 +487,7 @@ type PedidoDaEsteira = {
   pacienteNome: string | null;
   observacoes: string | null;
   aceitoEm: Date | null;
+  ajudaCustoCentavos: number | null;
   formaPagamento: string | null;
   procedimentoPaciente: string | null;
   clinica: { nome: string };
@@ -481,11 +506,13 @@ function CartaoDoGrupo({
   perfil,
   podeEditarValor,
   profissionais,
+  profissionaisPorServico,
 }: {
   membros: PedidoDaEsteira[];
   perfil: PerfilInterno;
   podeEditarValor: boolean;
   profissionais: { id: string; nome: string }[];
+  profissionaisPorServico: Record<string, { id: string; nome: string }[]>;
 }) {
   const primeiro = membros[0];
   const total = membros.reduce((soma, m) => soma + m.valorServicoCentavos, 0);
@@ -549,6 +576,13 @@ function CartaoDoGrupo({
               </div>
             </div>
             <SeloStatus status={m.status} />
+            {m.status === "ALOCADO" && perfilPermite(perfil, "LOGISTICA") ? (
+              <EditarAjudaDeCusto pedidoId={m.id} inicial={m.ajudaCustoCentavos} />
+            ) : (
+              m.ajudaCustoCentavos != null && (
+                <span className="text-[10px] text-gray-400">ajuda de custo {formatarReais(m.ajudaCustoCentavos)}</span>
+              )
+            )}
             <CondicaoPagamento pedidoId={m.id} atual={m.condicaoPagamento} />
             {podeEditarValor ? (
               <ValorServico pedidoId={m.id} valorCentavos={m.valorServicoCentavos} />
@@ -566,6 +600,14 @@ function CartaoDoGrupo({
         confirmados={contar("CONFIRMADO")}
         alocados={contar("ALOCADO")}
         profissionais={profissionais}
+        servicosConfirmados={membros
+          .filter((m) => m.status === "CONFIRMADO")
+          .map((m) => ({
+            pedidoId: m.id,
+            nome: m.servico.nome,
+            hora: m.horaInicio,
+            profissionais: profissionaisPorServico[m.id] ?? [],
+          }))}
       />
     </Cartao>
   );
