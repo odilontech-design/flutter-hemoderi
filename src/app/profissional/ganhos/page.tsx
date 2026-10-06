@@ -78,7 +78,7 @@ export default async function Ganhos({ searchParams }: { searchParams: { compete
         {repasses.length === 0 ? (
           <Vazio>Nenhum atendimento fechado em {competenciaPorExtenso(competencia)}.</Vazio>
         ) : (
-          <Tabela cabecalho={["Pedido", "Data", "Clínica", "Serviço", "Valor", "Situação"]}>
+          <Tabela cabecalho={["Pedido", "Data", "Clínica", "Serviço", "Valor do profissional", "Situação"]}>
             {repasses.map((repasse) => (
               <tr key={repasse.id} className="border-b border-gray-100 last:border-0">
                 <td className="py-2 pr-3 font-semibold whitespace-nowrap">

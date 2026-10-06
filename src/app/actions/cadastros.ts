@@ -9,6 +9,7 @@ import { lerCentavos } from "@/lib/dinheiro";
 import { cepValido, cnpjValido, cpfValido } from "@/lib/documento";
 import { condicaoValida } from "@/lib/pagamento";
 import { lerUfs } from "@/lib/uf";
+import { registroDeConselho } from "@/lib/conselhos";
 import { lerPerfis } from "@/lib/visibilidade";
 import type { Resultado } from "./pedidos";
 
@@ -107,6 +108,22 @@ export async function salvarProfissional(_anterior: Resultado, dados: FormData):
     return { ok: false, erro: "CPF inválido — confira se algum dígito ficou trocado." };
   }
 
+  // Conselho de classe (ata de 05/10): é a régua mínima de identificação do
+  // profissional e vale já no cadastro. Na edição de um cadastro antigo, sem
+  // conselho, não bloqueia salvar o resto — mas o que for informado é validado.
+  const conselho = String(dados.get("conselho") ?? "").trim();
+  const registroBruto = String(dados.get("registro") ?? "").trim();
+  const registro = registroBruto ? registroDeConselho(registroBruto) : null;
+  if (!id && (!conselho || !registroBruto)) {
+    return { ok: false, erro: "Informe o conselho de classe (CRO, CRM…) e o número do registro." };
+  }
+  if (registroBruto && !registro) {
+    return { ok: false, erro: "Número do registro inválido — use de 3 a 20 caracteres, com ao menos um número." };
+  }
+  if (registro && !conselho) {
+    return { ok: false, erro: "Escolha o conselho de classe do registro informado." };
+  }
+
   const percent = String(dados.get("repassePercentPadrao") ?? "").replace(",", ".");
   const fixo = String(dados.get("repasseFixoCentavos") ?? "").trim();
   const comum = {
@@ -114,8 +131,8 @@ export async function salvarProfissional(_anterior: Resultado, dados: FormData):
     cpf: cpf || null,
     telefone: String(dados.get("telefone") ?? "") || null,
     email: String(dados.get("email") ?? "").toLowerCase().trim() || null,
-    conselho: String(dados.get("conselho") ?? "") || null,
-    registro: String(dados.get("registro") ?? "") || null,
+    conselho: conselho || null,
+    registro,
     especialidade: String(dados.get("especialidade") ?? "").trim() || null,
     chavePix: String(dados.get("chavePix") ?? "") || null,
     repassePercentPadrao: percent ? Number(percent) : null,

@@ -81,7 +81,7 @@ export default async function Relatorios() {
         <Cartao className="mb-4 border-red-300">
           <div className="font-display font-bold text-red-700 text-sm mb-1">Devolvidos para correção</div>
           <div className="text-[11px] text-gray-500 mb-3">
-            A central recusou estes relatórios. Corrija o que foi pedido e reenvie — o repasse só é liberado depois
+            A central recusou estes relatórios. Corrija o que foi pedido e reenvie — o valor do profissional só é liberado depois
             que o relatório é aprovado.
           </div>
           <div className="space-y-3">
@@ -114,7 +114,7 @@ export default async function Relatorios() {
       <Cartao className={`mb-4 ${faltam.length > 0 ? "border-bordo" : ""}`}>
         <div className="font-display font-bold text-bordo text-sm mb-1">Faltam enviar</div>
         <div className="text-[11px] text-gray-500 mb-3">
-          O repasse só é liberado depois que o relatório é enviado e conferido pela central.
+          O valor do profissional só é liberado depois que o relatório é enviado e conferido pela central.
         </div>
         {faltam.length === 0 ? (
           <Vazio>Nenhum relatório pendente. Tudo em dia.</Vazio>

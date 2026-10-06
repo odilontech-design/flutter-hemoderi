@@ -12,6 +12,7 @@ import {
   enderecoEmUmaLinha,
   lerServicosAdicionais,
 } from "@/lib/relatorio";
+import { comprovanteAceito, lerRecebimento } from "@/lib/recebimento";
 import { registrarResultado, type Resultado } from "./pedidos";
 
 /**
@@ -44,7 +45,7 @@ export async function enviarRelatorio(_anterior: Resultado, dados: FormData): Pr
       doutorNome: true,
       clinica: { select: { nome: true, endereco: true, numero: true, bairro: true, cidade: true, uf: true } },
       endereco: { select: { endereco: true, numero: true, bairro: true, cidade: true, uf: true } },
-      relatorio: { select: { aprovadoEm: true } },
+      relatorio: { select: { aprovadoEm: true, comprovante: { select: { id: true } } } },
     },
   });
   if (!pedido) return { ok: false, erro: "Atendimento não encontrado na sua agenda." };
@@ -85,6 +86,37 @@ export async function enviarRelatorio(_anterior: Resultado, dados: FormData): Pr
   if (ajudaCustoCentavos === undefined) {
     return { ok: false, erro: "Ajuda de custo: use só números, como 150,00." };
   }
+
+  // O que foi recebido da clínica no ato (ata de 05/10). Só se pergunta
+  // quando houve atendimento: numa falta não existe valor a receber.
+  let recebimento: ReturnType<typeof lerRecebimento> | null = null;
+  let comprovante: { nome: string; tipo: string; tamanho: number; dados: Buffer } | null = null;
+  if (compareceu) {
+    recebimento = lerRecebimento({
+      situacao: String(dados.get("recebimento") ?? ""),
+      forma: String(dados.get("formaRecebimento") ?? ""),
+      valor: String(dados.get("valorRecebido") ?? ""),
+    });
+    if (!recebimento.ok) return { ok: false, erro: recebimento.erro };
+
+    const arquivo = dados.get("comprovante");
+    if (recebimento.dados.exigeComprovante && arquivo instanceof File && arquivo.size > 0) {
+      const problema = comprovanteAceito(arquivo);
+      if (problema) return { ok: false, erro: problema };
+      comprovante = {
+        nome: arquivo.name.slice(0, 120) || "comprovante",
+        tipo: arquivo.type,
+        tamanho: arquivo.size,
+        dados: Buffer.from(await arquivo.arrayBuffer()),
+      };
+    }
+    // Correção do relatório: o comprovante do envio anterior continua valendo
+    // quando a pessoa não anexa outro.
+    if (recebimento.dados.exigeComprovante && !comprovante && !pedido.relatorio?.comprovante) {
+      return { ok: false, erro: "Anexe o comprovante do Pix ou do cartão para enviar o relatório." };
+    }
+  }
+  const guardaComprovante = recebimento?.ok === true && recebimento.dados.exigeComprovante;
 
   const quantidade = Number(dados.get("quantidade") ?? 1);
 
@@ -148,6 +180,9 @@ export async function enviarRelatorio(_anterior: Resultado, dados: FormData): Pr
     servicosAdicionais: String(dados.get("servicosAdicionais") ?? "").trim() || null,
     ajudaCustoCentavos,
     ajudaCustoJustificativa: String(dados.get("ajudaCustoJustificativa") ?? "").trim() || null,
+    recebimento: recebimento?.ok ? recebimento.dados.recebimento : null,
+    formaRecebimento: recebimento?.ok ? recebimento.dados.formaRecebimento : null,
+    valorRecebidoCentavos: recebimento?.ok ? recebimento.dados.valorRecebidoCentavos : null,
     // A chave PIX deixou de ser pedida a cada relatório (ata de 02/10): é
     // única e fixa no cadastro do profissional, e é dela que sai o pagamento.
     // Os dados do agendamento como ele aconteceu (ata de 28/09). Guardados
@@ -182,6 +217,18 @@ export async function enviarRelatorio(_anterior: Resultado, dados: FormData): Pr
       create: { pedidoId: pedido.id, profissionalId: sessao.profissionalId, ...conteudo, ...localizacao },
       select: { id: true },
     });
+
+    // O comprovante só existe enquanto a resposta o exige: trocar Pix por
+    // dinheiro, ou "recebeu" por "não recebeu", apaga o arquivo antigo.
+    if (!guardaComprovante) {
+      await tx.comprovanteRecebimento.deleteMany({ where: { relatorioId: relatorio.id } });
+    } else if (comprovante) {
+      await tx.comprovanteRecebimento.upsert({
+        where: { relatorioId: relatorio.id },
+        update: { ...comprovante, criadoEm: new Date() },
+        create: { relatorioId: relatorio.id, ...comprovante },
+      });
+    }
 
     // A lista inteira é substituída: reenviar o relatório é reenviar o que
     // ele diz agora, inclusive o que a pessoa tirou.

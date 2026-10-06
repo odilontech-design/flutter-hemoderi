@@ -2,7 +2,7 @@ import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 import { exigirProfissional } from "@/lib/sessao";
 import { Cartao, SeloStatus, Titulo, Vazio } from "@/components/ui";
-import { formatarDataCurta, hojeUTC, instanteDoAtendimento } from "@/lib/data";
+import { formatarDataCurta, formatarDiaEData, hojeUTC, instanteDoAtendimento, proximosDias } from "@/lib/data";
 import { formatarReais } from "@/lib/dinheiro";
 import { parametros } from "@/lib/alocacao";
 import { LOCAL_FECHADO, localRevelado } from "@/lib/sigilo";
@@ -70,7 +70,12 @@ export default async function MinhaAgenda() {
     servico: { select: { nome: true, duracaoMin: true, descricao: true } },
   };
 
-  const [config, devolvidos, aguardandoAceite, deHoje, atrasados, proximos] = await Promise.all([
+  // A agenda dos próximos 7 dias (ata de 05/10): hoje mais seis, com os dias
+  // livres visíveis — é o que o profissional olha para planejar a semana.
+  const semana = proximosDias(7);
+  const fimDaSemana = semana[semana.length - 1];
+
+  const [config, devolvidos, aguardandoAceite, deHoje, atrasados, proximos, daSemana] = await Promise.all([
     parametros(),
     // Relatórios que a central recusou: vêm antes de tudo, porque travam o
     // repasse e só o próprio profissional resolve.
@@ -93,7 +98,12 @@ export default async function MinhaAgenda() {
       include: dadosDoPedido,
     }),
     prisma.pedido.findMany({
-      where: { ...meus, aceitoEm: { not: null }, data: { gt: hoje } },
+      where: { ...meus, aceitoEm: { not: null }, data: { gt: fimDaSemana } },
+      orderBy: [{ data: "asc" }, { horaInicio: "asc" }],
+      include: dadosDoPedido,
+    }),
+    prisma.pedido.findMany({
+      where: { ...meus, data: { gte: hoje, lte: fimDaSemana } },
       orderBy: [{ data: "asc" }, { horaInicio: "asc" }],
       include: dadosDoPedido,
     }),
@@ -108,7 +118,7 @@ export default async function MinhaAgenda() {
           <div className="font-display font-bold text-red-700 text-sm mb-1">
             {devolvidos} relatório(s) devolvido(s) para correção
           </div>
-          <div className="text-[11px] text-gray-500 mb-2">A central pediu um ajuste. O repasse espera o reenvio.</div>
+          <div className="text-[11px] text-gray-500 mb-2">A central pediu um ajuste. O valor do profissional espera o reenvio.</div>
           <Link href="/profissional/relatorios" className="text-xs font-semibold text-bordo hover:underline">
             Ver o que corrigir →
           </Link>
@@ -135,7 +145,7 @@ export default async function MinhaAgenda() {
                   ) : (
                     <span className="italic text-gray-400">{LOCAL_FECHADO}</span>
                   )}{" "}
-                  · {formatarReais(pedido.valorRepasseCentavos)}
+                  · valor do profissional: {formatarReais(pedido.valorRepasseCentavos)}
                 </div>
                 {/* A cidade aparece já no aceite (ata de 02/10): aceitar às cegas
                     inviabiliza planejar o dia quando há compromissos em lugares
@@ -178,7 +188,7 @@ export default async function MinhaAgenda() {
                   {pedido.horaInicio} · {pedido.clinica.nome}
                 </div>
                 <div className="text-[11px] text-gray-500 mb-2">
-                  {pedido.servico.nome} · {formatarReais(pedido.valorRepasseCentavos)}
+                  {pedido.servico.nome} · valor do profissional: {formatarReais(pedido.valorRepasseCentavos)}
                 </div>
                 <div className="flex flex-wrap items-center gap-2">
                   {pedido.checkinEm ? (
@@ -235,7 +245,7 @@ export default async function MinhaAgenda() {
             {atrasados.length} atendimento(s) esperando relatório
           </div>
           <div className="text-[11px] text-gray-500 mb-3">
-            O repasse é liberado quando o relatório é enviado e a central confere.
+            O valor do profissional é liberado quando o relatório é enviado e a central confere.
           </div>
           <div className="space-y-2">
             {atrasados.map((pedido) => (
@@ -248,7 +258,7 @@ export default async function MinhaAgenda() {
                     {formatarDataCurta(pedido.data)} · {pedido.horaInicio} · {pedido.clinica.nome}
                   </div>
                   <div className="text-gray-500">
-                    {pedido.servico.nome} · {formatarReais(pedido.valorRepasseCentavos)}
+                    {pedido.servico.nome} · valor do profissional: {formatarReais(pedido.valorRepasseCentavos)}
                   </div>
                 </div>
                 <Link
@@ -263,14 +273,63 @@ export default async function MinhaAgenda() {
         </Cartao>
       )}
 
+      <Cartao className="mb-3">
+        <div className="font-display font-bold text-bordo text-sm mb-1">Próximos 7 dias</div>
+        <div className="text-[11px] text-gray-500 mb-3">
+          A clínica aparece {config.horasRevelarLocal}h antes do atendimento — até lá, só o dia, o horário
+          e o serviço.
+        </div>
+        <div className="divide-y divide-gray-100">
+          {semana.map((dia) => {
+            const doDia = daSemana.filter((p) => p.data.getTime() === dia.getTime());
+            return (
+              <div key={dia.toISOString()} className="py-2 flex gap-3">
+                <div className="w-28 shrink-0 text-xs font-semibold text-bordo">
+                  {formatarDiaEData(dia)}
+                  {dia.getTime() === hoje.getTime() && (
+                    <span className="block text-[10px] font-normal text-gray-400">hoje</span>
+                  )}
+                </div>
+                <div className="flex-1 min-w-0 space-y-2">
+                  {doDia.length === 0 ? (
+                    <div className="text-[11px] text-gray-400">Livre</div>
+                  ) : (
+                    doDia.map((pedido) => (
+                      <div key={pedido.id} className="text-xs">
+                        <div className="font-semibold">
+                          {pedido.horaInicio} · {pedido.servico.nome}
+                          {pedido.quantidade > 1 ? ` × ${pedido.quantidade}` : ""}
+                        </div>
+                        <div className="text-[11px] text-gray-500">
+                          {localRevelado(pedido.data, pedido.horaInicio, config.horasRevelarLocal) ? (
+                            <>
+                              {pedido.clinica.nome}
+                              {pedido.doutorNome ? ` · Dr(a). ${pedido.doutorNome}` : ""}
+                            </>
+                          ) : (
+                            <span className="italic text-gray-400">{LOCAL_FECHADO}</span>
+                          )}{" "}
+                          · valor do profissional: {formatarReais(pedido.valorRepasseCentavos)}
+                          {!pedido.aceitoEm && <span className="ml-1 font-semibold text-amber-700">· aguardando seu aceite</span>}
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </Cartao>
+
       <Cartao>
-        <div className="font-display font-bold text-bordo text-sm mb-3">Próximos atendimentos</div>
+        <div className="font-display font-bold text-bordo text-sm mb-3">Mais adiante</div>
         <div className="text-[11px] text-gray-500 mb-3">
           A clínica aparece {config.horasRevelarLocal}h antes do atendimento, junto com o lembrete —
           a distribuição é feita por disponibilidade, não por endereço.
         </div>
         {proximos.length === 0 ? (
-          <Vazio>Nada confirmado à frente. Declare sua disponibilidade para receber atendimentos.</Vazio>
+          <Vazio>Nada confirmado além dos próximos 7 dias.</Vazio>
         ) : (
           <div className="space-y-2">
             {proximos.map((pedido) => (
@@ -303,6 +362,7 @@ export default async function MinhaAgenda() {
                   </a>
                 </div>
                 <div className="text-right">
+                  <div className="text-[10px] text-gray-400">valor do profissional</div>
                   <div className="font-semibold">{formatarReais(pedido.valorRepasseCentavos)}</div>
                   <SeloStatus status={pedido.status} />
                 </div>

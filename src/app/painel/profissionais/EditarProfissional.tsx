@@ -11,6 +11,7 @@ import { formatarPercent, formatarReais } from "@/lib/dinheiro";
 import { estrelas, formatarMedia } from "@/lib/avaliacao";
 import { ServicosAptos, type GrupoDeServicos } from "@/components/ServicosAptos";
 import { opcoesDeEspecialidade } from "@/lib/especialidades";
+import { CONSELHOS, conselhoValido } from "@/lib/conselhos";
 
 type Profissional = {
   id: string;
@@ -163,11 +164,23 @@ export function EditarProfissional({
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
-                  <Rotulo>Conselho</Rotulo>
-                  <Campo name="conselho" placeholder="COREN-SP" defaultValue={profissional.conselho ?? ""} />
+                  <Rotulo>Conselho de classe</Rotulo>
+                  <Selecao name="conselho" defaultValue={profissional.conselho ?? ""}>
+                    <option value="">Selecione…</option>
+                    {/* Cadastro antigo com texto livre (ex.: COREN-SP) continua
+                        aparecendo até alguém trocar pela lista. */}
+                    {profissional.conselho && !conselhoValido(profissional.conselho) && (
+                      <option value={profissional.conselho}>{profissional.conselho}</option>
+                    )}
+                    {CONSELHOS.map((c) => (
+                      <option key={c} value={c}>
+                        {c}
+                      </option>
+                    ))}
+                  </Selecao>
                 </div>
                 <div>
-                  <Rotulo>Registro</Rotulo>
+                  <Rotulo>Número do registro</Rotulo>
                   <Campo name="registro" defaultValue={profissional.registro ?? ""} />
                 </div>
               </div>

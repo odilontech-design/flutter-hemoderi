@@ -2,10 +2,13 @@ import type { Prisma } from "@prisma/client";
 import { CAMPOS_CLINICOS, NAO_SE_APLICA } from "@/lib/relatorio";
 import { formatarDataHora } from "@/lib/data";
 import { formatarReais } from "@/lib/dinheiro";
+import { rotuloDaForma, rotuloDaSituacao } from "@/lib/recebimento";
 
 export const INCLUIR_ADICIONAIS = {
   adicionais: { select: { quantidade: true, servico: { select: { nome: true } } } },
   servicoRealizado: { select: { nome: true } },
+  // Só o nome: o arquivo sai pela rota autorizada, nunca junto da página.
+  comprovante: { select: { nome: true } },
 } satisfies Prisma.RelatorioAtendimentoInclude;
 
 export type RelatorioCompleto = Prisma.RelatorioAtendimentoGetPayload<{ include: typeof INCLUIR_ADICIONAIS }>;
@@ -122,6 +125,27 @@ export function RelatorioPreenchido({ relatorio }: { relatorio: RelatorioComplet
             {formatarReais(relatorio.ajudaCustoCentavos)}
             {relatorio.ajudaCustoJustificativa ? ` · ${relatorio.ajudaCustoJustificativa}` : ""}
           </div>
+        </div>
+      )}
+
+      {relatorio.compareceu && (
+        <div className="text-xs">
+          <div className="text-gray-400 mb-0.5">Recebimento no atendimento</div>
+          <div className={relatorio.recebimento === "NAO" ? "text-gray-700" : "text-green-800 font-semibold"}>
+            {rotuloDaSituacao(relatorio.recebimento)}
+            {relatorio.formaRecebimento && ` · ${rotuloDaForma(relatorio.formaRecebimento)}`}
+            {relatorio.valorRecebidoCentavos != null && ` · ${formatarReais(relatorio.valorRecebidoCentavos)}`}
+          </div>
+          {relatorio.comprovante && (
+            <a
+              href={`/api/comprovantes/${relatorio.id}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="font-semibold text-bordo hover:underline"
+            >
+              Ver comprovante ({relatorio.comprovante.nome})
+            </a>
+          )}
         </div>
       )}
 

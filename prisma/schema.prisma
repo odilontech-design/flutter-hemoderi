@@ -1074,6 +1074,15 @@ model RelatorioAtendimento {
   longitude      Float?
   precisaoMetros Float?
 
+  /// O que o profissional recebeu da clínica NO ATO (ata de 05/10). Nulo =
+  /// relatório anterior ao bloco financeiro; "NAO", "TOTAL" ou "PARCIAL".
+  /// Forma (PIX, DINHEIRO, CHEQUE, CARTAO) e valor exato só existem quando
+  /// houve recebimento; o comprovante, quando a forma deixa rastro.
+  recebimento           String?
+  formaRecebimento      String?
+  valorRecebidoCentavos Int?
+  comprovante           ComprovanteRecebimento?
+
   /// A chave PIX que o profissional confirma NO relatório, que pode ser
   /// diferente da do cadastro (conta nova, chave trocada). É a que vale para
   /// este repasse: conferir no ato evita o pagamento devolvido três dias
@@ -1122,6 +1131,22 @@ model RelatorioAtendimento {
 
   @@index([profissionalId])
   @@index([aprovadoEm])
+}
+
+/// O comprovante de um recebimento no ato (Pix ou cartão). Guardado no banco,
+/// em tabela própria, para que listar relatórios nunca carregue o arquivo; é
+/// servido por uma rota que confere quem está pedindo. Limite de 3 MB.
+model ComprovanteRecebimento {
+  id String @id @default(cuid())
+
+  relatorioId String               @unique
+  relatorio   RelatorioAtendimento @relation(fields: [relatorioId], references: [id], onDelete: Cascade)
+
+  nome     String
+  tipo     String
+  tamanho  Int
+  dados    Bytes
+  criadoEm DateTime @default(now())
 }
 
 /// Um serviço a mais num relatório. Declarado por quem atendeu e conferido

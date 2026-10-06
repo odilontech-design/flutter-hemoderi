@@ -8,6 +8,8 @@ import { enviarRelatorio } from "@/app/actions/relatorio";
 import type { Resultado } from "@/app/actions/pedidos";
 import { obterLocalizacao } from "@/lib/geolocalizacao";
 import { CAMPOS_AGENDAMENTO, CAMPOS_CLINICOS, NAO_SE_APLICA } from "@/lib/relatorio";
+import { FORMAS_RECEBIMENTO, SITUACOES_RECEBIMENTO } from "@/lib/recebimento";
+import { reduzirImagem } from "@/lib/reduzir-imagem";
 
 const INICIAL: Resultado = { ok: false };
 
@@ -225,6 +227,117 @@ function ServicosRealizados({
   );
 }
 
+/**
+ * O recebimento no ato (ata de 05/10): recebeu o valor? total ou parcial? de
+ * que forma? Pix e cartão pedem o comprovante; dinheiro e parcial pedem o
+ * valor exato. As regras de verdade ficam no servidor (lib/recebimento.ts) —
+ * aqui o formulário só mostra o que cada resposta exige.
+ */
+function BlocoRecebimento({
+  valores,
+  comprovanteAtual,
+}: {
+  valores: ValoresRelatorio;
+  comprovanteAtual: string | null;
+}) {
+  const [situacao, setSituacao] = useState(valores.recebimento ?? "");
+  const [forma, setForma] = useState(valores.formaRecebimento ?? "");
+  const [anexo, setAnexo] = useState<string | null>(null);
+  const [aviso, setAviso] = useState<string | null>(null);
+
+  const recebeu = situacao === "TOTAL" || situacao === "PARCIAL";
+  const configuracao = FORMAS_RECEBIMENTO.find((f) => f.valor === forma);
+  const pedeValor = recebeu && (forma === "DINHEIRO" || situacao === "PARCIAL");
+
+  // Foto de celular chega a 5–8 MB; reduz antes de enviar para caber no limite.
+  async function aoEscolherArquivo(evento: React.ChangeEvent<HTMLInputElement>) {
+    const campo = evento.currentTarget;
+    const arquivo = campo.files?.[0];
+    setAviso(null);
+    if (!arquivo) return setAnexo(null);
+    const pronto = await reduzirImagem(arquivo);
+    if (pronto !== arquivo) {
+      const lista = new DataTransfer();
+      lista.items.add(pronto);
+      campo.files = lista.files;
+    }
+    if (pronto.size > 3 * 1024 * 1024) {
+      campo.value = "";
+      setAnexo(null);
+      return setAviso("Arquivo grande demais (máximo 3 MB). Tire uma foto menor ou envie o PDF do banco.");
+    }
+    setAnexo(pronto.name);
+  }
+
+  return (
+    <div className="rounded-xl border border-gray-200 p-3 space-y-3">
+      <div className="font-display font-bold text-bordo text-sm">Recebimento no atendimento</div>
+      <div>
+        <Rotulo>Você recebeu o valor da clínica?</Rotulo>
+        <Selecao name="recebimento" value={situacao} onChange={(e) => setSituacao(e.target.value)} required>
+          <option value="">Selecione…</option>
+          {SITUACOES_RECEBIMENTO.map((s) => (
+            <option key={s.valor} value={s.valor}>
+              {s.rotulo}
+            </option>
+          ))}
+        </Selecao>
+      </div>
+
+      {recebeu && (
+        <>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+            <div>
+              <Rotulo>Forma de pagamento</Rotulo>
+              <Selecao name="formaRecebimento" value={forma} onChange={(e) => setForma(e.target.value)} required>
+                <option value="">Selecione…</option>
+                {FORMAS_RECEBIMENTO.map((f) => (
+                  <option key={f.valor} value={f.valor}>
+                    {f.rotulo}
+                  </option>
+                ))}
+              </Selecao>
+            </div>
+            {pedeValor && (
+              <div>
+                <Rotulo>Valor exato recebido (R$)</Rotulo>
+                <Campo
+                  name="valorRecebido"
+                  inputMode="decimal"
+                  defaultValue={valores.valorRecebido}
+                  placeholder="350,00"
+                  required
+                />
+              </div>
+            )}
+          </div>
+
+          {configuracao?.exigeComprovante && (
+            <div>
+              <Rotulo>Comprovante ({configuracao.rotulo})</Rotulo>
+              <input
+                type="file"
+                name="comprovante"
+                accept="image/jpeg,image/png,image/webp,application/pdf"
+                onChange={aoEscolherArquivo}
+                className="block w-full text-xs text-gray-600 file:mr-3 file:rounded-lg file:border-0 file:bg-bordo file:px-3 file:py-2 file:text-xs file:font-semibold file:text-white"
+              />
+              <div className="text-[10px] text-gray-500 mt-1">
+                {anexo
+                  ? `Anexado: ${anexo}`
+                  : comprovanteAtual
+                    ? `Já enviado: ${comprovanteAtual}. Anexe outro só se quiser trocar.`
+                    : "Obrigatório: foto ou PDF do comprovante (até 3 MB)."}
+              </div>
+              {aviso && <div className="text-[10px] text-red-600 mt-1">{aviso}</div>}
+            </div>
+          )}
+        </>
+      )}
+    </div>
+  );
+}
+
 export function FormularioRelatorio({
   pedidoId,
   horaPrevista,
@@ -236,6 +349,7 @@ export function FormularioRelatorio({
   servicoRealizadoInicial,
   precos,
   adicionaisIniciais,
+  comprovanteAtual,
 }: {
   pedidoId: string;
   horaPrevista: string;
@@ -249,6 +363,8 @@ export function FormularioRelatorio({
   /** Preço de tabela de cada serviço para o cliente deste atendimento, já em texto. */
   precos: Record<string, string>;
   adicionaisIniciais: { servicoId: string; quantidade: number }[];
+  /** Nome do comprovante já enviado, quando é uma correção. */
+  comprovanteAtual: string | null;
 }) {
   const router = useRouter();
   const [estado, enviar] = useFormState(enviarRelatorio, INICIAL);
@@ -316,7 +432,7 @@ export function FormularioRelatorio({
         </Selecao>
         {compareceu === "nao" && (
           <div className="text-[10px] text-gray-500 mt-1">
-            A falta fica registrada, mas não gera repasse automático. Fale com a central se houve
+            A falta fica registrada, mas não gera valor do profissional automático. Fale com a central se houve
             deslocamento.
           </div>
         )}
@@ -392,6 +508,8 @@ export function FormularioRelatorio({
               />
             </div>
           </div>
+
+          <BlocoRecebimento valores={valores} comprovanteAtual={comprovanteAtual} />
         </>
       )}
 

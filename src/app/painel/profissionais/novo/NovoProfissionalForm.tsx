@@ -7,6 +7,7 @@ import { CampoDocumento } from "@/components/CampoDocumento";
 import { salvarProfissional } from "@/app/actions/cadastros";
 import { ServicosAptos, type GrupoDeServicos } from "@/components/ServicosAptos";
 import { ESPECIALIDADES } from "@/lib/especialidades";
+import { CONSELHOS } from "@/lib/conselhos";
 
 export function NovoProfissionalForm({
   gruposRepasse,
@@ -40,12 +41,19 @@ export function NovoProfissionalForm({
       </div>
       <div className="grid grid-cols-2 gap-2">
         <div>
-          <Rotulo>Conselho</Rotulo>
-          <Campo name="conselho" placeholder="COREN-SP" />
+          <Rotulo>Conselho de classe</Rotulo>
+          <Selecao name="conselho" defaultValue="" required>
+            <option value="">Selecione…</option>
+            {CONSELHOS.map((c) => (
+              <option key={c} value={c}>
+                {c}
+              </option>
+            ))}
+          </Selecao>
         </div>
         <div>
-          <Rotulo>Registro</Rotulo>
-          <Campo name="registro" />
+          <Rotulo>Número do registro</Rotulo>
+          <Campo name="registro" placeholder="12345" required />
         </div>
       </div>
       <div>

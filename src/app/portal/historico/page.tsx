@@ -4,6 +4,7 @@ import { Cartao, Kpi, Tabela, Titulo, Vazio } from "@/components/ui";
 import { formatarDataCurta } from "@/lib/data";
 import { formatarMedia, mediaDeNotas } from "@/lib/avaliacao";
 import { situacaoDoPagamento } from "@/lib/pagamento-cliente";
+import { recebidoNoAto } from "@/lib/recebimento";
 import { SeloStatusCliente } from "@/components/SeloStatusCliente";
 import { AvaliarAtendimento } from "../AvaliarAtendimento";
 import { ResponderNps } from "../ResponderNps";
@@ -30,6 +31,8 @@ export default async function HistoricoEAvaliacoes() {
         profissional: { select: { nome: true } },
         avaliacao: { select: { nota: true, comentario: true } },
         fatura: { select: { status: true } },
+        // O que o profissional declarou ter recebido no ato conta como pago.
+        relatorio: { select: { recebimento: true } },
       },
     }),
     prisma.avaliacao.findMany({ where: { clinicaId: sessao.clinicaId }, select: { nota: true } }),
@@ -53,7 +56,11 @@ export default async function HistoricoEAvaliacoes() {
 
   const pagamentoDaVisita = (itens: typeof historico) => {
     const situacoes = itens.map((p) =>
-      situacaoDoPagamento({ status: p.status, fatura: p.fatura })
+      situacaoDoPagamento({
+        status: p.status,
+        fatura: p.fatura,
+        recebidoNoAto: recebidoNoAto(p.relatorio?.recebimento),
+      })
     );
     if (situacoes.every((s) => s === null)) return null;
     return situacoes.some((s) => s === "pendente") ? "pendente" : "pago";

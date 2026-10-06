@@ -26,7 +26,13 @@ export default async function Relatorio({ params }: { params: { pedidoId: string
       },
       endereco: { select: { endereco: true, numero: true, bairro: true, cidade: true, uf: true } },
       servico: { select: { id: true, nome: true } },
-      relatorio: { include: { adicionais: { select: { servicoId: true, quantidade: true } } } },
+      relatorio: {
+        include: {
+          adicionais: { select: { servicoId: true, quantidade: true } },
+          // Só o nome: o arquivo em si nunca vem junto da página.
+          comprovante: { select: { nome: true } },
+        },
+      },
     },
   });
   if (!pedido) notFound();
@@ -86,6 +92,10 @@ export default async function Relatorio({ params }: { params: { pedidoId: string
     servicosAdicionais: r?.servicosAdicionais ?? "",
     ajudaCusto: r?.ajudaCustoCentavos != null ? (r.ajudaCustoCentavos / 100).toFixed(2).replace(".", ",") : "",
     ajudaCustoJustificativa: r?.ajudaCustoJustificativa ?? "",
+    recebimento: r?.recebimento ?? "",
+    formaRecebimento: r?.formaRecebimento ?? "",
+    valorRecebido:
+      r?.valorRecebidoCentavos != null ? (r.valorRecebidoCentavos / 100).toFixed(2).replace(".", ",") : "",
     // O agendado é o ponto de partida; a correção já declarada, quando
     // existe, tem precedência — reabrir o relatório precisa mostrar o que a
     // pessoa escreveu, não jogá-la de volta ao valor que ela corrigiu.
@@ -106,7 +116,7 @@ export default async function Relatorio({ params }: { params: { pedidoId: string
             {pedido.clinica.nome} · {formatarData(pedido.data)} às {pedido.horaInicio}
           </div>
           <div className="text-xs text-gray-500">
-            Repasse previsto: <strong>{formatarReais(pedido.valorRepasseCentavos)}</strong>
+            Valor do profissional: <strong>{formatarReais(pedido.valorRepasseCentavos)}</strong>
           </div>
         </div>
         {pedido.relatorio?.devolvidoEm && !pedido.relatorio.aprovadoEm && (
@@ -119,7 +129,7 @@ export default async function Relatorio({ params }: { params: { pedidoId: string
         )}
         {pedido.relatorio?.aprovadoEm ? (
           <Aviso tom="info">
-            Este relatório já foi conferido pela central e o repasse está liberado. Para corrigir
+            Este relatório já foi conferido pela central e o valor do profissional está liberado. Para corrigir
             alguma coisa, fale com a central.
           </Aviso>
         ) : (
@@ -134,6 +144,7 @@ export default async function Relatorio({ params }: { params: { pedidoId: string
             servicoRealizadoInicial={r?.servicoRealizadoId ?? pedido.servico.id}
             precos={precos}
             adicionaisIniciais={r?.adicionais ?? []}
+            comprovanteAtual={r?.comprovante?.nome ?? null}
           />
         )}
       </Cartao>
