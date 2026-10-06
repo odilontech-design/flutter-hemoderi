@@ -56,6 +56,7 @@ export default async function CatalogoDaClinica({ searchParams }: { searchParams
       id: true,
       nome: true,
       descricao: true,
+      detalhes: true,
       duracaoMin: true,
       familia: true,
       valorPadraoCentavos: true,
@@ -86,14 +87,26 @@ export default async function CatalogoDaClinica({ searchParams }: { searchParams
     <>
       <Titulo
         acao={
-          podeAgendar ? (
+          <div className="flex flex-wrap items-center gap-2">
+            {/* O catálogo institucional em PDF continua disponível (ata de
+                05/10) enquanto a marca é redesenhada; os cards abaixo são a
+                versão navegável. */}
+            <a
+              href="/catalogo-hemoderi-2026.pdf"
+              download
+              className="border border-gray-300 text-bordo text-xs font-semibold px-3 py-2 min-h-[40px] sm:min-h-0 inline-flex items-center rounded-lg hover:bg-gray-50"
+            >
+              Baixar catálogo (PDF)
+            </a>
+            {podeAgendar ? (
             <Link
               href="/portal/agendar"
               className="bg-bordo text-white text-xs font-semibold px-3 py-2 min-h-[40px] sm:min-h-0 inline-flex items-center rounded-lg hover:bg-bordoEscuro"
             >
               + Agendar atendimento
             </Link>
-          ) : undefined
+            ) : null}
+          </div>
         }
       >
         Catálogo
@@ -157,8 +170,28 @@ export default async function CatalogoDaClinica({ searchParams }: { searchParams
                     </div>
 
                     {servico.descricao && (
-                      <p className="text-[11px] text-gray-600 leading-relaxed">{servico.descricao}</p>
+                      <p className="text-[11px] text-gray-600 leading-relaxed line-clamp-3">{servico.descricao}</p>
                     )}
+
+                    {/* "Mais detalhes" (ata de 05/10): o resumo do card fica
+                        curto; o detalhamento técnico abre sob demanda. */}
+                    <details className="group text-[11px]">
+                      <summary className="cursor-pointer select-none font-semibold text-bordo hover:underline list-none [&::-webkit-details-marker]:hidden">
+                        Mais detalhes <span aria-hidden className="text-[9px] group-open:hidden">▾</span>
+                        <span aria-hidden className="text-[9px] hidden group-open:inline">▴</span>
+                      </summary>
+                      <div className="mt-2 space-y-1.5 text-gray-600 leading-relaxed">
+                        {servico.detalhes ? (
+                          <p className="whitespace-pre-line">{servico.detalhes}</p>
+                        ) : (
+                          servico.descricao && <p className="whitespace-pre-line">{servico.descricao}</p>
+                        )}
+                        <ul className="text-gray-500 space-y-0.5">
+                          <li>Duração: {servico.duracaoMin} min</li>
+                          <li>Cobrança: {descricaoDoPreco(valor, servico)}</li>
+                        </ul>
+                      </div>
+                    </details>
 
                     <div className="text-[10px] text-gray-500">
                       {servico.permiteQuantidade

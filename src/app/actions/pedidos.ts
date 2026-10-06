@@ -40,7 +40,13 @@ import { proximoNumeroDePedido } from "@/lib/numero-pedido";
 import { duracaoEfetiva, quantidadeValida, totalDoItem } from "@/lib/cobranca";
 import { servicoVisivel } from "@/lib/visibilidade";
 
-export type Resultado = { ok: boolean; erro?: string; avisos?: string[] };
+export type Resultado = {
+  ok: boolean;
+  erro?: string;
+  avisos?: string[];
+  /** Id do que foi criado, quando a tela precisa levar a pessoa até ele. */
+  id?: string;
+};
 
 function atualizarTelas() {
   revalidatePath("/painel");
@@ -406,6 +412,7 @@ export async function solicitarAgendamento(_anterior: Resultado, dados: FormData
             valorServicoCentavos: item.valorServicoCentavos,
             pacienteNome: String(dados.get("pacienteNome") ?? "") || null,
             pacienteContato: String(dados.get("pacienteContato") ?? "") || null,
+            contatoClinica: String(dados.get("contatoClinica") ?? "").trim().slice(0, 40) || null,
             doutorNome: String(dados.get("doutorNome") ?? "").trim() || null,
             procedimentoPaciente,
             formaPagamento,
@@ -424,7 +431,9 @@ export async function solicitarAgendamento(_anterior: Resultado, dados: FormData
     await criarNegocio(pedido.id);
   }
   atualizarTelas();
-  return { ok: true };
+  // A tela leva a pessoa ao resumo do agendamento (ata de 05/10), que é a
+  // confirmação final.
+  return { ok: true, id: resultado.criados[0].id };
 }
 
 // ─── Esteira ────────────────────────────────────────────────────────────────
@@ -927,6 +936,30 @@ async function efetuarReagendamento(
   return { ok: true };
 }
 
+/**
+ * Os serviços de um mesmo agendamento (grupo) que ainda estão de pé, na ordem
+ * em que acontecem. Sem grupo, é só o próprio pedido. É o que faz o portal
+ * tratar a visita como uma coisa só (ata de 05/10).
+ */
+async function membrosAtivosDoAgendamento(pedido: { id: string; grupoId: string | null }, clinicaId: string) {
+  if (!pedido.grupoId) return null;
+  const membros = await prisma.pedido.findMany({
+    where: { clinicaId, grupoId: pedido.grupoId, status: { in: STATUS_ATIVOS } },
+    orderBy: [{ horaInicio: "asc" }, { numero: "asc" }],
+    select: {
+      id: true,
+      servicoId: true,
+      quantidade: true,
+      duracaoMin: true,
+      status: true,
+      clinicaId: true,
+      data: true,
+      horaInicio: true,
+    },
+  });
+  return membros.length > 1 ? membros : null;
+}
+
 export async function reagendarPedido(_anterior: Resultado, dados: FormData): Promise<Resultado> {
   const sessao = await exigirClinica();
 
@@ -953,6 +986,76 @@ export async function reagendarPedido(_anterior: Resultado, dados: FormData): Pr
       ok: false,
       erro: "O novo horário está fora do prazo: o site fecha a agenda de amanhã às 18h de hoje.",
     };
+  }
+
+  // Agendamento com vários serviços: o bloco inteiro é remarcado de uma vez,
+  // mantendo a ordem e a sequência entre os serviços.
+  const membros = await membrosAtivosDoAgendamento(pedido, sessao.clinicaId);
+  if (membros && pedido.grupoId) {
+    const bloco = await horariosDisponiveisConjunto({
+      clinicaId: pedido.clinicaId,
+      itens: membros.map((m) => ({ servicoId: m.servicoId, quantidade: m.quantidade })),
+      dataISO,
+      ignorarGrupoId: pedido.grupoId,
+      exigirAntecedencia: true,
+      horas: [horaInicio],
+      foraDoExpediente: true,
+    });
+    if (!bloco.horarios.includes(horaInicio)) {
+      return { ok: false, erro: "Esse horário não está disponível (já ocupado). Escolha outro ou fale com a central." };
+    }
+
+    const novaData = dataDeISO(dataISO);
+    const duracaoDoBloco = membros.reduce((soma, m) => soma + m.duracaoMin, 0);
+    const resultadoBloco = await prisma.$transaction(async (tx) => {
+      await travarRecursos(tx, { clinicaId: pedido.clinicaId });
+      const impedimentos = await verificarAlocacao(
+        {
+          clinicaId: pedido.clinicaId,
+          data: novaData,
+          horaInicio,
+          duracaoMin: duracaoDoBloco,
+          ignorarGrupoId: pedido.grupoId!,
+        },
+        tx
+      );
+      if (temBloqueio(impedimentos)) {
+        return { ok: false as const, erro: "Esse horário acabou de ficar indisponível. Escolha outro." };
+      }
+      let cursor = paraMinutos(horaInicio);
+      for (const m of membros) {
+        await tx.pedido.update({
+          where: { id: m.id },
+          data: {
+            data: novaData,
+            horaInicio: paraHora(cursor),
+            // Já confirmado ou alocado volta para a aprovação da central.
+            ...(m.status !== "SOLICITADO"
+              ? { status: "SOLICITADO" as const, profissionalId: null, equipamentoId: null, aceitoEm: null }
+              : {}),
+          },
+        });
+        cursor += m.duracaoMin;
+      }
+      return { ok: true as const };
+    });
+    if (!resultadoBloco.ok) return resultadoBloco;
+
+    for (const m of membros) {
+      await prisma.mensagemWhatsapp.deleteMany({
+        where: { pedidoId: m.id, tipo: { in: ["CONFIRMACAO", "ALOCACAO", "LEMBRETE"] }, status: "PENDENTE" },
+      });
+      await sincronizarEvento(m.id);
+    }
+    await registrarAuditoria(
+      sessao.usuarioId,
+      "Pedido",
+      pedido.id,
+      "reagendar-portal",
+      `${isoDeData(pedido.data)} ${pedido.horaInicio} → ${dataISO} ${horaInicio} (${membros.length} serviços)`
+    );
+    atualizarTelas();
+    return { ok: true, id: pedido.id };
   }
 
   // Qualquer horário vale (o relógio do formulário), desde que passe pelas
@@ -1226,6 +1329,62 @@ export async function editarAgendamento(_anterior: Resultado, dados: FormData): 
 }
 
 /**
+ * "Editar" no resumo do agendamento (ata de 05/10): a clínica corrige o que não
+ * muda a agenda — doutor, paciente, contato, procedimento, forma de pagamento e
+ * observações. Data, horário e serviço NÃO passam por aqui: mudar a data é
+ * remarcar (e volta para a aprovação da central).
+ *
+ * Vale para o agendamento inteiro: os serviços de uma mesma visita partilham
+ * esses dados.
+ */
+export async function editarAgendamentoPeloPortal(_anterior: Resultado, dados: FormData): Promise<Resultado> {
+  const sessao = await exigirClinica();
+
+  const pedido = await pedidoDaClinica(String(dados.get("pedidoId") ?? ""), sessao.clinicaId);
+  if (!pedido) return { ok: false, erro: "Agendamento não encontrado." };
+  if (!STATUS_ATIVOS.includes(pedido.status)) {
+    return { ok: false, erro: "Este atendimento já foi finalizado e não pode mais ser editado." };
+  }
+
+  const doutorNome = String(dados.get("doutorNome") ?? "").trim();
+  if (!doutorNome) return { ok: false, erro: "Informe o(a) doutor(a) responsável." };
+
+  const procedimentoPaciente = procedimentoEscolhido(
+    String(dados.get("procedimentoPaciente") ?? ""),
+    String(dados.get("procedimentoOutro") ?? "")
+  );
+  if (!procedimentoPaciente) {
+    return { ok: false, erro: "Escolha o procedimento que será realizado no paciente (se for outro, descreva)." };
+  }
+  const formaPagamento = String(dados.get("formaPagamento") ?? "");
+  if (!formaDePagamentoValida(formaPagamento)) {
+    return { ok: false, erro: "Escolha a forma de pagamento: Pix, dinheiro ou cheque." };
+  }
+
+  const resultado = await prisma.pedido.updateMany({
+    where: {
+      clinicaId: sessao.clinicaId,
+      status: { in: STATUS_ATIVOS },
+      ...(pedido.grupoId ? { grupoId: pedido.grupoId } : { id: pedido.id }),
+    },
+    data: {
+      doutorNome,
+      pacienteNome: String(dados.get("pacienteNome") ?? "").trim() || null,
+      contatoClinica: String(dados.get("contatoClinica") ?? "").trim().slice(0, 40) || null,
+      procedimentoPaciente,
+      formaPagamento,
+      observacoes: String(dados.get("observacoes") ?? "").trim() || null,
+    },
+  });
+  if (resultado.count === 0) return { ok: false, erro: "Nada foi alterado." };
+
+  await registrarAuditoria(sessao.usuarioId, "Pedido", pedido.id, "editar-portal", "dados do agendamento");
+  atualizarTelas();
+  revalidatePath(`/portal/resumo/${pedido.id}`);
+  return { ok: true, id: pedido.id };
+}
+
+/**
  * Cancelamento pelo portal — até 30 minutos antes do atendimento (ata de
  * 21/09), desacoplado do prazo de reagendamento. Ver `dentroDoPrazoDeCancelamento`.
  */
@@ -1245,19 +1404,23 @@ export async function cancelarPeloPortal(pedidoId: string, motivo: string): Prom
     };
   }
 
-  await prisma.pedido.update({
-    where: { id: pedido.id },
-    data: {
-      status: "CANCELADO",
-      canceladoEm: new Date(),
-      motivoCancelamento: motivo ? `Cancelado pela clínica: ${motivo}` : "Cancelado pela clínica.",
-    },
-  });
-  await prisma.mensagemWhatsapp.updateMany({
-    where: { pedidoId: pedido.id, status: "PENDENTE" },
-    data: { status: "CANCELADA" },
-  });
-  await sincronizarEvento(pedido.id);
+  // Agendamento com vários serviços: cancelar é cancelar a visita inteira.
+  const doAgendamento = (await membrosAtivosDoAgendamento(pedido, sessao.clinicaId)) ?? [pedido];
+  for (const membro of doAgendamento) {
+    await prisma.pedido.update({
+      where: { id: membro.id },
+      data: {
+        status: "CANCELADO",
+        canceladoEm: new Date(),
+        motivoCancelamento: motivo ? `Cancelado pela clínica: ${motivo}` : "Cancelado pela clínica.",
+      },
+    });
+    await prisma.mensagemWhatsapp.updateMany({
+      where: { pedidoId: membro.id, status: "PENDENTE" },
+      data: { status: "CANCELADA" },
+    });
+    await sincronizarEvento(membro.id);
+  }
 
   await registrarAuditoria(sessao.usuarioId, "Pedido", pedido.id, "cancelar-portal", motivo || undefined);
 

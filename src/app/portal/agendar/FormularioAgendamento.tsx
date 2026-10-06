@@ -65,6 +65,7 @@ export function FormularioAgendamento({
   clinicaNome,
   whatsappCentral,
   servicoInicialId,
+  telefoneClinica,
 }: {
   grupos: Grupo[];
   locais: LocalDeAtendimento[];
@@ -73,6 +74,8 @@ export function FormularioAgendamento({
   clinicaNome: string;
   whatsappCentral: string | null;
   servicoInicialId: string | null;
+  /** O telefone do cadastro, que já vem preenchido no contato da clínica. */
+  telefoneClinica: string;
 }) {
   const router = useRouter();
   const [estado, enviar] = useFormState(solicitarAgendamento, INICIAL);
@@ -187,8 +190,8 @@ export function FormularioAgendamento({
   }, [hora, chaveDosItens, data]);
 
   useEffect(() => {
-    if (estado.ok) router.push("/portal");
-  }, [estado.ok, router]);
+    if (estado.ok) router.push(estado.id ? `/portal/resumo/${estado.id}` : "/portal");
+  }, [estado.ok, estado.id, router]);
 
   function adicionar(servico: ServicoDoCarrinho) {
     setItens((atuais) =>
@@ -289,14 +292,19 @@ export function FormularioAgendamento({
                 type="button"
                 onClick={() => setFamiliaAberta(aberta ? null : grupo.familia)}
                 aria-expanded={aberta}
-                className={`text-left rounded-xl border p-3 transition-colors min-h-[72px]
-                  ${aberta ? "border-bordo bg-bordo text-white" : "border-gray-200 bg-white hover:border-bordo/40"}`}
+                className={`text-left rounded-xl border p-3 transition-colors min-h-[56px]
+                  ${
+                    aberta
+                      ? "border-bordo bg-bordo text-white"
+                      : noCarrinho > 0
+                        ? "border-bordo/60 bg-white ring-1 ring-bordo/30"
+                        : "border-gray-200 bg-white hover:border-bordo/40"
+                  }`}
               >
+                {/* Sem subtítulo de contagem (ata de 05/10): "duas opções, um
+                    escolhido" confundia. A categoria com serviço no carrinho
+                    ganha só o contorno. */}
                 <div className="text-xs font-semibold">{grupo.familia}</div>
-                <div className={`text-[10px] mt-1 ${aberta ? "text-white/70" : "text-gray-400"}`}>
-                  {grupo.servicos.length} opç{grupo.servicos.length === 1 ? "ão" : "ões"}
-                  {noCarrinho > 0 ? ` · ${noCarrinho} escolhido${noCarrinho === 1 ? "" : "s"}` : ""}
-                </div>
               </button>
             );
           })}
@@ -554,22 +562,20 @@ export function FormularioAgendamento({
               </div>
             </div>
 
-            <div>
-              <Rotulo>Doutor(a) responsável</Rotulo>
-              <Campo name="doutorNome" required value={doutorNome} onChange={(e) => setDoutorNome(e.target.value)} />
-              <div className="text-[10px] text-gray-400 mt-1">
-                Quem responde pelo caso na clínica. É por este nome que a central pergunta.
-              </div>
-            </div>
-
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <Rotulo>Doutor(a) responsável</Rotulo>
+                <Campo name="doutorNome" required value={doutorNome} onChange={(e) => setDoutorNome(e.target.value)} />
+                <div className="text-[10px] text-gray-400 mt-1">É por este nome que a central pergunta.</div>
+              </div>
+              <div>
+                <Rotulo>Contato da clínica para confirmação</Rotulo>
+                <Campo name="contatoClinica" defaultValue={telefoneClinica} maxLength={40} />
+                <div className="text-[10px] text-gray-400 mt-1">Para onde a central liga ou escreve.</div>
+              </div>
               <div>
                 <Rotulo>Paciente (opcional)</Rotulo>
                 <Campo name="pacienteNome" value={pacienteNome} onChange={(e) => setPacienteNome(e.target.value)} />
-              </div>
-              <div>
-                <Rotulo>Contato (opcional)</Rotulo>
-                <Campo name="pacienteContato" />
               </div>
             </div>
 

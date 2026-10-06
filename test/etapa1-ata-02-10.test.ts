@@ -65,3 +65,25 @@ test("chegada: registrou, atrasou além da tolerância, aguardando", () => {
   assert.deepEqual(statusDeChegada(data, "15:00", null, em(20)), { tipo: "atrasado", minutos: 20 });
   assert.deepEqual(statusDeChegada(data, "15:00", null, em(-60)), { tipo: "aguardando" });
 });
+
+import { situacaoDoPagamento } from "../src/lib/pagamento-cliente";
+
+test("pagamento do cliente: pago pela fatura ou no ato; pendente nos demais realizados", () => {
+  assert.equal(situacaoDoPagamento({ status: "REALIZADO", fatura: { status: "PAGA" } }), "pago");
+  assert.equal(situacaoDoPagamento({ status: "REALIZADO", fatura: null, recebidoNoAto: true }), "pago");
+  assert.equal(situacaoDoPagamento({ status: "REALIZADO", fatura: { status: "ABERTA" } }), "pendente");
+  assert.equal(situacaoDoPagamento({ status: "REALIZADO", fatura: null }), "pendente");
+  assert.equal(situacaoDoPagamento({ status: "FALTOU", fatura: null }), null);
+});
+
+import { conselhoValido, registroDeConselho } from "../src/lib/conselhos";
+
+test("conselho: lista fechada; registro precisa ter número e tamanho razoável", () => {
+  assert.equal(conselhoValido("CRO"), true);
+  assert.equal(conselhoValido("XYZ"), false);
+  assert.equal(registroDeConselho(" sp-12345 "), "SP-12345");
+  assert.equal(registroDeConselho("12.345"), "12.345");
+  assert.equal(registroDeConselho("ab"), null);
+  assert.equal(registroDeConselho("SEMNUMERO"), null);
+  assert.equal(registroDeConselho("1".repeat(21)), null);
+});

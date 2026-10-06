@@ -6,6 +6,7 @@ import { prisma } from "@/lib/prisma";
 import { cepValido, cnpjValido, cpfValido } from "@/lib/documento";
 import { conferirSenhaNova } from "@/lib/senha";
 import { PERFIS_DO_AUTOCADASTRO } from "@/lib/visibilidade";
+import { conselhoValido, registroDeConselho } from "@/lib/conselhos";
 import { slugLivre } from "./cadastros";
 import type { Resultado } from "./pedidos";
 
@@ -15,8 +16,11 @@ import type { Resultado } from "./pedidos";
  * atribuídos só pela equipe: nove em cada dez dentistas também lecionam, e
  * deixar a pessoa escolher "curso" seria desconto por autodeclaração.
  *
- * A conta nasce PENDENTE. Entra e vê o catálogo, mas só agenda depois que a
- * equipe confere o perfil (ver `revisarCadastro`).
+ * A conta nasce APROVADA (ata de 05/10): o catálogo e o agendamento ficam
+ * acessíveis logo após o preenchimento, sem triagem prévia. A validação mora no
+ * agendamento (cadastro completo, ver lib/cadastro-completo.ts) e no número do
+ * conselho de classe, obrigatório aqui. O perfil declarado já vale — a equipe
+ * ajusta depois, em Acessos, se for o caso.
  *
  * Rota pública: nada aqui confia no navegador. O campo `site` é uma isca para
  * robôs — pessoa de verdade nunca o vê, nem o preenche.
@@ -36,6 +40,12 @@ export async function autocadastrar(_anterior: Resultado, dados: FormData): Prom
   const responsavel = String(dados.get("responsavel") ?? "").trim();
   if (!nome) return { ok: false, erro: "Informe o nome da clínica ou consultório." };
   if (!responsavel) return { ok: false, erro: "Informe o nome do responsável." };
+
+  // O registro no conselho de classe é a régua mínima (ata de 05/10).
+  const conselho = String(dados.get("conselho") ?? "");
+  if (!conselhoValido(conselho)) return { ok: false, erro: "Escolha o seu conselho de classe (CRO, CRM…)." };
+  const registro = registroDeConselho(String(dados.get("registroConselho") ?? ""));
+  if (!registro) return { ok: false, erro: "Informe o número do seu registro no conselho (ex.: 12345 ou SP-12345)." };
 
   const email = String(dados.get("email") ?? "").toLowerCase().trim();
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return { ok: false, erro: "Informe um e-mail válido." };
@@ -88,8 +98,13 @@ export async function autocadastrar(_anterior: Resultado, dados: FormData): Prom
       bairro: String(dados.get("bairro") ?? "").trim() || null,
       cidade: String(dados.get("cidade") ?? "").trim() || null,
       uf,
+      conselho,
+      registroConselho: registro,
       perfilDeclarado: perfil as (typeof PERFIS_DO_AUTOCADASTRO)[number],
-      statusCadastro: "PENDENTE",
+      // O perfil declarado já vale: sem triagem prévia, o cliente vê o
+      // catálogo e agenda de imediato.
+      perfis: [perfil as (typeof PERFIS_DO_AUTOCADASTRO)[number]],
+      statusCadastro: "APROVADO",
       autocadastro: true,
       usuarios: {
         create: {

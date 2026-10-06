@@ -8,6 +8,7 @@ import { precosDosServicos, tabelasDaClinica } from "@/lib/preco";
 import { servicoVisivel } from "@/lib/visibilidade";
 import { Aviso, Titulo } from "@/components/ui";
 import { camposFaltando } from "@/lib/cadastro-completo";
+import { formatarTelefone } from "@/lib/whatsapp-link";
 import { FormularioAgendamento, type ServicoDoCarrinho } from "./FormularioAgendamento";
 
 export const dynamic = "force-dynamic";
@@ -130,6 +131,7 @@ export default async function Agendar({ searchParams }: { searchParams: { servic
         clinicaNome={sessao.clinicaNome}
         whatsappCentral={config.whatsapp}
         servicoInicialId={searchParams.servico ?? null}
+        telefoneClinica={formatarTelefone(clinica?.telefone ?? "")}
       />
     </>
   );

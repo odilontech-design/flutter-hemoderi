@@ -24,6 +24,16 @@ export default async function Reagendar({ params }: { params: { pedidoId: string
   if (!pedido) notFound();
 
   const config = await parametros();
+  // Agendamento com vários serviços: remarca-se o bloco todo, e a conferência
+  // de horários considera a soma das durações.
+  const membros = pedido.grupoId
+    ? await prisma.pedido.findMany({
+        where: { clinicaId: sessao.clinicaId, grupoId: pedido.grupoId, status: { in: STATUS_ATIVOS } },
+        orderBy: [{ horaInicio: "asc" }, { numero: "asc" }],
+        select: { servicoId: true, quantidade: true, servico: { select: { nome: true } } },
+      })
+    : [];
+  const ehGrupo = membros.length > 1;
   const finalizado = !STATUS_ATIVOS.includes(pedido.status);
   // Mesma regra da listagem: quem vai atender só aparece com 24h de
   // antecedência — vale também aqui, onde a clínica está prestes a mexer no
@@ -36,7 +46,8 @@ export default async function Reagendar({ params }: { params: { pedidoId: string
       <Cartao className="max-w-2xl">
         <div className="mb-4 pb-4 border-b border-gray-100">
           <div className="font-display font-bold text-bordo text-sm">
-            {codigoDoPedido(pedido.numero, pedido.clinica.nome, pedido.data)} · {pedido.servico.nome}
+            {codigoDoPedido(pedido.numero, pedido.clinica.nome, pedido.data)} ·{" "}
+            {ehGrupo ? membros.map((m) => m.servico.nome).join(" + ") : pedido.servico.nome}
           </div>
           <div className="text-xs text-gray-500 mt-1">
             Hoje marcado para {formatarData(pedido.data)} às {pedido.horaInicio}
@@ -50,6 +61,8 @@ export default async function Reagendar({ params }: { params: { pedidoId: string
           <FormularioReagendamento
             pedidoId={pedido.id}
             servicoId={pedido.servico.id}
+            grupoId={ehGrupo ? pedido.grupoId : null}
+            itens={ehGrupo ? membros.map((m) => `${m.servicoId}:${m.quantidade}`).join(",") : null}
             jaConfirmado={pedido.status !== "SOLICITADO"}
             dataMinima={dataMinimaAgendamentoPublico()}
             antecedenciaHoras={config.antecedenciaMinimaHoras}

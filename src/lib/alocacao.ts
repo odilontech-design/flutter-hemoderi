@@ -40,6 +40,16 @@ import { dataDeISO, instanteDoAtendimento, paraMinutos } from "@/lib/data";
 import { STATUS_ATIVOS } from "@/lib/pedido";
 import { duracaoEfetiva } from "@/lib/cobranca";
 
+/**
+ * Tira da conta os pedidos de um agendamento (grupo). Os serviços de uma mesma
+ * visita não podem bloquear uns aos outros quando o bloco inteiro é remarcado.
+ * Escrito com OR explícito porque `grupoId: { not: X }` no Prisma também
+ * descarta os pedidos sem grupo (NULL), que precisam continuar na conta.
+ */
+function semOGrupo(grupoId?: string) {
+  return grupoId ? { AND: [{ OR: [{ grupoId: null }, { grupoId: { not: grupoId } }] }] } : {};
+}
+
 /** Aceita tanto o cliente normal quanto o `tx` de dentro de uma transação. */
 export type ClientePrisma = PrismaClient | Prisma.TransactionClient;
 
@@ -101,6 +111,7 @@ export async function verificarAlocacao(
     horaInicio,
     duracaoMin,
     ignorarPedidoId,
+    ignorarGrupoId,
   }: {
     clinicaId: string;
     profissionalId?: string | null;
@@ -109,6 +120,8 @@ export async function verificarAlocacao(
     horaInicio: string;
     duracaoMin: number;
     ignorarPedidoId?: string;
+    /** Remarcando um agendamento com vários serviços: nenhum deles conta como conflito. */
+    ignorarGrupoId?: string;
   },
   bd: ClientePrisma = prisma
 ): Promise<Impedimento[]> {
@@ -120,6 +133,7 @@ export async function verificarAlocacao(
       data,
       status: { in: STATUS_ATIVOS },
       ...(ignorarPedidoId ? { id: { not: ignorarPedidoId } } : {}),
+      ...semOGrupo(ignorarGrupoId),
       OR: [
         { clinicaId },
         ...(profissionalId ? [{ profissionalId }] : []),
@@ -391,6 +405,7 @@ export async function horariosDisponiveisConjunto({
   exigirAntecedencia = false,
   horas,
   foraDoExpediente = false,
+  ignorarGrupoId,
 }: {
   clinicaId: string;
   itens: { servicoId: string; quantidade: number }[];
@@ -410,6 +425,8 @@ export async function horariosDisponiveisConjunto({
    * 48 chips por dia não ajuda ninguém.
    */
   foraDoExpediente?: boolean;
+  /** Remarcação: o próprio agendamento não conta como ocupação. */
+  ignorarGrupoId?: string;
 }): Promise<{ horarios: string[]; duracaoTotalMin: number }> {
   if (itens.length === 0) return { horarios: [], duracaoTotalMin: 0 };
   const data = dataDeISO(dataISO);
@@ -433,6 +450,7 @@ export async function horariosDisponiveisConjunto({
     where: {
       data,
       status: { in: STATUS_ATIVOS },
+      ...semOGrupo(ignorarGrupoId),
       OR: [{ clinicaId }, { equipamentoId: { not: null } }],
     },
     select: { horaInicio: true, duracaoMin: true, clinicaId: true, equipamentoId: true },

@@ -219,6 +219,7 @@ export async function salvarServico(_anterior: Resultado, dados: FormData): Prom
     nome,
     categoria: categoria as CategoriaServico,
     descricao: String(dados.get("descricao") ?? "") || null,
+    detalhes: String(dados.get("detalhes") ?? "").trim() || null,
     duracaoMin: Number.isFinite(duracao) && duracao > 0 ? Math.trunc(duracao) : 60,
     valorPadraoCentavos: lerCentavos(String(dados.get("valorPadrao") ?? "")),
     repassePercent: percent ? Number(percent) : null,

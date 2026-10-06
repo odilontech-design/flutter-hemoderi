@@ -192,6 +192,12 @@ model Clinica {
   telefone String?
   email    String?
 
+  /// Registro no conselho de classe do responsável (CRO, CRM, CRBM…) — a régua
+  /// mínima de identificação, o equivalente ao CPF/CNPJ (ata de 05/10).
+  /// Obrigatório no autocadastro; opcional no momento do agendamento.
+  conselho         String?
+  registroConselho String?
+
   /// Logradouro, bairro, cidade e UF vêm da consulta por CEP e não são
   /// digitados: endereço escrito à mão é o que faz o profissional rodar
   /// quarteirão atrás de uma clínica cadastrada com o nome da rua errado.
@@ -299,6 +305,10 @@ model Servico {
   id        String           @id @default(cuid())
   nome      String
   descricao String?
+  /// O detalhamento técnico do serviço (ata de 05/10): o que está incluso, como
+  /// funciona. Aparece no botão "mais detalhes" do catálogo do cliente e no
+  /// aceite do profissional; a `descricao` continua sendo o resumo do card.
+  detalhes  String?
   categoria CategoriaServico
 
   /// Duração cheia do atendimento, incluindo preparo. É ela que define o
@@ -861,6 +871,10 @@ model Pedido {
   /// o doutor é a pessoa que responde pelo caso, e é por ele que a equipe
   /// pergunta ao telefone — "o pedido da doutora Marina", não "o pedido 412".
   doutorNome String?
+
+  /// Contato da CLÍNICA para a central confirmar o agendamento (ata de 05/10)
+  /// — quem atende o telefone lá, não o paciente.
+  contatoClinica String?
 
   /// O procedimento que o doutor fará NO PACIENTE ("Implante", "Enxerto
   /// ósseo"…), escolhido numa lista na última etapa do agendamento (ata de

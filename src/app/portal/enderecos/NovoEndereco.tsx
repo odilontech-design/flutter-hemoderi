@@ -11,9 +11,8 @@ export function NovoEndereco() {
 
   return (
     <FormularioAcao acao={adicionarEndereco} botao="Salvar endereço" aoSalvar={() => router.refresh()}>
-      {/* Ordem da ata de 02/10: CEP primeiro (ele puxa o resto), depois o nome
-          da clínica ou consultório, e por fim a observação. */}
-      <CamposEndereco />
+      {/* Ordem da ata de 05/10: o NOME da clínica ou consultório vem antes do
+          CEP nos endereços novos (o CEP só vem primeiro no cadastro inicial). */}
       <div>
         <Rotulo>Nome da clínica ou consultório</Rotulo>
         <Campo name="rotulo" required placeholder="Clínica Lom Saúde, Unidade Moema…" />
@@ -21,6 +20,7 @@ export function NovoEndereco() {
           É como você vai reconhecer o lugar na hora de agendar.
         </div>
       </div>
+      <CamposEndereco />
       <div>
         <Rotulo>Observações e referências (opcional)</Rotulo>
         <Area name="observacoes" rows={2} maxLength={500} placeholder="Ex.: entrada pelos fundos, bloco B, sala 12" />

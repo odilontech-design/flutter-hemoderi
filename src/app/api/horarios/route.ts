@@ -43,10 +43,18 @@ export async function GET(requisicao: Request) {
 
     // `hora` confere UM horário digitado à mão; sem ele, devolve a grade.
     const hora = url.searchParams.get("hora");
+    // Remarcando um agendamento com vários serviços: ele não conta como
+    // ocupação de si mesmo. Só vale se o grupo for da própria clínica.
+    const grupoParaIgnorar = url.searchParams.get("ignorarGrupoId");
+    const ignorarGrupoId = grupoParaIgnorar
+      ? (await prisma.pedido.findFirst({ where: { grupoId: grupoParaIgnorar, clinicaId }, select: { grupoId: true } }))
+          ?.grupoId ?? undefined
+      : undefined;
     const resultado = await horariosDisponiveisConjunto({
       clinicaId,
       itens,
       dataISO: data,
+      ...(ignorarGrupoId ? { ignorarGrupoId } : {}),
       exigirAntecedencia: sessao.user.papel === "CLINICA",
       ...(hora ? { horas: [hora], foraDoExpediente: sessao.user.papel === "CLINICA" } : {}),
     });

@@ -18,6 +18,7 @@ type Servico = {
   nome: string;
   categoria: "ODONTOLOGIA" | "ESTETICA" | "SAUDE";
   descricao: string | null;
+  detalhes: string | null;
   duracaoMin: number;
   valorPadraoCentavos: number;
   repassePercent: number | null;
@@ -145,6 +146,15 @@ export function EditarServico({
               <div>
                 <Rotulo>Descrição</Rotulo>
                 <Area name="descricao" rows={2} defaultValue={servico.descricao ?? ""} />
+              </div>
+              <div>
+                <Rotulo>Detalhes técnicos (botão «mais detalhes»)</Rotulo>
+                <Area
+                  name="detalhes"
+                  rows={4}
+                  defaultValue={servico.detalhes ?? ""}
+                  placeholder="O que está incluso, como funciona, o que o cliente precisa ter. Aparece no catálogo do cliente e no aceite do profissional."
+                />
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>

@@ -8,15 +8,41 @@ import { reagendarPedido, type Resultado } from "@/app/actions/pedidos";
 
 const INICIAL: Resultado = { ok: false };
 
+/** Os parâmetros da consulta de horários: um serviço só, ou o bloco todo de uma visita. */
+function parametros_de({
+  servicoId,
+  data,
+  pedidoId,
+  grupoId,
+  itens,
+  hora,
+}: {
+  servicoId: string;
+  data: string;
+  pedidoId: string;
+  grupoId: string | null;
+  itens: string | null;
+  hora?: string;
+}) {
+  const p = grupoId && itens ? new URLSearchParams({ itens, data, ignorarGrupoId: grupoId }) : new URLSearchParams({ servicoId, data, ignorarPedidoId: pedidoId });
+  if (hora) p.set("hora", hora);
+  return p;
+}
+
 export function FormularioReagendamento({
   pedidoId,
   servicoId,
+  grupoId,
+  itens,
   jaConfirmado,
   dataMinima,
   antecedenciaHoras,
 }: {
   pedidoId: string;
   servicoId: string;
+  /** Agendamento com vários serviços: o bloco inteiro é conferido de uma vez. */
+  grupoId: string | null;
+  itens: string | null;
   /** Confirmado ou alocado: remarcar devolve o pedido para a aprovação da central. */
   jaConfirmado: boolean;
   /** ISO — regra das 18h do dia anterior, a mesma do agendamento novo. */
@@ -41,7 +67,7 @@ export function FormularioReagendamento({
     }
     let cancelado = false;
     setBuscando(true);
-    const parametros = new URLSearchParams({ servicoId, data, ignorarPedidoId: pedidoId });
+    const parametros = parametros_de({ servicoId, data, pedidoId, grupoId, itens });
     fetch(`/api/horarios?${parametros}`)
       .then((r) => r.json())
       .then((json) => {
@@ -53,7 +79,7 @@ export function FormularioReagendamento({
     return () => {
       cancelado = true;
     };
-  }, [data, servicoId, pedidoId]);
+  }, [data, servicoId, pedidoId, grupoId, itens]);
 
   // Confere o horário digitado contra a agenda, com uma pequena espera para não
   // consultar a cada minuto que a pessoa gira no relógio.
@@ -65,7 +91,7 @@ export function FormularioReagendamento({
     let cancelado = false;
     setSituacaoHora("verificando");
     const espera = setTimeout(() => {
-      const parametros = new URLSearchParams({ servicoId, data, ignorarPedidoId: pedidoId, hora });
+      const parametros = parametros_de({ servicoId, data, pedidoId, grupoId, itens, hora });
       fetch(`/api/horarios?${parametros}`)
         .then((r) => r.json())
         .then((json) => {
@@ -80,7 +106,7 @@ export function FormularioReagendamento({
       cancelado = true;
       clearTimeout(espera);
     };
-  }, [hora, data, servicoId, pedidoId]);
+  }, [hora, data, servicoId, pedidoId, grupoId, itens]);
 
   useEffect(() => {
     if (estado.ok) router.push("/portal");

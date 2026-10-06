@@ -48,6 +48,10 @@ export function NovoServicoForm({
         <Rotulo>Descrição</Rotulo>
         <Area name="descricao" rows={2} />
       </div>
+      <div>
+        <Rotulo>Detalhes técnicos (botão «mais detalhes»)</Rotulo>
+        <Area name="detalhes" rows={3} placeholder="O que está incluso, como funciona." />
+      </div>
       <div className="grid grid-cols-2 gap-2">
         <div>
           <Rotulo>Duração (min)</Rotulo>

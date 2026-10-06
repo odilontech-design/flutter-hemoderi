@@ -3,7 +3,8 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useFormState } from "react-dom";
-import { Aviso, Botao, Campo, Rotulo } from "@/components/ui";
+import { Aviso, Botao, Campo, Rotulo, Selecao } from "@/components/ui";
+import { CONSELHOS } from "@/lib/conselhos";
 import { CamposEndereco } from "@/components/CamposEndereco";
 import { CampoDocumento } from "@/components/CampoDocumento";
 import { autocadastrar } from "@/app/actions/autocadastro";
@@ -20,9 +21,8 @@ export function FormularioCadastro() {
     return (
       <div className="space-y-3">
         <Aviso>
-          <div className="font-semibold mb-1">Cadastro enviado!</div>
-          Já pode entrar com o e-mail e a senha que você escolheu. Você vê o catálogo agora, e o agendamento
-          é liberado assim que nossa equipe conferir o seu perfil.
+          <div className="font-semibold mb-1">Cadastro concluído!</div>
+          Já pode entrar com o e-mail e a senha que você escolheu: o catálogo e o agendamento estão liberados.
         </Aviso>
         <Link
           href="/login"
@@ -65,7 +65,7 @@ export function FormularioCadastro() {
           ))}
         </div>
         <div className="text-[10px] text-gray-400 mt-1">
-          Sua equipe Hemoderi confere o perfil antes de liberar o agendamento.
+          Define o catálogo e a tabela de preço que você enxerga.
         </div>
       </div>
 
@@ -77,6 +77,21 @@ export function FormularioCadastro() {
         <div>
           <Rotulo>Seu nome (responsável)</Rotulo>
           <Campo name="responsavel" required autoComplete="name" />
+        </div>
+        <div>
+          <Rotulo>Conselho de classe</Rotulo>
+          <Selecao name="conselho" required defaultValue="">
+            <option value="">Selecione…</option>
+            {CONSELHOS.map((c) => (
+              <option key={c} value={c}>
+                {c}
+              </option>
+            ))}
+          </Selecao>
+        </div>
+        <div>
+          <Rotulo>Número do registro</Rotulo>
+          <Campo name="registroConselho" required maxLength={20} placeholder="12345 ou SP-12345" />
         </div>
         <div>
           <Rotulo>E-mail</Rotulo>
