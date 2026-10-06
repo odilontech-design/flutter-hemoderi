@@ -11,6 +11,7 @@ import { solicitarAgendamento, type Resultado } from "@/app/actions/pedidos";
 import { linkWhatsapp, mensagemDeUrgencia } from "@/lib/whatsapp-link";
 import { formatarReais } from "@/lib/dinheiro";
 import { descricaoDoPreco, quantidadeMinimaDe, totalDoItem } from "@/lib/cobranca";
+import { descritivoDaFamilia } from "@/lib/catalogo-familias";
 import type { LocalDeAtendimento } from "@/lib/endereco";
 import type { UnidadeCobranca } from "@prisma/client";
 
@@ -101,6 +102,16 @@ export function FormularioAgendamento({
   );
   const porId = useMemo(
     () => new Map(gruposVisiveis.flatMap((g) => g.servicos).map((s) => [s.id, s])),
+    [gruposVisiveis]
+  );
+
+  // A foto da seção do catálogo acompanha a escolha (pedido de 06/10): o
+  // equipamento é reconhecido pela imagem antes de ser lido pelo nome.
+  const imagemDoServico = useMemo(
+    () =>
+      new Map(
+        gruposVisiveis.flatMap((g) => g.servicos.map((sv) => [sv.id, descritivoDaFamilia(g.familia)?.imagem ?? null] as const))
+      ),
     [gruposVisiveis]
   );
 
@@ -289,6 +300,7 @@ export function FormularioAgendamento({
           {gruposVisiveis.map((grupo) => {
             const aberta = familiaAberta === grupo.familia;
             const noCarrinho = grupo.servicos.filter((s) => itens.some((i) => i.servicoId === s.id)).length;
+            const imagem = descritivoDaFamilia(grupo.familia)?.imagem;
             return (
               <button
                 key={grupo.familia}
@@ -307,6 +319,15 @@ export function FormularioAgendamento({
                 {/* Sem subtítulo de contagem (ata de 05/10): "duas opções, um
                     escolhido" confundia. A categoria com serviço no carrinho
                     ganha só o contorno. */}
+                {imagem && (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={imagem}
+                    alt=""
+                    loading="lazy"
+                    className="mb-2 h-24 w-full rounded-lg bg-white object-contain"
+                  />
+                )}
                 <div className="text-xs font-semibold">{grupo.familia}</div>
               </button>
             );
@@ -315,6 +336,23 @@ export function FormularioAgendamento({
 
         {familiaAberta && (
           <div className="mt-4 bg-bege rounded-xl p-3">
+            {(() => {
+              const d = descritivoDaFamilia(familiaAberta);
+              if (!d) return null;
+              return (
+                <div className="flex items-center gap-3 mb-3">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={d.imagem} alt={d.legenda} className="h-20 w-20 shrink-0 rounded-lg bg-white object-contain border border-gray-100" />
+                  <div className="min-w-0">
+                    <div className="text-xs font-semibold text-bordo">{familiaAberta}</div>
+                    <div className="text-[11px] text-gray-500 leading-snug">{d.legenda}</div>
+                    <Link href="/portal/catalogo" target="_blank" className="text-[11px] font-semibold text-bordo hover:underline">
+                      Ver descritivo completo no catálogo ↗
+                    </Link>
+                  </div>
+                </div>
+              );
+            })()}
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
               {gruposVisiveis
                 .find((g) => g.familia === familiaAberta)
@@ -357,6 +395,15 @@ export function FormularioAgendamento({
                 const unitario = precoUnitario(servico.id);
                 return (
                   <li key={servico.id} className="py-3 flex flex-wrap items-center gap-x-4 gap-y-2">
+                    {imagemDoServico.get(servico.id) && (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        src={imagemDoServico.get(servico.id) as string}
+                        alt=""
+                        loading="lazy"
+                        className="h-12 w-12 shrink-0 rounded-lg border border-gray-100 bg-white object-contain"
+                      />
+                    )}
                     <div className="min-w-0 flex-1 basis-48">
                       <div className="text-xs font-semibold text-bordo">{servico.nome}</div>
                       <div className="text-[10px] text-gray-400 mt-0.5">
