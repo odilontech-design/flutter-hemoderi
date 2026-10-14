@@ -11,7 +11,8 @@
  */
 
 import { prisma } from "@/lib/prisma";
-import { formatarData } from "@/lib/data";
+import { formatarData, instanteDoAtendimento } from "@/lib/data";
+import { corpoParaDilonZap, interpretarResposta, mensagemVencida } from "@/lib/integracoes/dilon-zap";
 import { codigoDoPedido } from "@/lib/numeracao";
 import { normalizarTelefone } from "@/lib/slug";
 import type { TipoMensagem } from "@prisma/client";
@@ -86,7 +87,7 @@ export async function enfileirarMensagem(
   // rotina, e travar o agendamento por causa disso seria pior.
   if (!destinatario) return;
 
-  await prisma.mensagemWhatsapp.upsert({
+  const mensagem = await prisma.mensagemWhatsapp.upsert({
     where: { pedidoId_tipo: { pedidoId, tipo } },
     update: {},
     create: {
@@ -96,35 +97,77 @@ export async function enfileirarMensagem(
       texto: montarTexto(tipo, pedido),
       agendadaPara,
     },
+    select: { id: true, status: true, agendadaPara: true },
   });
+
+  // Sai na hora, sem esperar a rotina diária (que roda uma vez por dia, às 7h):
+  // a confirmação de um agendamento feito à tarde não pode chegar na manhã
+  // seguinte. Falha aqui nunca derruba quem enfileirou — a mensagem fica na
+  // fila e a rotina tenta de novo.
+  const vencida = !mensagem.agendadaPara || mensagem.agendadaPara.getTime() <= Date.now();
+  if (mensagem.status === "PENDENTE" && vencida && process.env.WHATSAPP_API_URL) {
+    await despacharPendentes(1, mensagem.id).catch(() => undefined);
+  }
 }
 
 /**
- * Entrega as mensagens vencidas. Chamada pela rotina agendada
+ * Entrega as mensagens vencidas pela API de integração do Dilon Zap
+ * (lib/integracoes/dilon-zap.ts). Chamada pela rotina agendada
  * (app/api/rotinas/mensagens).
  *
- * Sem WHATSAPP_API_URL configurada — o estado do projeto até a Fase 4 — as
- * mensagens ficam PENDENTE e visíveis na tela. Melhor uma fila parada e
- * visível do que um envio fingido.
+ * WHATSAPP_API_URL é o endereço completo do endpoint
+ * (https://zap.dilontech.com.br/api/integracao/mensagens) e WHATSAPP_API_TOKEN
+ * a chave `dz_...` da Hemoderi no Dilon Zap. Sem a URL, as mensagens ficam
+ * PENDENTE e visíveis na tela — melhor uma fila parada e visível do que um
+ * envio fingido.
  */
-export async function despacharPendentes(limite = 50): Promise<{ enviadas: number; falhas: number }> {
+export async function despacharPendentes(
+  limite = 50,
+  /** Só esta mensagem — o envio imediato logo depois de enfileirar. */
+  somenteId?: string
+): Promise<{ enviadas: number; falhas: number; canceladas: number; interrompido?: string }> {
   const url = process.env.WHATSAPP_API_URL;
   const token = process.env.WHATSAPP_API_TOKEN;
-  if (!url) return { enviadas: 0, falhas: 0 };
+  if (!url) return { enviadas: 0, falhas: 0, canceladas: 0 };
 
+  const agora = new Date();
   const pendentes = await prisma.mensagemWhatsapp.findMany({
     where: {
       status: "PENDENTE",
-      OR: [{ agendadaPara: null }, { agendadaPara: { lte: new Date() } }],
+      OR: [{ agendadaPara: null }, { agendadaPara: { lte: agora } }],
+      ...(somenteId ? { id: somenteId } : {}),
     },
     take: limite,
     orderBy: { criadaEm: "asc" },
+    include: {
+      pedido: {
+        select: {
+          data: true,
+          horaInicio: true,
+          clinica: { select: { nome: true } },
+          profissional: { select: { nome: true } },
+        },
+      },
+    },
   });
 
   let enviadas = 0;
   let falhas = 0;
+  let canceladas = 0;
 
   for (const mensagem of pendentes) {
+    const inicio = mensagem.pedido ? instanteDoAtendimento(mensagem.pedido.data, mensagem.pedido.horaInicio) : null;
+    if (mensagemVencida({ tipo: mensagem.tipo, criadaEm: mensagem.criadaEm, inicioDoAtendimento: inicio, agora })) {
+      await prisma.mensagemWhatsapp.update({
+        where: { id: mensagem.id },
+        data: { status: "CANCELADA", erro: "Não enviada: o atendimento já passou e a mensagem perdeu o sentido." },
+      });
+      canceladas++;
+      continue;
+    }
+
+    const nome = mensagem.tipo === "ALOCACAO" ? mensagem.pedido?.profissional?.nome : mensagem.pedido?.clinica.nome;
+    let desfecho: ReturnType<typeof interpretarResposta>;
     try {
       const resposta = await fetch(url, {
         method: "POST",
@@ -132,23 +175,35 @@ export async function despacharPendentes(limite = 50): Promise<{ enviadas: numbe
           "Content-Type": "application/json",
           ...(token ? { Authorization: `Bearer ${token}` } : {}),
         },
-        body: JSON.stringify({ para: mensagem.destinatario, texto: mensagem.texto }),
+        body: JSON.stringify(corpoParaDilonZap({ ...mensagem, nome })),
+        // Curto no envio imediato: quem está salvando um agendamento não espera
+        // o Dilon Zap; se demorar, a rotina entrega depois.
+        signal: AbortSignal.timeout(somenteId ? 5_000 : 15_000),
       });
-      if (!resposta.ok) throw new Error(`HTTP ${resposta.status}`);
+      desfecho = interpretarResposta(resposta.status, await resposta.json().catch(() => null));
+    } catch (erro) {
+      // Rede ou tempo esgotado: problema da integração, não da mensagem.
+      desfecho = { resultado: "parar", erro: `Dilon Zap fora do alcance: ${erro instanceof Error ? erro.message : String(erro)}` };
+    }
 
+    if (desfecho.resultado === "enviada") {
       await prisma.mensagemWhatsapp.update({
         where: { id: mensagem.id },
         data: { status: "ENVIADA", enviadaEm: new Date(), erro: null },
       });
       enviadas++;
-    } catch (erro) {
+    } else if (desfecho.resultado === "falha") {
       await prisma.mensagemWhatsapp.update({
         where: { id: mensagem.id },
-        data: { status: "FALHA", erro: erro instanceof Error ? erro.message : String(erro) },
+        data: { status: "FALHA", erro: desfecho.erro },
       });
       falhas++;
+    } else {
+      // Continua PENDENTE, com o motivo à vista; a próxima rodada tenta de novo.
+      await prisma.mensagemWhatsapp.update({ where: { id: mensagem.id }, data: { erro: desfecho.erro } });
+      return { enviadas, falhas, canceladas, interrompido: desfecho.erro };
     }
   }
 
-  return { enviadas, falhas };
+  return { enviadas, falhas, canceladas };
 }
