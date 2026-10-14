@@ -9,7 +9,8 @@ import { exigirClinica, registrarAuditoria } from "@/lib/sessao";
 import { gerarSenha } from "@/lib/senha";
 import { cnpjValido, cpfValido } from "@/lib/documento";
 import { conselhoValido, registroDeConselho } from "@/lib/conselhos";
-import { formatarNumero, lerTelefones, tituloDe } from "@/lib/crm";
+import { tituloDe } from "@/lib/crm";
+import { formatarTelefoneBrasileiro, lerTelefoneBrasileiro, MENSAGEM_TELEFONE_INVALIDO } from "@/lib/telefone";
 import type { Resultado } from "./pedidos";
 import type { Credencial } from "./acessos";
 
@@ -67,8 +68,9 @@ export async function salvarDadosDaClinica(_anterior: Resultado, dados: FormData
   });
   if (!atual) return { ok: false, erro: "Cadastro não encontrado." };
 
-  const telefone = String(dados.get("telefone") ?? "").trim();
-  if (telefone.replace(/\D/g, "").length < 10) return { ok: false, erro: "Informe um telefone com DDD." };
+  const digitosTelefone = lerTelefoneBrasileiro(String(dados.get("telefone") ?? ""));
+  if (!digitosTelefone) return { ok: false, erro: MENSAGEM_TELEFONE_INVALIDO };
+  const telefone = formatarTelefoneBrasileiro(digitosTelefone);
 
   const email = String(dados.get("email") ?? "").toLowerCase().trim();
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return { ok: false, erro: "Informe um e-mail válido." };
@@ -206,8 +208,8 @@ export async function salvarDoutor(_anterior: Resultado, dados: FormData): Promi
   if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return { ok: false, erro: "E-mail inválido." };
 
   const telefoneBruto = String(dados.get("telefone") ?? "").trim();
-  const telefone = telefoneBruto ? lerTelefones(telefoneBruto).telefones[0] : null;
-  if (telefoneBruto && !telefone) return { ok: false, erro: "Telefone inválido — informe com DDD." };
+  const digitosTelefone = telefoneBruto ? lerTelefoneBrasileiro(telefoneBruto) : null;
+  if (telefoneBruto && !digitosTelefone) return { ok: false, erro: MENSAGEM_TELEFONE_INVALIDO };
 
   const conselho = String(dados.get("conselho") ?? "").trim();
   const registroBruto = String(dados.get("registroConselho") ?? "").trim();
@@ -221,8 +223,8 @@ export async function salvarDoutor(_anterior: Resultado, dados: FormData): Promi
   const campos = {
     nome,
     titulo: tituloDe(nome),
-    telefone: telefone ? formatarNumero(telefone.numero) : null,
-    tipoTelefone: telefone?.tipo ?? null,
+    telefone: digitosTelefone ? formatarTelefoneBrasileiro(digitosTelefone) : null,
+    tipoTelefone: digitosTelefone ? (digitosTelefone[2] === "9" ? "Celular" : "Fixo") : null,
     email: email || null,
     conselho: conselho || null,
     registroConselho: registro,

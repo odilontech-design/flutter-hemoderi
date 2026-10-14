@@ -5,6 +5,7 @@ import { FormularioAcao } from "@/components/FormularioAcao";
 import { CampoDocumento } from "@/components/CampoDocumento";
 import { salvarDadosDaClinica } from "@/app/actions/configuracoes";
 import { CONSELHOS } from "@/lib/conselhos";
+import { CampoTelefone } from "@/components/CampoTelefone";
 
 /**
  * Os dados de contato e documento da clínica. Nome, perfil e o endereço
@@ -60,7 +61,7 @@ export function DadosDaClinica({
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <div>
           <Rotulo>Telefone</Rotulo>
-          <Campo name="telefone" defaultValue={telefone} inputMode="tel" placeholder="(11) 99999-9999" />
+          <CampoTelefone name="telefone" inicial={telefone} obrigatorio />
         </div>
         <div>
           <Rotulo>E-mail para contato e cobrança</Rotulo>

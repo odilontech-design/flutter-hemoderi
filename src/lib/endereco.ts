@@ -102,3 +102,25 @@ export async function locaisDaClinica(clinicaId: string): Promise<LocalDeAtendim
   }
   return locais;
 }
+
+type IdentidadeDoLocal = { cep?: string | null; numero?: string | null; complemento?: string | null };
+
+function normalizarParte(valor: string | null | undefined): string {
+  return (valor ?? "")
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]/g, "");
+}
+
+/**
+ * Dois cadastros apontam para o mesmo lugar? (ata de 13/10: evitar endereço
+ * duplicado). Mesmo CEP, mesmo número e mesmo complemento — ignorando
+ * maiúsculas, acentos e pontuação ("Sala 12" = "sala-12"). O complemento
+ * conta porque o mesmo prédio comercial pode ter duas salas da mesma clínica.
+ */
+export function mesmoLocal(a: IdentidadeDoLocal, b: IdentidadeDoLocal): boolean {
+  const cepA = (a.cep ?? "").replace(/\D/g, "");
+  if (!cepA || cepA !== (b.cep ?? "").replace(/\D/g, "")) return false;
+  return normalizarParte(a.numero) === normalizarParte(b.numero) && normalizarParte(a.complemento) === normalizarParte(b.complemento);
+}

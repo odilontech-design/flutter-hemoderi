@@ -58,7 +58,6 @@ export default async function Enderecos() {
       </Cartao>
 
       <Cartao className="max-w-2xl">
-        <div className="font-display font-bold text-bordo text-sm mb-3">Adicionar endereço</div>
         <NovoEndereco />
       </Cartao>
     </>

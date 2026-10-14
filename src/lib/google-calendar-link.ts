@@ -27,3 +27,47 @@ export function linkAdicionarGoogleAgenda(params: {
 
   return `https://calendar.google.com/calendar/render?${query.toString()}`;
 }
+
+/** Texto de campo do iCalendar: vírgula, ponto e vírgula, barra e quebra de linha escapados (RFC 5545). */
+function textoIcs(valor: string): string {
+  return valor.replace(/\\/g, "\\\\").replace(/;/g, "\;").replace(/,/g, "\\,").replace(/\r?\n/g, "\\n");
+}
+
+/**
+ * O mesmo evento em arquivo .ics (ata de 13/10: "Adicionar à sua agenda", não só
+ * ao Google). É o formato que Apple Calendário, Outlook e o próprio Google
+ * abrem: quem não usa Google não fica sem o botão.
+ */
+export function arquivoIcs(params: {
+  id: string;
+  titulo: string;
+  detalhes?: string;
+  local?: string;
+  inicio: Date;
+  duracaoMin: number;
+}): string {
+  const fim = new Date(params.inicio.getTime() + params.duracaoMin * 60 * 1000);
+  const comoUTC = (d: Date) => d.toISOString().replace(/[-:]|\.\d{3}/g, "");
+  const linhas = [
+    "BEGIN:VCALENDAR",
+    "VERSION:2.0",
+    "PRODID:-//Hemoderi//Dilon Saude//PT-BR",
+    "CALSCALE:GREGORIAN",
+    "BEGIN:VEVENT",
+    `UID:${params.id}@hemoderi`,
+    `DTSTAMP:${comoUTC(new Date())}`,
+    `DTSTART:${comoUTC(params.inicio)}`,
+    `DTEND:${comoUTC(fim)}`,
+    `SUMMARY:${textoIcs(params.titulo)}`,
+    ...(params.local ? [`LOCATION:${textoIcs(params.local)}`] : []),
+    ...(params.detalhes ? [`DESCRIPTION:${textoIcs(params.detalhes)}`] : []),
+    "END:VEVENT",
+    "END:VCALENDAR",
+  ];
+  return linhas.join("\r\n") + "\r\n";
+}
+
+/** O .ics como link de download, sem rota no servidor. */
+export function linkArquivoIcs(params: Parameters<typeof arquivoIcs>[0]): string {
+  return `data:text/calendar;charset=utf-8,${encodeURIComponent(arquivoIcs(params))}`;
+}

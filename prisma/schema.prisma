@@ -1380,7 +1380,16 @@ model Avaliacao {
 
   /// Opcional de propósito. Exigir texto derruba a taxa de resposta, e uma
   /// nota sem comentário ainda é informação; um comentário forçado é ruído.
+  /// Campo livre das avaliações anteriores a 13/10; as novas usam as três
+  /// perguntas abaixo.
   comentario String?
+
+  /// As três perguntas opcionais da ata de 13/10: o que mais gostou, o que
+  /// menos gostou e o que pode melhorar. Separadas para a central conseguir
+  /// ler só as críticas, por exemplo.
+  pontosPositivos String?
+  pontosNegativos String?
+  sugestoes       String?
 
   criadoPorId String?
   criadoPor   Usuario? @relation("AvaliacaoCriadaPor", fields: [criadoPorId], references: [id])

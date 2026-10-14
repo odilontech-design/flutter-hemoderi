@@ -10,6 +10,7 @@ import { CampoDocumento } from "@/components/CampoDocumento";
 import { autocadastrar } from "@/app/actions/autocadastro";
 import type { Resultado } from "@/app/actions/pedidos";
 import { PERFIS_DO_AUTOCADASTRO, ROTULO_PERFIL_CLIENTE } from "@/lib/visibilidade";
+import { CampoTelefone } from "@/components/CampoTelefone";
 
 const INICIAL: Resultado = { ok: false };
 
@@ -99,7 +100,7 @@ export function FormularioCadastro() {
         </div>
         <div>
           <Rotulo>Telefone / WhatsApp</Rotulo>
-          <Campo name="telefone" required placeholder="(11) 99999-0000" autoComplete="tel" />
+          <CampoTelefone name="telefone" obrigatorio />
         </div>
       </div>
 

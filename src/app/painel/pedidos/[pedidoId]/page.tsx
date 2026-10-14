@@ -14,6 +14,7 @@ import { formatarData, formatarDataHora } from "@/lib/data";
 import { formatarReais } from "@/lib/dinheiro";
 import { INCLUIR_ADICIONAIS, RelatorioPreenchido } from "@/components/RelatorioPreenchido";
 import { MostrarEstrelas } from "@/components/Estrelas";
+import { respostasEscritas } from "@/lib/avaliacao";
 
 export const dynamic = "force-dynamic";
 
@@ -39,7 +40,7 @@ export default async function DetalheDoPedido({ params }: { params: { pedidoId: 
       endereco: { select: { rotulo: true, endereco: true, numero: true, complemento: true, bairro: true, cidade: true, uf: true, observacoes: true } },
       profissional: { select: { nome: true } },
       relatorio: { include: INCLUIR_ADICIONAIS },
-      avaliacao: { select: { nota: true, comentario: true } },
+      avaliacao: { select: { nota: true, comentario: true, pontosPositivos: true, pontosNegativos: true, sugestoes: true } },
     },
   });
   if (!pedido) notFound();
@@ -208,9 +209,11 @@ export default async function DetalheDoPedido({ params }: { params: { pedidoId: 
         <Cartao>
           <div className="font-display font-bold text-bordo text-sm mb-2">Avaliação da clínica</div>
           <MostrarEstrelas nota={pedido.avaliacao.nota} />
-          {pedido.avaliacao.comentario && (
-            <div className="text-xs text-gray-600 mt-2">{pedido.avaliacao.comentario}</div>
-          )}
+          {respostasEscritas(pedido.avaliacao).map((r) => (
+            <div key={r.rotulo} className="text-xs text-gray-600 mt-2">
+              <span className="font-semibold text-gray-500">{r.rotulo}:</span> {r.texto}
+            </div>
+          ))}
         </Cartao>
       )}
     </>

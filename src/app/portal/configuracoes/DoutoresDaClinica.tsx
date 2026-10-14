@@ -5,6 +5,7 @@ import { FormularioAcao } from "@/components/FormularioAcao";
 import { BotaoAcao } from "@/components/BotaoAcao";
 import { removerDoutor, salvarDoutor } from "@/app/actions/configuracoes";
 import { CONSELHOS } from "@/lib/conselhos";
+import { CampoTelefone } from "@/components/CampoTelefone";
 
 export type DoutorDaClinica = {
   id: string;
@@ -27,7 +28,7 @@ function CamposDoDoutor({ d }: { d?: DoutorDaClinica }) {
         </div>
         <div>
           <Rotulo>Celular ou telefone</Rotulo>
-          <Campo name="telefone" defaultValue={d?.telefone ?? ""} inputMode="tel" placeholder="(11) 99999-9999" />
+          <CampoTelefone name="telefone" inicial={d?.telefone ?? ""} />
         </div>
         <div>
           <Rotulo>E-mail (opcional)</Rotulo>

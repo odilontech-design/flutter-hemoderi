@@ -52,3 +52,35 @@ export function estrelas(media: number | null): string {
   const cheias = Math.round(media);
   return "★".repeat(cheias) + "☆".repeat(NOTA_MAXIMA - cheias);
 }
+
+/**
+ * As três perguntas opcionais da avaliação e do NPS (ata de 13/10): o que mais
+ * gostou, o que menos gostou e o que pode melhorar — no imperativo, curtas,
+ * para a clínica responder em uma linha.
+ */
+export const PERGUNTAS_ABERTAS = [
+  { campo: "pontosPositivos", pergunta: "O que você mais gostou?", rotulo: "Mais gostou" },
+  { campo: "pontosNegativos", pergunta: "O que você menos gostou?", rotulo: "Menos gostou" },
+  { campo: "sugestoes", pergunta: "O que podemos melhorar?", rotulo: "Pontos de melhoria" },
+] as const;
+
+export type CamposAbertos = {
+  comentario?: string | null;
+  pontosPositivos?: string | null;
+  pontosNegativos?: string | null;
+  sugestoes?: string | null;
+};
+
+/**
+ * As respostas escritas de uma avaliação, já rotuladas, para as telas da
+ * central. Inclui o comentário livre das avaliações antigas (antes de 13/10).
+ */
+export function respostasEscritas(avaliacao: CamposAbertos): { rotulo: string; texto: string }[] {
+  const respostas: { rotulo: string; texto: string }[] = [];
+  if (avaliacao.comentario) respostas.push({ rotulo: "Comentário", texto: avaliacao.comentario });
+  for (const { campo, rotulo } of PERGUNTAS_ABERTAS) {
+    const texto = avaliacao[campo];
+    if (texto) respostas.push({ rotulo, texto });
+  }
+  return respostas;
+}

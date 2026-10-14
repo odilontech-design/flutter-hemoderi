@@ -32,6 +32,7 @@ import { condicaoValida, formaDePagamentoValida } from "@/lib/pagamento";
 import { procedimentoEscolhido } from "@/lib/procedimentos";
 import { camposFaltando } from "@/lib/cadastro-completo";
 import { aptoParaServico } from "@/lib/aptidao";
+import { formatarTelefoneBrasileiro, lerTelefoneBrasileiro, MENSAGEM_TELEFONE_INVALIDO } from "@/lib/telefone";
 import { ajudaCustoEmCentavos } from "@/lib/relatorio";
 import { perfilPermite } from "@/lib/papeis";
 import { formatarReais, lerCentavos } from "@/lib/dinheiro";
@@ -300,6 +301,11 @@ export async function solicitarAgendamento(_anterior: Resultado, dados: FormData
     return { ok: false, erro: "Escolha a forma de pagamento: Pix, dinheiro ou cheque." };
   }
 
+  // Contato da clínica obrigatório e no padrão brasileiro (ata de 13/10): é
+  // para onde a central liga e manda a confirmação.
+  const contatoClinica = lerTelefoneBrasileiro(String(dados.get("contatoClinica") ?? ""));
+  if (!contatoClinica) return { ok: false, erro: `Contato da clínica: ${MENSAGEM_TELEFONE_INVALIDO}` };
+
   const enderecoId = String(dados.get("enderecoId") ?? "") || null;
   const endereco = enderecoId
     ? await prisma.enderecoClinica.findFirst({
@@ -413,7 +419,7 @@ export async function solicitarAgendamento(_anterior: Resultado, dados: FormData
             valorServicoCentavos: item.valorServicoCentavos,
             pacienteNome: String(dados.get("pacienteNome") ?? "") || null,
             pacienteContato: String(dados.get("pacienteContato") ?? "") || null,
-            contatoClinica: String(dados.get("contatoClinica") ?? "").trim().slice(0, 40) || null,
+            contatoClinica: formatarTelefoneBrasileiro(contatoClinica),
             doutorNome: String(dados.get("doutorNome") ?? "").trim() || null,
             procedimentoPaciente,
             formaPagamento,
@@ -1093,13 +1099,24 @@ export async function reagendarPedido(_anterior: Resultado, dados: FormData): Pr
   const pedidoId = String(dados.get("pedidoId") ?? "");
   const dataISO = String(dados.get("data") ?? "");
   const horaInicio = String(dados.get("horaInicio") ?? "");
-  if (!dataISO || !horaInicio) return { ok: false, erro: "Escolha a nova data e o novo horário." };
 
   const pedido = await pedidoDaClinica(pedidoId, sessao.clinicaId);
   if (!pedido) return { ok: false, erro: "Pedido não encontrado." };
   if (!STATUS_ATIVOS.includes(pedido.status)) {
     return { ok: false, erro: "Este atendimento já foi finalizado." };
   }
+
+  // O local também pode mudar na remarcação (ata de 13/10). "" é o endereço
+  // principal do cadastro; outro valor precisa ser um endereço ativo DESTA
+  // clínica — o id vem do navegador.
+  const trocaDeLocal = await lerTrocaDeLocal(dados, pedido, sessao.clinicaId);
+  if (!trocaDeLocal.ok) return trocaDeLocal;
+  const mudaLocal = trocaDeLocal.mudou;
+
+  if (!dataISO && !horaInicio && mudaLocal) {
+    return aplicarTrocaDeLocal(pedido, trocaDeLocal.enderecoId, sessao.usuarioId, sessao.clinicaId);
+  }
+  if (!dataISO || !horaInicio) return { ok: false, erro: "Escolha a nova data e o novo horário." };
 
   const dataMinima = dataMinimaAgendamentoPublico();
   if (isoDeData(pedido.data) < dataMinima) {
@@ -1181,6 +1198,12 @@ export async function reagendarPedido(_anterior: Resultado, dados: FormData): Pr
       "reagendar-portal",
       `${isoDeData(pedido.data)} ${pedido.horaInicio} → ${dataISO} ${horaInicio} (${membros.length} serviços)`
     );
+    if (mudaLocal) {
+      await prisma.pedido.updateMany({
+        where: { id: { in: membros.map((m) => m.id) } },
+        data: { enderecoId: trocaDeLocal.enderecoId },
+      });
+    }
     atualizarTelas();
     return { ok: true, id: pedido.id };
   }
@@ -1217,15 +1240,97 @@ export async function reagendarPedido(_anterior: Resultado, dados: FormData): Pr
   );
   if (!resultado.ok) return resultado;
 
+  if (mudaLocal) {
+    await prisma.pedido.update({ where: { id: pedido.id }, data: { enderecoId: trocaDeLocal.enderecoId } });
+    atualizarTelas();
+  }
   await registrarAuditoria(
     sessao.usuarioId,
     "Pedido",
     pedido.id,
     "reagendar-portal",
-    `${dataAnterior} → ${dataISO} ${horaInicio}`
+    `${dataAnterior} → ${dataISO} ${horaInicio}${mudaLocal ? " · local alterado" : ""}`
   );
 
   return { ok: true };
+}
+
+/**
+ * O local escolhido na remarcação. Confere que o endereço é desta clínica e
+ * está ativo, e que os serviços do atendimento são atendidos na UF dele — o
+ * mesmo filtro que o agendamento novo aplica.
+ */
+async function lerTrocaDeLocal(
+  dados: FormData,
+  pedido: { id: string; grupoId: string | null; enderecoId: string | null; servicoId: string },
+  clinicaId: string
+): Promise<{ ok: true; mudou: boolean; enderecoId: string | null } | { ok: false; erro: string }> {
+  if (!dados.has("enderecoId")) return { ok: true, mudou: false, enderecoId: pedido.enderecoId };
+  const escolhido = String(dados.get("enderecoId") ?? "") || null;
+  if (escolhido === pedido.enderecoId) return { ok: true, mudou: false, enderecoId: escolhido };
+
+  let uf: string | null;
+  if (escolhido) {
+    const endereco = await prisma.enderecoClinica.findFirst({
+      where: { id: escolhido, clinicaId, ativo: true },
+      select: { uf: true },
+    });
+    if (!endereco) return { ok: false, erro: "Endereço não encontrado. Recarregue a página e escolha de novo." };
+    uf = endereco.uf;
+  } else {
+    uf = (await prisma.clinica.findUnique({ where: { id: clinicaId }, select: { uf: true } }))?.uf ?? null;
+  }
+
+  const servicoIds = pedido.grupoId
+    ? (
+        await prisma.pedido.findMany({
+          where: { clinicaId, grupoId: pedido.grupoId, status: { in: STATUS_ATIVOS } },
+          select: { servicoId: true },
+        })
+      ).map((m) => m.servicoId)
+    : [pedido.servicoId];
+  if (uf) {
+    const fora = await prisma.servico.findFirst({
+      where: { id: { in: servicoIds }, ufsIndisponiveis: { has: uf.toUpperCase() } },
+      select: { nome: true },
+    });
+    if (fora) return { ok: false, erro: `${fora.nome} não é atendido em ${uf.toUpperCase()}. Escolha outro endereço ou fale com a central.` };
+  }
+  return { ok: true, mudou: true, enderecoId: escolhido };
+}
+
+/**
+ * Só o local muda (mesma data e horário). Atendimento já confirmado volta para
+ * a confirmação da central: outro endereço pode pedir outro profissional, e
+ * quem foi alocado aceitou ir ao endereço anterior.
+ */
+async function aplicarTrocaDeLocal(
+  pedido: { id: string; grupoId: string | null },
+  enderecoId: string | null,
+  usuarioId: string,
+  clinicaId: string
+): Promise<Resultado> {
+  const membros = (await membrosAtivosDoAgendamento(pedido, clinicaId)) ?? [
+    await prisma.pedido.findUniqueOrThrow({ where: { id: pedido.id }, select: { id: true, status: true } }),
+  ];
+  for (const m of membros) {
+    await prisma.pedido.update({
+      where: { id: m.id },
+      data: {
+        enderecoId,
+        ...(m.status !== "SOLICITADO"
+          ? { status: "SOLICITADO" as const, profissionalId: null, equipamentoId: null, aceitoEm: null }
+          : {}),
+      },
+    });
+    await prisma.mensagemWhatsapp.deleteMany({
+      where: { pedidoId: m.id, tipo: { in: ["CONFIRMACAO", "ALOCACAO", "LEMBRETE"] }, status: "PENDENTE" },
+    });
+    await sincronizarEvento(m.id);
+  }
+  await registrarAuditoria(usuarioId, "Pedido", pedido.id, "trocar-local-portal", enderecoId ?? "endereço principal");
+  atualizarTelas();
+  return { ok: true, id: pedido.id };
 }
 
 /**
@@ -1488,6 +1593,9 @@ export async function editarAgendamentoPeloPortal(_anterior: Resultado, dados: F
     return { ok: false, erro: "Escolha a forma de pagamento: Pix, dinheiro ou cheque." };
   }
 
+  const contatoClinica = lerTelefoneBrasileiro(String(dados.get("contatoClinica") ?? ""));
+  if (!contatoClinica) return { ok: false, erro: `Contato da clínica: ${MENSAGEM_TELEFONE_INVALIDO}` };
+
   const resultado = await prisma.pedido.updateMany({
     where: {
       clinicaId: sessao.clinicaId,
@@ -1497,7 +1605,7 @@ export async function editarAgendamentoPeloPortal(_anterior: Resultado, dados: F
     data: {
       doutorNome,
       pacienteNome: String(dados.get("pacienteNome") ?? "").trim() || null,
-      contatoClinica: String(dados.get("contatoClinica") ?? "").trim().slice(0, 40) || null,
+      contatoClinica: formatarTelefoneBrasileiro(contatoClinica),
       procedimentoPaciente,
       formaPagamento,
       observacoes: String(dados.get("observacoes") ?? "").trim() || null,

@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { exigirClinica, registrarAuditoria } from "@/lib/sessao";
-import { LIMITE_COMENTARIO, notaValida } from "@/lib/avaliacao";
+import { LIMITE_COMENTARIO, PERGUNTAS_ABERTAS, notaValida } from "@/lib/avaliacao";
 import type { Resultado } from "./pedidos";
 
 /**
@@ -25,13 +25,18 @@ export async function avaliarAtendimento(_anterior: Resultado, dados: FormData):
 
   const pedidoId = String(dados.get("pedidoId") ?? "");
   const notaBruta = String(dados.get("nota") ?? "");
-  const comentario = String(dados.get("comentario") ?? "").trim();
+  // As três perguntas da ata de 13/10, todas opcionais.
+  const respostas = Object.fromEntries(
+    PERGUNTAS_ABERTAS.map(({ campo }) => [campo, String(dados.get(campo) ?? "").trim()])
+  ) as Record<(typeof PERGUNTAS_ABERTAS)[number]["campo"], string>;
 
   if (!notaValida(notaBruta)) return { ok: false, erro: "Escolha de 1 a 5 estrelas." };
   const nota = Number(notaBruta);
 
-  if (comentario.length > LIMITE_COMENTARIO) {
-    return { ok: false, erro: `O comentário passa de ${LIMITE_COMENTARIO} caracteres.` };
+  for (const { campo, pergunta } of PERGUNTAS_ABERTAS) {
+    if (respostas[campo].length > LIMITE_COMENTARIO) {
+      return { ok: false, erro: `A resposta de "${pergunta}" passa de ${LIMITE_COMENTARIO} caracteres.` };
+    }
   }
 
   const pedido = await prisma.pedido.findUnique({
@@ -64,7 +69,9 @@ export async function avaliarAtendimento(_anterior: Resultado, dados: FormData):
     data: {
       pedidoId: pedido.id,
       nota,
-      comentario: comentario || null,
+      pontosPositivos: respostas.pontosPositivos || null,
+      pontosNegativos: respostas.pontosNegativos || null,
+      sugestoes: respostas.sugestoes || null,
       profissionalId: pedido.profissionalId,
       clinicaId: pedido.clinicaId,
       criadoPorId: sessao.usuarioId,

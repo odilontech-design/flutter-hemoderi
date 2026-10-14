@@ -29,7 +29,7 @@ export default async function HistoricoEAvaliacoes() {
       include: {
         servico: { select: { nome: true } },
         profissional: { select: { nome: true } },
-        avaliacao: { select: { nota: true, comentario: true } },
+        avaliacao: { select: { nota: true } },
         fatura: { select: { status: true } },
         // O que o profissional declarou ter recebido no ato conta como pago.
         relatorio: { select: { recebimento: true } },
@@ -97,7 +97,7 @@ export default async function HistoricoEAvaliacoes() {
           <div className="font-display font-bold text-bordo text-sm mb-1">Pesquisa de satisfação</div>
           <div className="text-[11px] text-gray-500 mb-4 leading-relaxed">
             Faz um tempo que a gente não vê muito movimento — e é exatamente por isso que a sua opinião vale mais
-            agora. Duas perguntas, sem compromisso.
+            agora. Uma nota e três perguntas opcionais.
           </div>
           <ResponderNps pesquisaId={npsPendente.id} />
         </Cartao>
@@ -148,7 +148,7 @@ export default async function HistoricoEAvaliacoes() {
                         cancelado e falta não são trabalho de ninguém. A nota é
                         do profissional da visita (o primeiro realizado). */}
                     {avaliavel ? (
-                      <AvaliarAtendimento pedidoId={avaliavel.id} atual={avaliavel.avaliacao} compacto />
+                      <AvaliarAtendimento pedidoId={avaliavel.id} atual={avaliavel.avaliacao} />
                     ) : (
                       <span className="text-gray-300">—</span>
                     )}

@@ -6,6 +6,7 @@ import { dataMinimaAgendamentoPublico, formatarData, nomeDoProfissionalVisivel }
 import { codigoDoPedido } from "@/lib/numeracao";
 import { STATUS_ATIVOS } from "@/lib/pedido";
 import { parametros } from "@/lib/alocacao";
+import { locaisDaClinica } from "@/lib/endereco";
 import { FormularioReagendamento } from "./FormularioReagendamento";
 
 export const dynamic = "force-dynamic";
@@ -23,7 +24,7 @@ export default async function Reagendar({ params }: { params: { pedidoId: string
   });
   if (!pedido) notFound();
 
-  const config = await parametros();
+  const [config, locais] = await Promise.all([parametros(), locaisDaClinica(sessao.clinicaId)]);
   // Agendamento com vários serviços: remarca-se o bloco todo, e a conferência
   // de horários considera a soma das durações.
   const membros = pedido.grupoId
@@ -66,6 +67,8 @@ export default async function Reagendar({ params }: { params: { pedidoId: string
             jaConfirmado={pedido.status !== "SOLICITADO"}
             dataMinima={dataMinimaAgendamentoPublico()}
             antecedenciaHoras={config.antecedenciaMinimaHoras}
+            locais={locais.map((l) => ({ id: l.id, rotulo: l.rotulo, resumo: l.resumo }))}
+            enderecoAtualId={pedido.enderecoId ?? ""}
           />
         )}
       </Cartao>

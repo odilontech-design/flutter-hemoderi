@@ -7,6 +7,7 @@ import { FormularioAcao } from "@/components/FormularioAcao";
 import { editarAgendamentoPeloPortal } from "@/app/actions/pedidos";
 import { FORMAS_DE_PAGAMENTO } from "@/lib/pagamento";
 import { OUTRO_PROCEDIMENTO, PROCEDIMENTOS_NO_PACIENTE } from "@/lib/procedimentos";
+import { CampoTelefone } from "@/components/CampoTelefone";
 
 type Dados = {
   id: string;
@@ -51,7 +52,7 @@ export function EditarAgendamentoPortal({ dados, doutores = [] }: { dados: Dados
         </div>
         <div>
           <Rotulo>Contato da clínica para confirmação</Rotulo>
-          <Campo name="contatoClinica" maxLength={40} defaultValue={dados.contatoClinica} />
+          <CampoTelefone name="contatoClinica" inicial={dados.contatoClinica} obrigatorio />
         </div>
         <div>
           <Rotulo>Paciente (opcional)</Rotulo>

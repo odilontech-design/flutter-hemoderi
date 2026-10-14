@@ -5,7 +5,7 @@ import { Cartao, Kpi, SeloStatus, Tabela, Titulo, Vazio } from "@/components/ui"
 import { competenciaAtual, formatarData, hojeUTC } from "@/lib/data";
 import { formatarReaisCurto } from "@/lib/dinheiro";
 import { STATUS_ATIVOS, STATUS_PENDENTES } from "@/lib/pedido";
-import { estrelas, formatarMedia, mediaDeNotas } from "@/lib/avaliacao";
+import { estrelas, formatarMedia, mediaDeNotas, respostasEscritas } from "@/lib/avaliacao";
 import { MostrarEstrelas } from "@/components/Estrelas";
 import { falhasRecentes } from "@/lib/integracoes/google-agenda";
 import { Aviso } from "@/components/ui";
@@ -129,13 +129,23 @@ export default async function Hoje({ searchParams }: { searchParams: { servico?:
     // Só as que têm comentário: uma lista de cinco estrelas sem texto não é
     // leitura, é enfeite. O que a equipe age em cima é o que foi escrito.
     prisma.avaliacao.findMany({
-      where: { comentario: { not: null } },
+      where: {
+        OR: [
+          { comentario: { not: null } },
+          { pontosPositivos: { not: null } },
+          { pontosNegativos: { not: null } },
+          { sugestoes: { not: null } },
+        ],
+      },
       orderBy: { criadaEm: "desc" },
       take: 5,
       select: {
         id: true,
         nota: true,
         comentario: true,
+        pontosPositivos: true,
+        pontosNegativos: true,
+        sugestoes: true,
         criadaEm: true,
         clinica: { select: { nome: true } },
         profissional: { select: { nome: true } },
@@ -472,7 +482,11 @@ export default async function Hoje({ searchParams }: { searchParams: { servico?:
                     <div className="text-[10px] text-gray-400 mb-1">
                       sobre {avaliacao.profissional.nome} · {formatarData(avaliacao.criadaEm)}
                     </div>
-                    <div className="text-xs text-gray-600 leading-relaxed">{avaliacao.comentario}</div>
+                    {respostasEscritas(avaliacao).map((r) => (
+                      <div key={r.rotulo} className="text-xs text-gray-600 leading-relaxed">
+                        <span className="font-semibold text-gray-500">{r.rotulo}:</span> {r.texto}
+                      </div>
+                    ))}
                   </div>
                 ))}
               </div>

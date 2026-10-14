@@ -29,9 +29,9 @@ export async function responderNps(_anterior: Resultado, dados: FormData): Promi
   const nota = Number(notaBruta);
 
   for (const [rotulo, texto] of [
-    ["pontos positivos", pontosPositivos],
-    ["expectativas não atendidas", expectativasNaoAtendidas],
-    ["sugestões", sugestoes],
+    ["o que mais gostou", pontosPositivos],
+    ["o que menos gostou", expectativasNaoAtendidas],
+    ["pontos de melhoria", sugestoes],
   ] as const) {
     if (texto.length > LIMITE_TEXTO_NPS) {
       return { ok: false, erro: `O campo de ${rotulo} passa de ${LIMITE_TEXTO_NPS} caracteres.` };

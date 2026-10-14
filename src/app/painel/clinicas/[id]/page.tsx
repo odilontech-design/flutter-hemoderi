@@ -239,18 +239,18 @@ export default async function DetalheClinica({ params }: { params: { id: string 
                     </div>
                     {pesquisa.pontosPositivos && (
                       <div className="text-[11px] text-gray-600 mt-1">
-                        <strong className="text-gray-500">Pontos positivos:</strong> {pesquisa.pontosPositivos}
+                        <strong className="text-gray-500">Mais gostou:</strong> {pesquisa.pontosPositivos}
                       </div>
                     )}
                     {pesquisa.expectativasNaoAtendidas && (
                       <div className="text-[11px] text-gray-600 mt-1">
-                        <strong className="text-gray-500">Expectativas não atendidas:</strong>{" "}
+                        <strong className="text-gray-500">Menos gostou:</strong>{" "}
                         {pesquisa.expectativasNaoAtendidas}
                       </div>
                     )}
                     {pesquisa.sugestoes && (
                       <div className="text-[11px] text-gray-600 mt-1">
-                        <strong className="text-gray-500">Sugestões:</strong> {pesquisa.sugestoes}
+                        <strong className="text-gray-500">Pontos de melhoria:</strong> {pesquisa.sugestoes}
                       </div>
                     )}
                   </>

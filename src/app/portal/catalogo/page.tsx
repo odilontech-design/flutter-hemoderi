@@ -58,7 +58,6 @@ export default async function CatalogoDaClinica({ searchParams }: { searchParams
       nome: true,
       descricao: true,
       detalhes: true,
-      duracaoMin: true,
       familia: true,
       valorPadraoCentavos: true,
       unidadeCobranca: true,
@@ -173,8 +172,11 @@ export default async function CatalogoDaClinica({ searchParams }: { searchParams
               </span>
             </summary>
 
+            {/* Títulos "Como contratar" e "Serviços disponíveis" (ata de 13/10):
+                separam o descritivo da seção da lista do que dá para agendar. */}
             {descritivo && (
               <div className="px-5 pb-4">
+                <h3 className="font-display font-bold text-bordo text-xs uppercase tracking-wide mb-2">Como contratar</h3>
                 <div className="rounded-xl border border-gray-100 bg-bege/60 p-4 flex flex-col md:flex-row gap-4">
                   <figure className="md:w-56 shrink-0 m-0">
                     {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -208,6 +210,7 @@ export default async function CatalogoDaClinica({ searchParams }: { searchParams
               </div>
             )}
 
+            <h3 className="font-display font-bold text-bordo text-xs uppercase tracking-wide px-5 mb-2">Serviços disponíveis</h3>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 px-5 pb-5">
               {grupo.servicos.map((servico) => {
                 const preco = precos.get(servico.id);
@@ -216,7 +219,6 @@ export default async function CatalogoDaClinica({ searchParams }: { searchParams
                   <div key={servico.id} className="border border-gray-200 rounded-xl p-3 flex flex-col gap-2">
                     <div>
                       <div className="text-xs font-semibold text-bordo">{servico.nome}</div>
-                      <div className="text-[10px] text-gray-400 mt-0.5">{servico.duracaoMin} min</div>
                     </div>
 
                     {servico.descricao && (
@@ -237,7 +239,6 @@ export default async function CatalogoDaClinica({ searchParams }: { searchParams
                           servico.descricao && <p className="whitespace-pre-line">{servico.descricao}</p>
                         )}
                         <ul className="text-gray-500 space-y-0.5">
-                          <li>Duração: {servico.duracaoMin} min</li>
                           <li>Cobrança: {descricaoDoPreco(valor, servico)}</li>
                         </ul>
                       </div>

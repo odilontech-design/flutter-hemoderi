@@ -37,6 +37,8 @@ export function FormularioReagendamento({
   jaConfirmado,
   dataMinima,
   antecedenciaHoras,
+  locais,
+  enderecoAtualId,
 }: {
   pedidoId: string;
   servicoId: string;
@@ -49,37 +51,19 @@ export function FormularioReagendamento({
   dataMinima: string;
   /** Antecedência mínima do portal, em horas. */
   antecedenciaHoras: number;
+  /** Endereços da clínica: o local também pode mudar na remarcação (ata de 13/10). */
+  locais: { id: string; rotulo: string; resumo: string }[];
+  enderecoAtualId: string;
 }) {
   const router = useRouter();
   const [estado, enviar] = useFormState(reagendarPedido, INICIAL);
 
   const [data, setData] = useState("");
-  const [horarios, setHorarios] = useState<string[]>([]);
-  const [buscando, setBuscando] = useState(false);
+  const [enderecoId, setEnderecoId] = useState(enderecoAtualId);
+  const mudaLocal = enderecoId !== enderecoAtualId;
   // O horário vem do relógio do formulário — qualquer um, não só os da grade.
   const [hora, setHora] = useState("");
   const [situacaoHora, setSituacaoHora] = useState<"livre" | "indisponivel" | "verificando" | null>(null);
-
-  useEffect(() => {
-    if (!data) {
-      setHorarios([]);
-      return;
-    }
-    let cancelado = false;
-    setBuscando(true);
-    const parametros = parametros_de({ servicoId, data, pedidoId, grupoId, itens });
-    fetch(`/api/horarios?${parametros}`)
-      .then((r) => r.json())
-      .then((json) => {
-        if (!cancelado) setHorarios(json.horarios ?? []);
-      })
-      .finally(() => {
-        if (!cancelado) setBuscando(false);
-      });
-    return () => {
-      cancelado = true;
-    };
-  }, [data, servicoId, pedidoId, grupoId, itens]);
 
   // Confere o horário digitado contra a agenda, com uma pequena espera para não
   // consultar a cada minuto que a pessoa gira no relógio.
@@ -117,11 +101,39 @@ export function FormularioReagendamento({
       <input type="hidden" name="pedidoId" value={pedidoId} />
 
       <Aviso>
-        Os horários abaixo são os que a sua clínica tem livres.{" "}
         {jaConfirmado
-          ? "Ao remarcar, o atendimento volta para a confirmação da central, que reorganiza a equipe para a nova data."
-          : "A central confirma o novo horário."}
+          ? "Ao remarcar ou mudar o local, o atendimento volta para a confirmação da central, que reorganiza a equipe."
+          : "A central confirma o novo horário e o local."}
       </Aviso>
+
+      {locais.length > 1 && (
+        <div>
+          <Rotulo>Local do atendimento</Rotulo>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+            {locais.map((l) => {
+              const escolhido = l.id === enderecoId;
+              return (
+                <button
+                  key={l.id || "principal"}
+                  type="button"
+                  onClick={() => setEnderecoId(l.id)}
+                  aria-pressed={escolhido}
+                  className={`text-left rounded-xl border p-3 transition-colors ${
+                    escolhido ? "border-bordo bg-bordo text-white" : "border-gray-200 bg-white hover:border-bordo/40"
+                  }`}
+                >
+                  <div className="text-xs font-semibold">
+                    {l.rotulo}
+                    {l.id === enderecoAtualId && <span className="font-normal opacity-70"> · atual</span>}
+                  </div>
+                  <div className={`text-[10px] mt-1 ${escolhido ? "text-white/70" : "text-gray-400"}`}>{l.resumo || "—"}</div>
+                </button>
+              );
+            })}
+          </div>
+          <input type="hidden" name="enderecoId" value={enderecoId} />
+        </div>
+      )}
 
       <div>
         <Rotulo>Nova data</Rotulo>
@@ -131,18 +143,19 @@ export function FormularioReagendamento({
           min={dataMinima}
           value={data}
           onChange={(e) => setData(e.target.value)}
-          required
+          required={!mudaLocal}
         />
         <div className="text-[10px] text-gray-400 mt-1">
           Remarcação pelo portal fecha às 18h do dia anterior — a mesma regra de um agendamento
           novo. Para menos que isso, fale com a central.
+          {mudaLocal && " Só vai mudar o local? Deixe a data e o horário em branco."}
         </div>
       </div>
 
       <div>
         <Rotulo>Novo horário</Rotulo>
         {!data ? (
-          <div className="text-xs text-gray-400 py-2">Escolha a data.</div>
+          <div className="text-xs text-gray-400 py-2">{mudaLocal ? "Mantém o horário atual." : "Escolha a data."}</div>
         ) : (
           <div className="space-y-2">
             <Campo
@@ -170,31 +183,6 @@ export function FormularioReagendamento({
               )}
             </div>
 
-            {buscando ? (
-              <div className="text-[11px] text-gray-400">Buscando sugestões…</div>
-            ) : horarios.length === 0 ? (
-              <Aviso tom="alerta">Sem horário livre nesse dia. Tente outra data.</Aviso>
-            ) : (
-              <div>
-                <div className="text-[10px] text-gray-400 mb-1">Sugestões de horários livres:</div>
-                <div className="flex flex-wrap gap-1.5">
-                  {horarios.map((sugestao) => (
-                    <button
-                      key={sugestao}
-                      type="button"
-                      onClick={() => setHora(sugestao)}
-                      className={`text-[11px] font-semibold px-2.5 py-1.5 rounded-lg border ${
-                        hora === sugestao
-                          ? "bg-bordo text-white border-bordo"
-                          : "border-gray-300 text-gray-600 hover:bg-gray-50"
-                      }`}
-                    >
-                      {sugestao}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )}
           </div>
         )}
       </div>
@@ -202,8 +190,15 @@ export function FormularioReagendamento({
       {estado.erro && <Aviso tom="erro">{estado.erro}</Aviso>}
 
       <div className="flex gap-2">
-        <Botao type="submit" disabled={!hora || situacaoHora === "indisponivel" || situacaoHora === "verificando"}>
-          Confirmar novo horário
+        <Botao
+          type="submit"
+          disabled={
+            mudaLocal && !data
+              ? false
+              : !hora || situacaoHora === "indisponivel" || situacaoHora === "verificando"
+          }
+        >
+          {mudaLocal && !data ? "Confirmar novo local" : "Confirmar remarcação"}
         </Botao>
         <Botao type="button" variante="secundario" onClick={() => router.push("/portal")}>
           Voltar

@@ -6,7 +6,7 @@ import { formatarDataCurta, formatarDiaEData, hojeUTC, instanteDoAtendimento, pr
 import { formatarReais } from "@/lib/dinheiro";
 import { parametros } from "@/lib/alocacao";
 import { LOCAL_FECHADO, localRevelado } from "@/lib/sigilo";
-import { linkAdicionarGoogleAgenda } from "@/lib/google-calendar-link";
+import { AdicionarAgenda } from "@/components/AdicionarAgenda";
 import { houveAtraso } from "@/lib/atraso";
 import { comEnderecoDoPedido } from "@/lib/endereco";
 import { AceiteAlocacao, BotaoCheckin } from "./AcoesAtendimento";
@@ -25,7 +25,7 @@ type PedidoParaCalendario = {
  * endereço entram no evento — só "quando", que é o que o profissional
  * precisa para reservar a data antes de saber onde é.
  */
-function linkCalendarioDoPedido(pedido: PedidoParaCalendario, revelado: boolean): string {
+function eventoDoPedido(pedido: PedidoParaCalendario & { id: string }, revelado: boolean) {
   // O endereço do PEDIDO, quando a clínica escolheu outro que não o principal.
   const onde = comEnderecoDoPedido(pedido.clinica, pedido.endereco);
   const local = revelado
@@ -38,12 +38,13 @@ function linkCalendarioDoPedido(pedido: PedidoParaCalendario, revelado: boolean)
         .join(" — ")
     : undefined;
 
-  return linkAdicionarGoogleAgenda({
+  return {
+    id: pedido.id,
     titulo: revelado ? `${pedido.servico.nome} — ${pedido.clinica.nome}` : `${pedido.servico.nome} — Hemoderi`,
     local: local || undefined,
     inicio: instanteDoAtendimento(pedido.data, pedido.horaInicio),
     duracaoMin: pedido.servico.duracaoMin,
-  });
+  };
 }
 
 export const dynamic = "force-dynamic";
@@ -213,17 +214,7 @@ export default async function MinhaAgenda() {
                       atrasado={houveAtraso(pedido.data, pedido.horaInicio, new Date())}
                     />
                   )}
-                  <a
-                    href={linkCalendarioDoPedido(
-                      pedido,
-                      localRevelado(pedido.data, pedido.horaInicio, config.horasRevelarLocal)
-                    )}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-[11px] font-semibold text-bordo hover:underline"
-                  >
-                    + Google Agenda
-                  </a>
+                  <AdicionarAgenda variante="link" evento={eventoDoPedido(pedido, localRevelado(pedido.data, pedido.horaInicio, config.horasRevelarLocal))} />
                   {pedido.relatorio ? (
                     <Link
                       href={`/profissional/relatorio/${pedido.id}`}
@@ -357,17 +348,7 @@ export default async function MinhaAgenda() {
                     )}{" "}
                     · {pedido.servico.nome}
                   </div>
-                  <a
-                    href={linkCalendarioDoPedido(
-                      pedido,
-                      localRevelado(pedido.data, pedido.horaInicio, config.horasRevelarLocal)
-                    )}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-[11px] font-semibold text-bordo hover:underline"
-                  >
-                    + Google Agenda
-                  </a>
+                  <AdicionarAgenda variante="link" evento={eventoDoPedido(pedido, localRevelado(pedido.data, pedido.horaInicio, config.horasRevelarLocal))} />
                 </div>
                 <div className="text-right">
                   <div className="text-[10px] text-gray-400">valor do profissional</div>

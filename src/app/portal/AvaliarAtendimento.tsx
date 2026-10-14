@@ -4,34 +4,25 @@ import { useState } from "react";
 import { avaliarAtendimento } from "@/app/actions/avaliacoes";
 import { FormularioAcao } from "@/components/FormularioAcao";
 import { EscolherEstrelas, MostrarEstrelas } from "@/components/Estrelas";
-import { Area, Botao, Rotulo } from "@/components/ui";
-import { LIMITE_COMENTARIO } from "@/lib/avaliacao";
+import { Area, Rotulo } from "@/components/ui";
+import { LIMITE_COMENTARIO, PERGUNTAS_ABERTAS } from "@/lib/avaliacao";
 
-export type AvaliacaoAtual = { nota: number; comentario: string | null } | null;
+export type AvaliacaoAtual = { nota: number } | null;
 
 /**
  * O formulário de avaliação de um atendimento — uma vez só.
  *
- * Em `compacto` ele começa fechado, como um botão numa linha de tabela — é
- * assim que ele aparece no histórico, onde abrir cinco formulários de uma vez
- * transformaria a lista num paredão. Fora do compacto, já vem aberto: no
- * cartão de pendentes o formulário É o conteúdo, e um clique a mais para
- * chegar nele é onde a taxa de resposta morre.
+ * As estrelas aparecem direto, sem botão "Avaliar" no meio (ata de 13/10): a
+ * clínica clica na nota e só então abrem as três perguntas opcionais e o
+ * botão de enviar. Assim a linha do histórico continua curta até alguém
+ * decidir avaliar, e avaliar custa um clique a menos.
  *
- * Definitiva (ata de 21/09): já avaliado, só mostra a nota — sem botão de
- * abrir o formulário de novo. `avaliarAtendimento` recusa o reenvio no
- * servidor; aqui é só o reflexo disso na tela.
+ * Definitiva (ata de 21/09): já avaliado, só mostra a nota.
+ * `avaliarAtendimento` recusa o reenvio no servidor; aqui é só o reflexo
+ * disso na tela.
  */
-export function AvaliarAtendimento({
-  pedidoId,
-  atual,
-  compacto = false,
-}: {
-  pedidoId: string;
-  atual: AvaliacaoAtual;
-  compacto?: boolean;
-}) {
-  const [aberto, setAberto] = useState(!compacto);
+export function AvaliarAtendimento({ pedidoId, atual }: { pedidoId: string; atual: AvaliacaoAtual }) {
+  const [nota, setNota] = useState(0);
 
   if (atual) {
     return (
@@ -41,38 +32,21 @@ export function AvaliarAtendimento({
     );
   }
 
-  if (!aberto) {
-    return (
-      <Botao variante="secundario" onClick={() => setAberto(true)}>
-        Avaliar
-      </Botao>
-    );
+  if (!nota) {
+    return <EscolherEstrelas inicial={0} aoMudar={setNota} />;
   }
 
   return (
-    <div className="space-y-2">
-      <FormularioAcao acao={avaliarAtendimento} botao="Enviar avaliação" limparAoSalvar={false}>
-        <input type="hidden" name="pedidoId" value={pedidoId} />
-        <EscolherEstrelas inicial={0} />
-        <div>
-          <Rotulo>Comentário (opcional)</Rotulo>
-          <Area
-            name="comentario"
-            rows={2}
-            maxLength={LIMITE_COMENTARIO}
-            placeholder="O que funcionou bem, o que pode melhorar…"
-          />
+    <FormularioAcao acao={avaliarAtendimento} botao="Enviar avaliação" limparAoSalvar={false}>
+      <input type="hidden" name="pedidoId" value={pedidoId} />
+      <EscolherEstrelas inicial={nota} aoMudar={setNota} />
+      <div className="text-[10px] text-gray-400">As perguntas abaixo são opcionais.</div>
+      {PERGUNTAS_ABERTAS.map(({ campo, pergunta }) => (
+        <div key={campo}>
+          <Rotulo>{pergunta}</Rotulo>
+          <Area name={campo} rows={2} maxLength={LIMITE_COMENTARIO} />
         </div>
-      </FormularioAcao>
-      {compacto && (
-        <button
-          type="button"
-          onClick={() => setAberto(false)}
-          className="text-[11px] text-gray-400 hover:text-bordo"
-        >
-          fechar
-        </button>
-      )}
-    </div>
+      ))}
+    </FormularioAcao>
   );
 }

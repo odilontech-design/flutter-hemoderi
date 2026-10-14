@@ -4,6 +4,7 @@ import bcrypt from "bcryptjs";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { cepValido, cnpjValido, cpfValido } from "@/lib/documento";
+import { formatarTelefoneBrasileiro, lerTelefoneBrasileiro, MENSAGEM_TELEFONE_INVALIDO } from "@/lib/telefone";
 import { conferirSenhaNova } from "@/lib/senha";
 import { PERFIS_DO_AUTOCADASTRO } from "@/lib/visibilidade";
 import { conselhoValido, registroDeConselho } from "@/lib/conselhos";
@@ -50,8 +51,9 @@ export async function autocadastrar(_anterior: Resultado, dados: FormData): Prom
   const email = String(dados.get("email") ?? "").toLowerCase().trim();
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return { ok: false, erro: "Informe um e-mail válido." };
 
-  const telefone = String(dados.get("telefone") ?? "").trim();
-  if (telefone.replace(/\D/g, "").length < 10) return { ok: false, erro: "Informe um telefone com DDD." };
+  const digitosTelefone = lerTelefoneBrasileiro(String(dados.get("telefone") ?? ""));
+  if (!digitosTelefone) return { ok: false, erro: MENSAGEM_TELEFONE_INVALIDO };
+  const telefone = formatarTelefoneBrasileiro(digitosTelefone);
 
   const documento = String(dados.get("cnpj") ?? "").trim();
   // Obrigatório (ata de 02/10): sem documento a central não emite a cobrança.

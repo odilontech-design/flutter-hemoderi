@@ -11,8 +11,21 @@ import { NOTA_MAXIMA, ROTULO_NOTA } from "@/lib/avaliacao";
  * continuar sendo um formulário HTML comum — é o que deixa a server action
  * ler `dados.get("nota")` sem cliente nenhum no meio.
  */
-export function EscolherEstrelas({ name = "nota", inicial = 0 }: { name?: string; inicial?: number }) {
-  const [nota, setNota] = useState(inicial);
+export function EscolherEstrelas({
+  name = "nota",
+  inicial = 0,
+  aoMudar,
+}: {
+  name?: string;
+  inicial?: number;
+  /** Avisa a nota escolhida (0 = desmarcada) — a avaliação abre as perguntas no clique. */
+  aoMudar?: (nota: number) => void;
+}) {
+  const [nota, setNotaInterna] = useState(inicial);
+  function setNota(valor: number) {
+    setNotaInterna(valor);
+    aoMudar?.(valor);
+  }
   // Pré-visualização no hover: sem ela, quem usa mouse não sabe o que está
   // prestes a clicar até ter clicado.
   const [previa, setPrevia] = useState(0);

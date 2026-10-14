@@ -6,7 +6,7 @@ import { formatarDataCurta, hojeUTC, instanteDoAtendimento, nomeDoProfissionalVi
 import { STATUS_ATIVOS } from "@/lib/pedido";
 import { SeloStatusCliente } from "@/components/SeloStatusCliente";
 import { AcoesClinica } from "./AcoesClinica";
-import { linkAdicionarGoogleAgenda } from "@/lib/google-calendar-link";
+import { AdicionarAgenda } from "@/components/AdicionarAgenda";
 
 export const dynamic = "force-dynamic";
 
@@ -165,18 +165,15 @@ export default async function MeusAgendamentos() {
                       </Link>
                       <AcoesClinica pedidoId={primeiro.id} />
                       {statusDaVisita !== "SOLICITADO" && (
-                        <a
-                          href={linkAdicionarGoogleAgenda({
+                        <AdicionarAgenda
+                          variante="link"
+                          evento={{
+                            id: primeiro.id,
                             titulo: `${itens.map((p) => p.servico.nome).join(" + ")} — Hemoderi`,
                             inicio: instanteDoAtendimento(primeiro.data, primeiro.horaInicio),
                             duracaoMin: duracaoTotal,
-                          })}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="text-[11px] font-semibold text-bordo hover:underline whitespace-nowrap"
-                        >
-                          + Google Agenda
-                        </a>
+                          }}
+                        />
                       )}
                     </div>
                   </td>

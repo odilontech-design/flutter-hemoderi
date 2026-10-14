@@ -5,6 +5,7 @@ import { useFormState } from "react-dom";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Area, Aviso, Botao, Campo, Rotulo, Selecao } from "@/components/ui";
+import { CampoTelefone } from "@/components/CampoTelefone";
 import { FORMAS_DE_PAGAMENTO } from "@/lib/pagamento";
 import { OUTRO_PROCEDIMENTO, PROCEDIMENTOS_NO_PACIENTE } from "@/lib/procedimentos";
 import { solicitarAgendamento, type Resultado } from "@/app/actions/pedidos";
@@ -44,6 +45,51 @@ const HORARIO = new Intl.DateTimeFormat("pt-BR", {
 });
 
 /**
+ * Uma etapa do agendamento: aberta, concluída (com resumo e "alterar") ou à
+ * frente (apagada). Fica fora do formulário para o React não remontar os
+ * campos a cada tecla digitada.
+ */
+function Etapa({
+  numero,
+  rotulo,
+  titulo,
+  passo,
+  irPara,
+  resumo,
+  children,
+}: {
+  numero: number;
+  /** Número exibido — sem a etapa de local, a contagem começa em 1 nos serviços. */
+  rotulo: number;
+  titulo: string;
+  passo: number;
+  irPara: (numero: number) => void;
+  resumo?: React.ReactNode;
+  children: React.ReactNode;
+}) {
+  const aberta = passo === numero;
+  const concluida = passo > numero;
+  return (
+    <section id={`passo-${numero}`} className={`scroll-mt-4 rounded-2xl border ${aberta ? "border-bordo/30 bg-white" : "border-gray-200 bg-white/60"}`}>
+      <div className="flex items-center justify-between gap-3 px-4 py-3">
+        <div className="min-w-0">
+          <h2 className={`font-display font-bold text-sm ${aberta || concluida ? "text-bordo" : "text-gray-400"}`}>
+            {rotulo} · {titulo}
+          </h2>
+          {concluida && resumo && <div className="text-[11px] text-gray-600 mt-0.5 truncate">{resumo}</div>}
+        </div>
+        {concluida && (
+          <button type="button" onClick={() => irPara(numero)} className="shrink-0 text-[11px] font-semibold text-bordo hover:underline">
+            alterar
+          </button>
+        )}
+      </div>
+      {aberta && <div className="px-4 pb-4">{children}</div>}
+    </section>
+  );
+}
+
+/**
  * O agendamento pelo portal (atas de 14/09 e 01/10).
  *
  * Equipamento primeiro, procedimento em seguida — e agora VÁRIOS procedimentos
@@ -57,6 +103,13 @@ const HORARIO = new Intl.DateTimeFormat("pt-BR", {
  *
  * A escolha de profissional continua fora da tela (ata de 14/09): quem
  * decide quem atende é a central.
+ *
+ * Em ETAPAS sequenciais (ata de 13/10): local, equipamento e serviços, data e
+ * horário, informações. Só a etapa da vez fica aberta; as anteriores viram uma
+ * linha de resumo com "alterar", e a tela rola sozinha para a próxima — sem a
+ * rolagem infinita de antes. Sem minutos (geravam cobrança de "procedimento
+ * curto"), sem sugestão de horário livre (quem fecha a agenda é a central) e
+ * sem previsão de término.
  */
 export function FormularioAgendamento({
   grupos,
@@ -115,6 +168,21 @@ export function FormularioAgendamento({
     [gruposVisiveis]
   );
 
+  // Etapas: 1 local (só quando há mais de um), 2 serviços, 3 data e horário,
+  // 4 informações. Quem chega pelo catálogo com um serviço escolhido já começa
+  // nos serviços.
+  const temEtapaDeLocal = locais.length > 1;
+  const [passo, setPasso] = useState(() => (temEtapaDeLocal && !servicoInicialId ? 1 : 2));
+  const [primeiraRenderizacao, setPrimeiraRenderizacao] = useState(true);
+  useEffect(() => {
+    if (primeiraRenderizacao) {
+      setPrimeiraRenderizacao(false);
+      return;
+    }
+    document.getElementById(`passo-${passo}`)?.scrollIntoView({ behavior: "smooth", block: "start" });
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- rola só quando a etapa muda
+  }, [passo]);
+
   const [familiaAberta, setFamiliaAberta] = useState<string | null>(() => {
     if (!servicoInicialId) return null;
     return grupos.find((g) => g.servicos.some((s) => s.id === servicoInicialId))?.familia ?? null;
@@ -128,9 +196,6 @@ export function FormularioAgendamento({
   const [procedimento, setProcedimento] = useState("");
   const [pacienteNome, setPacienteNome] = useState("");
   const [observacoes, setObservacoes] = useState("");
-  const [horarios, setHorarios] = useState<string[]>([]);
-  const [duracaoTotal, setDuracaoTotal] = useState(0);
-  const [buscando, setBuscando] = useState(false);
   const [primeiroHorario, setPrimeiroHorario] = useState<string | null>(null);
   // O horário vem do relógio do formulário — qualquer um, não só os da grade
   // (ata de 02/10). `situacaoHora` diz se a agenda comporta esse horário.
@@ -149,32 +214,6 @@ export function FormularioAgendamento({
   }, [antecedenciaHoras]);
 
   const chaveDosItens = itens.map((i) => `${i.servicoId}:${i.quantidade}`).join(",");
-
-  useEffect(() => {
-    if (!chaveDosItens || !data) {
-      setHorarios([]);
-      setDuracaoTotal(0);
-      return;
-    }
-    let cancelado = false;
-    setBuscando(true);
-    const parametros = new URLSearchParams({ itens: chaveDosItens, data });
-    fetch(`/api/horarios?${parametros}`)
-      .then((r) => r.json())
-      .then((json) => {
-        if (cancelado) return;
-        setHorarios(json.horarios ?? []);
-        setDuracaoTotal(json.duracaoTotalMin ?? 0);
-      })
-      .finally(() => {
-        if (!cancelado) setBuscando(false);
-      });
-    // Cancela a resposta antiga: trocar de data (ou de serviço) rápido não pode
-    // fazer a lista de horários de antes aparecer para o pedido de agora.
-    return () => {
-      cancelado = true;
-    };
-  }, [chaveDosItens, data]);
 
   // Confere o horário digitado contra a agenda, com uma pequena espera para não
   // consultar a cada minuto que a pessoa gira no relógio.
@@ -206,6 +245,12 @@ export function FormularioAgendamento({
   useEffect(() => {
     if (estado.ok) router.push(estado.id ? `/portal/resumo/${estado.id}` : "/portal");
   }, [estado.ok, estado.id, router]);
+
+  function abrirFamilia(familia: string | null) {
+    setFamiliaAberta(familia);
+    // Leva a tela até os procedimentos da categoria escolhida.
+    if (familia) setTimeout(() => document.getElementById("procedimentos-da-familia")?.scrollIntoView({ behavior: "smooth", block: "nearest" }), 50);
+  }
 
   function adicionar(servico: ServicoDoCarrinho) {
     setItens((atuais) =>
@@ -256,29 +301,47 @@ export function FormularioAgendamento({
     })
   );
 
+  const horaLivre = Boolean(hora) && situacaoHora === "livre";
+  const dataLegivel = data ? data.split("-").reverse().join("/") : "";
+
   return (
-    <div className="space-y-8">
-      {/* ── 1. Endereço ──────────────────────────────────────────────────── */}
-      {locais.length > 0 && (
-        <section>
-          <h2 className="font-display font-bold text-bordo text-sm mb-1">1 · Onde será o atendimento</h2>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 mt-3">
+    <form action={enviar} className="space-y-3 max-w-4xl">
+      <input type="hidden" name="itens" value={JSON.stringify(itens)} />
+      <input type="hidden" name="enderecoId" value={local?.id ?? ""} />
+      <input type="hidden" name="data" value={data} />
+      <input type="hidden" name="horaInicio" value={hora} />
+
+      {!temEtapaDeLocal && local && (
+        <div className="text-[11px] text-gray-500 px-1">
+          Atendimento em <strong className="text-gray-700">{local.rotulo}</strong>
+          {local.resumo ? ` · ${local.resumo}` : ""} ·{" "}
+          <Link href="/portal/enderecos" className="font-semibold text-bordo hover:underline">
+            cadastrar outro endereço
+          </Link>
+        </div>
+      )}
+
+      {/* ── Local ─────────────────────────────────────────────────────────── */}
+      {temEtapaDeLocal && (
+        <Etapa numero={1} rotulo={1} passo={passo} irPara={setPasso} titulo="Onde será o atendimento" resumo={local ? `${local.rotulo}${local.resumo ? ` · ${local.resumo}` : ""}` : null}>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
             {locais.map((l) => {
               const escolhido = l.id === (local?.id ?? "");
               return (
                 <button
                   key={l.id || "principal"}
                   type="button"
-                  onClick={() => setLocalId(l.id)}
+                  onClick={() => {
+                    setLocalId(l.id);
+                    setPasso(2);
+                  }}
                   aria-pressed={escolhido}
                   className={`text-left rounded-xl border p-3 transition-colors ${
                     escolhido ? "border-bordo bg-bordo text-white" : "border-gray-200 bg-white hover:border-bordo/40"
                   }`}
                 >
                   <div className="text-xs font-semibold">{l.rotulo}</div>
-                  <div className={`text-[10px] mt-1 ${escolhido ? "text-white/70" : "text-gray-400"}`}>
-                    {l.resumo || "—"}
-                  </div>
+                  <div className={`text-[10px] mt-1 ${escolhido ? "text-white/70" : "text-gray-400"}`}>{l.resumo || "—"}</div>
                 </button>
               );
             })}
@@ -286,17 +349,22 @@ export function FormularioAgendamento({
           <Link href="/portal/enderecos" className="inline-block text-[11px] font-semibold text-bordo hover:underline mt-2">
             + Cadastrar outro endereço
           </Link>
-        </section>
+        </Etapa>
       )}
 
-      {/* ── 2. Serviços ──────────────────────────────────────────────────── */}
-      <section>
-        <h2 className="font-display font-bold text-bordo text-sm mb-1">2 · O que você precisa</h2>
-        <p className="text-[11px] text-gray-500 mb-4">
+      {/* ── Equipamento e serviços ────────────────────────────────────────── */}
+      <Etapa
+        numero={2}
+        rotulo={temEtapaDeLocal ? 2 : 1}
+        passo={passo}
+        irPara={setPasso}
+        titulo="Equipamento e serviços"
+        resumo={linhas.map((l) => `${l.servico.nome}${l.item.quantidade > 1 ? ` × ${l.item.quantidade}` : ""}`).join(" + ")}
+      >
+        <p className="text-[11px] text-gray-500 mb-3">
           Escolha o equipamento e adicione os procedimentos — pode juntar mais de um na mesma visita.
         </p>
-
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2">
+        <div className="grid grid-cols-3 sm:grid-cols-4 lg:grid-cols-6 gap-2">
           {gruposVisiveis.map((grupo) => {
             const aberta = familiaAberta === grupo.familia;
             const noCarrinho = grupo.servicos.filter((s) => itens.some((i) => i.servicoId === s.id)).length;
@@ -305,44 +373,35 @@ export function FormularioAgendamento({
               <button
                 key={grupo.familia}
                 type="button"
-                onClick={() => setFamiliaAberta(aberta ? null : grupo.familia)}
+                onClick={() => abrirFamilia(aberta ? null : grupo.familia)}
                 aria-expanded={aberta}
-                className={`text-left rounded-xl border p-3 transition-colors min-h-[56px]
-                  ${
-                    aberta
-                      ? "border-bordo bg-bordo text-white"
-                      : noCarrinho > 0
-                        ? "border-bordo/60 bg-white ring-1 ring-bordo/30"
-                        : "border-gray-200 bg-white hover:border-bordo/40"
-                  }`}
+                className={`text-left rounded-xl border p-2 transition-colors ${
+                  aberta
+                    ? "border-bordo bg-bordo text-white"
+                    : noCarrinho > 0
+                      ? "border-bordo/60 bg-white ring-1 ring-bordo/30"
+                      : "border-gray-200 bg-white hover:border-bordo/40"
+                }`}
               >
-                {/* Sem subtítulo de contagem (ata de 05/10): "duas opções, um
-                    escolhido" confundia. A categoria com serviço no carrinho
-                    ganha só o contorno. */}
                 {imagem && (
                   // eslint-disable-next-line @next/next/no-img-element
-                  <img
-                    src={imagem}
-                    alt=""
-                    loading="lazy"
-                    className="mb-2 h-24 w-full rounded-lg bg-white object-contain"
-                  />
+                  <img src={imagem} alt="" loading="lazy" className="mb-1.5 h-14 w-full rounded-lg bg-white object-contain" />
                 )}
-                <div className="text-xs font-semibold">{grupo.familia}</div>
+                <div className="text-[11px] font-semibold leading-tight">{grupo.familia}</div>
               </button>
             );
           })}
         </div>
 
         {familiaAberta && (
-          <div className="mt-4 bg-bege rounded-xl p-3">
+          <div id="procedimentos-da-familia" className="mt-3 bg-bege rounded-xl p-3 scroll-mt-4">
             {(() => {
               const d = descritivoDaFamilia(familiaAberta);
               if (!d) return null;
               return (
                 <div className="flex items-center gap-3 mb-3">
                   {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={d.imagem} alt={d.legenda} className="h-20 w-20 shrink-0 rounded-lg bg-white object-contain border border-gray-100" />
+                  <img src={d.imagem} alt={d.legenda} className="h-16 w-16 shrink-0 rounded-lg bg-white object-contain border border-gray-100" />
                   <div className="min-w-0">
                     <div className="text-xs font-semibold text-bordo">{familiaAberta}</div>
                     <div className="text-[11px] text-gray-500 leading-snug">{d.legenda}</div>
@@ -371,7 +430,6 @@ export function FormularioAgendamento({
                     >
                       <div className="text-xs font-semibold">{item.nome}</div>
                       <div className={`text-[10px] mt-1 ${escolhido ? "text-white/70" : "text-gray-400"}`}>
-                        {item.duracaoMin} min ·{" "}
                         {descricaoDoPreco(valor, item)}
                       </div>
                       <div className={`text-[10px] mt-1 font-semibold ${escolhido ? "text-white" : "text-bordo"}`}>
@@ -383,36 +441,30 @@ export function FormularioAgendamento({
             </div>
           </div>
         )}
-      </section>
 
-      {/* ── 3. Resumo ────────────────────────────────────────────────────── */}
-      {linhas.length > 0 && (
-        <section id="passo-resumo" className="scroll-mt-4">
-          <h2 className="font-display font-bold text-bordo text-sm mb-3">3 · Seu agendamento</h2>
-          <div className="bg-white border border-gray-200 rounded-2xl p-4 max-w-2xl">
+        {linhas.length > 0 && (
+          <div className="mt-4 border border-gray-200 rounded-xl p-3">
+            <div className="text-[11px] font-semibold text-gray-600 mb-1">Seu agendamento</div>
             <ul className="divide-y divide-gray-100">
               {linhas.map(({ item, servico }) => {
                 const unitario = precoUnitario(servico.id);
                 return (
-                  <li key={servico.id} className="py-3 flex flex-wrap items-center gap-x-4 gap-y-2">
+                  <li key={servico.id} className="py-2 flex flex-wrap items-center gap-x-4 gap-y-2">
                     {imagemDoServico.get(servico.id) && (
                       // eslint-disable-next-line @next/next/no-img-element
                       <img
                         src={imagemDoServico.get(servico.id) as string}
                         alt=""
                         loading="lazy"
-                        className="h-12 w-12 shrink-0 rounded-lg border border-gray-100 bg-white object-contain"
+                        className="h-10 w-10 shrink-0 rounded-lg border border-gray-100 bg-white object-contain"
                       />
                     )}
                     <div className="min-w-0 flex-1 basis-48">
                       <div className="text-xs font-semibold text-bordo">{servico.nome}</div>
-                      <div className="text-[10px] text-gray-400 mt-0.5">
-                        {servico.permiteQuantidade
-                          ? `${servico.duracaoMin} min${servico.unidadeCobranca === "HORA" ? " por hora contratada" : ""}`
-                          : `${servico.duracaoMin} min · uma unidade por agendamento`}
-                      </div>
+                      {!servico.permiteQuantidade && (
+                        <div className="text-[10px] text-gray-400 mt-0.5">uma unidade por agendamento</div>
+                      )}
                     </div>
-
                     {servico.permiteQuantidade && (
                       <label className="flex items-center gap-2 text-[11px] text-gray-600">
                         <span>{servico.rotuloQuantidade ? servico.rotuloQuantidade : "Quantidade"}</span>
@@ -426,7 +478,6 @@ export function FormularioAgendamento({
                         />
                       </label>
                     )}
-
                     <div className="text-xs font-semibold text-bordo w-24 text-right">
                       {unitario > 0 ? formatarReais(totalDaLinha({ item, servico })) : "sob consulta"}
                     </div>
@@ -442,224 +493,186 @@ export function FormularioAgendamento({
                 );
               })}
             </ul>
-
-            <div className="border-t border-gray-200 pt-3 mt-1 flex items-baseline justify-between text-xs">
-              <span className="text-gray-500">
-                {linhas.length} serviço{linhas.length === 1 ? "" : "s"}
-                {duracaoTotal > 0 ? ` · ${duracaoTotal} min no total` : ""}
-              </span>
+            <div className="border-t border-gray-200 pt-2 mt-1 flex flex-wrap items-center justify-between gap-3 text-xs">
               <span className="font-bold text-bordo text-sm">
                 {totalCentavos > 0 ? formatarReais(totalCentavos) : "sob consulta"}
-                {algumSobConsulta && totalCentavos > 0 && (
-                  <span className="text-[10px] font-normal text-gray-400"> + itens sob consulta</span>
-                )}
+                {algumSobConsulta && totalCentavos > 0 && <span className="text-[10px] font-normal text-gray-400"> + itens sob consulta</span>}
               </span>
+              <div className="flex flex-wrap gap-2">
+                <Botao
+                  type="button"
+                  variante="secundario"
+                  onClick={() => {
+                    setFamiliaAberta(null);
+                    document.getElementById("passo-2")?.scrollIntoView({ behavior: "smooth", block: "start" });
+                  }}
+                >
+                  + Adicionar outro serviço
+                </Botao>
+                <Botao type="button" onClick={() => setPasso(3)}>
+                  Continuar
+                </Botao>
+              </div>
             </div>
             <div className="text-[10px] text-gray-400 mt-2">
-              Os serviços acontecem um depois do outro, na ordem em que foram adicionados. Para repetir
-              um serviço (outro paciente, por exemplo), faça outro agendamento.
+              Os serviços acontecem um depois do outro, na ordem em que foram adicionados. Para repetir um serviço
+              (outro paciente, por exemplo), faça outro agendamento.
             </div>
           </div>
-        </section>
-      )}
+        )}
+      </Etapa>
 
-      {/* ── 4. Quando e detalhes ─────────────────────────────────────────── */}
-      {linhas.length > 0 && (
-        <section id="passo-quando" className="scroll-mt-4">
-          <h2 className="font-display font-bold text-bordo text-sm mb-3">4 · Quando</h2>
-
-          <form action={enviar} className="bg-white border border-gray-200 rounded-2xl p-4 max-w-2xl space-y-4">
-            <input type="hidden" name="itens" value={JSON.stringify(itens)} />
-            <input type="hidden" name="enderecoId" value={local?.id ?? ""} />
-
-            <div>
-              <Rotulo>Data</Rotulo>
-              <Campo type="date" value={data} onChange={(e) => setData(e.target.value)} required name="data" />
-              <div className="text-[10px] text-gray-500 mt-1 leading-relaxed">
-                O portal agenda com {antecedenciaHoras}h de antecedência
-                {primeiroHorario ? (
-                  <>
-                    : neste momento, o primeiro horário possível é <strong>{primeiroHorario}</strong>
-                  </>
-                ) : null}
-                . Para horários antes disso, a central resolve direto pelo WhatsApp.
-              </div>
+      {/* ── Data e horário ────────────────────────────────────────────────── */}
+      <Etapa numero={3} rotulo={temEtapaDeLocal ? 3 : 2} passo={passo} irPara={setPasso} titulo="Data e horário" resumo={data && hora ? `${dataLegivel} às ${hora}` : null}>
+        <div className="space-y-4 max-w-xl">
+          <div>
+            <Rotulo>Data</Rotulo>
+            <Campo type="date" value={data} onChange={(e) => setData(e.target.value)} required />
+            <div className="text-[10px] text-gray-500 mt-1 leading-relaxed">
+              O portal agenda com {antecedenciaHoras}h de antecedência
+              {primeiroHorario ? (
+                <>
+                  : neste momento, o primeiro horário possível é <strong>{primeiroHorario}</strong>
+                </>
+              ) : null}
+              . Para horários antes disso, a central resolve direto pelo WhatsApp.
             </div>
+          </div>
 
-            {urgente && (
-              <Aviso tom="alerta">
-                <div className="font-semibold mb-1">Esse dia está dentro das próximas {antecedenciaHoras}h.</div>
-                Para horários antes do limite do portal, a central trata direto — assim consegue remanejar
-                quem já está em rota.
-                {linkCentral ? (
-                  <a
-                    href={linkCentral}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="mt-2 inline-flex items-center gap-1.5 bg-[#1EA952] text-white text-xs font-semibold px-3 py-2 rounded-lg hover:bg-[#178943]"
-                  >
-                    Falar com a central no WhatsApp →
-                  </a>
-                ) : (
-                  <div className="mt-1">Fale com a central — o número não está configurado no sistema.</div>
-                )}
-              </Aviso>
-            )}
-
-            <div>
-              <Rotulo>Horário agendado com o paciente</Rotulo>
-              <div className="text-[10px] text-gray-500 mb-2 leading-relaxed">
-                É o horário que o paciente vai chegar. Para locação de equipamento sem operador (motor de
-                implante, laser, ultrassom microfocado), considere o horário de entrega.
-              </div>
-              {!data ? (
-                <div className="text-xs text-gray-400 py-2">Escolha a data.</div>
+          {urgente && (
+            <Aviso tom="alerta">
+              <div className="font-semibold mb-1">Esse dia está dentro das próximas {antecedenciaHoras}h.</div>
+              Para horários antes do limite do portal, a central trata direto — assim consegue remanejar quem já está
+              em rota.
+              {linkCentral ? (
+                <a
+                  href={linkCentral}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="mt-2 inline-flex items-center gap-1.5 bg-[#1EA952] text-white text-xs font-semibold px-3 py-2 rounded-lg hover:bg-[#178943]"
+                >
+                  Falar com a central no WhatsApp →
+                </a>
               ) : (
-                <div className="space-y-2">
-                  <Campo
-                    type="time"
-                    name="horaInicio"
-                    required
-                    value={hora}
-                    onChange={(e) => setHora(e.target.value)}
-                    className="!w-40"
-                  />
-                  <div className="text-[10px] leading-relaxed">
-                    {situacaoHora === "verificando" && <span className="text-gray-400">Conferindo a agenda…</span>}
-                    {situacaoHora === "livre" && (
-                      <span className="font-semibold text-green-700">
-                        Horário disponível{duracaoTotal > 0 ? ` · bloco de ${duracaoTotal} min` : ""}.
-                      </span>
-                    )}
-                    {situacaoHora === "indisponivel" && (
-                      <span className="font-semibold text-amber-700">
-                        Esse horário não está disponível para {linhas.length > 1 ? "esses serviços juntos" : "esse serviço"}{" "}
-                        (já ocupado, com menos de {antecedenciaHoras}h de antecedência ou passando da meia-noite).
-                        Tente outro horário ou fale com a central.
-                      </span>
-                    )}
-                    {situacaoHora === null && (
-                      <span className="text-gray-400">
-                        Escolha qualquer horário do dia, com {antecedenciaHoras}h de antecedência. Antes disso, só
-                        pela central.
-                      </span>
-                    )}
-                  </div>
+                <div className="mt-1">Fale com a central — o número não está configurado no sistema.</div>
+              )}
+            </Aviso>
+          )}
 
-                  {buscando ? (
-                    <div className="text-[11px] text-gray-400">Buscando sugestões…</div>
-                  ) : horarios.length === 0 ? (
-                    <Aviso tom="alerta">
-                      Nenhum horário livre nesse dia para {linhas.length > 1 ? "esses serviços juntos" : "esse serviço"}.
-                      Tente outra data — ou fale com a central pelo WhatsApp.
-                    </Aviso>
-                  ) : (
-                    <div>
-                      <div className="text-[10px] text-gray-400 mb-1">Sugestões de horários livres:</div>
-                      <div className="flex flex-wrap gap-1.5">
-                        {horarios.map((sugestao) => (
-                          <button
-                            key={sugestao}
-                            type="button"
-                            onClick={() => setHora(sugestao)}
-                            className={`text-[11px] font-semibold px-2.5 py-1.5 rounded-lg border ${
-                              hora === sugestao
-                                ? "bg-bordo text-white border-bordo"
-                                : "border-gray-300 text-gray-600 hover:bg-gray-50"
-                            }`}
-                          >
-                            {sugestao}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
+          <div>
+            <Rotulo>Horário agendado com o paciente</Rotulo>
+            <div className="text-[10px] text-gray-500 mb-2 leading-relaxed">
+              É o horário que o paciente vai chegar. Para locação de equipamento sem operador (motor de implante, laser,
+              ultrassom microfocado), considere o horário de entrega.
+            </div>
+            {!data ? (
+              <div className="text-xs text-gray-400 py-2">Escolha a data.</div>
+            ) : (
+              <div className="space-y-2">
+                <Campo type="time" required value={hora} onChange={(e) => setHora(e.target.value)} className="!w-40" />
+                <div className="text-[10px] leading-relaxed">
+                  {situacaoHora === "verificando" && <span className="text-gray-400">Conferindo a agenda…</span>}
+                  {situacaoHora === "livre" && <span className="font-semibold text-green-700">Horário disponível para solicitar.</span>}
+                  {situacaoHora === "indisponivel" && (
+                    <span className="font-semibold text-amber-700">
+                      Esse horário não está disponível para {linhas.length > 1 ? "esses serviços juntos" : "esse serviço"}{" "}
+                      (já ocupado, com menos de {antecedenciaHoras}h de antecedência ou passando da meia-noite). Tente
+                      outro horário ou fale com a central.
+                    </span>
+                  )}
+                  {situacaoHora === null && (
+                    <span className="text-gray-400">
+                      Escolha o horário. A central confere a agenda da equipe e confirma pelo WhatsApp.
+                    </span>
                   )}
                 </div>
+              </div>
+            )}
+          </div>
+
+          <Botao type="button" disabled={!horaLivre} onClick={() => setPasso(4)}>
+            Continuar
+          </Botao>
+        </div>
+      </Etapa>
+
+      {/* ── Informações ───────────────────────────────────────────────────── */}
+      <Etapa numero={4} rotulo={temEtapaDeLocal ? 4 : 3} passo={passo} irPara={setPasso} titulo="Informações do atendimento">
+        <div className="space-y-4 max-w-2xl">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <Rotulo>Procedimento a ser realizado no paciente</Rotulo>
+              <Selecao name="procedimentoPaciente" required value={procedimento} onChange={(e) => setProcedimento(e.target.value)}>
+                <option value="">Selecione…</option>
+                {PROCEDIMENTOS_NO_PACIENTE.map((p) => (
+                  <option key={p} value={p}>
+                    {p}
+                  </option>
+                ))}
+                <option value={OUTRO_PROCEDIMENTO}>{OUTRO_PROCEDIMENTO}</option>
+              </Selecao>
+              {procedimento === OUTRO_PROCEDIMENTO && (
+                <Campo name="procedimentoOutro" required maxLength={120} placeholder="Qual procedimento?" className="mt-2" />
               )}
             </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <div>
-                <Rotulo>Procedimento a ser realizado no paciente</Rotulo>
-                <Selecao
-                  name="procedimentoPaciente"
-                  required
-                  value={procedimento}
-                  onChange={(e) => setProcedimento(e.target.value)}
-                >
-                  <option value="">Selecione…</option>
-                  {PROCEDIMENTOS_NO_PACIENTE.map((p) => (
-                    <option key={p} value={p}>
-                      {p}
-                    </option>
-                  ))}
-                  <option value={OUTRO_PROCEDIMENTO}>{OUTRO_PROCEDIMENTO}</option>
-                </Selecao>
-                {procedimento === OUTRO_PROCEDIMENTO && (
-                  <Campo name="procedimentoOutro" required maxLength={120} placeholder="Qual procedimento?" className="mt-2" />
-                )}
-              </div>
-              <div>
-                <Rotulo>Forma de pagamento</Rotulo>
-                <Selecao name="formaPagamento" required defaultValue="">
-                  <option value="">Selecione…</option>
-                  {FORMAS_DE_PAGAMENTO.map((forma) => (
-                    <option key={forma} value={forma}>
-                      {forma}
-                    </option>
-                  ))}
-                </Selecao>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <div>
-                <Rotulo>Doutor(a) responsável</Rotulo>
-                <Campo
-                  name="doutorNome"
-                  required
-                  list="doutores-da-clinica"
-                  autoComplete="off"
-                  value={doutorNome}
-                  onChange={(e) => setDoutorNome(e.target.value)}
-                />
-                <datalist id="doutores-da-clinica">
-                  {doutores.map((nome) => (
-                    <option key={nome} value={nome} />
-                  ))}
-                </datalist>
-                <div className="text-[10px] text-gray-400 mt-1">
-                  É por este nome que a central pergunta.
-                  {doutores.length > 0 ? " Escolha da lista ou digite outro." : " Cadastre os doutores em Configurações."}
-                </div>
-              </div>
-              <div>
-                <Rotulo>Contato da clínica para confirmação</Rotulo>
-                <Campo name="contatoClinica" defaultValue={telefoneClinica} maxLength={40} />
-                <div className="text-[10px] text-gray-400 mt-1">Para onde a central liga ou escreve.</div>
-              </div>
-              <div>
-                <Rotulo>Paciente (opcional)</Rotulo>
-                <Campo name="pacienteNome" value={pacienteNome} onChange={(e) => setPacienteNome(e.target.value)} />
-              </div>
-            </div>
-
             <div>
-              <Rotulo>Observações do procedimento</Rotulo>
-              <Area name="observacoes" rows={2} value={observacoes} onChange={(e) => setObservacoes(e.target.value)} />
+              <Rotulo>Forma de pagamento no ato</Rotulo>
+              <Selecao name="formaPagamento" required defaultValue="">
+                <option value="">Selecione…</option>
+                {FORMAS_DE_PAGAMENTO.map((forma) => (
+                  <option key={forma} value={forma}>
+                    {forma}
+                  </option>
+                ))}
+              </Selecao>
             </div>
+          </div>
 
-            {estado.erro && <Aviso tom="erro">{estado.erro}</Aviso>}
-
-            <Botao type="submit" disabled={!hora || situacaoHora === "indisponivel" || situacaoHora === "verificando"}>
-              Solicitar agendamento
-            </Botao>
-            <div className="text-[10px] text-gray-400">
-              A central confirma a solicitação e avisa pelo WhatsApp.
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <Rotulo>Doutor(a) responsável — nome e sobrenome</Rotulo>
+              <Campo
+                name="doutorNome"
+                required
+                list="doutores-da-clinica"
+                autoComplete="off"
+                value={doutorNome}
+                onChange={(e) => setDoutorNome(e.target.value)}
+              />
+              <datalist id="doutores-da-clinica">
+                {doutores.map((nome) => (
+                  <option key={nome} value={nome} />
+                ))}
+              </datalist>
+              <div className="text-[10px] text-gray-400 mt-1">
+                É por este nome que a central pergunta.
+                {doutores.length > 0 ? " Escolha da lista ou digite outro." : " Cadastre os doutores em Configurações."}
+              </div>
             </div>
-          </form>
-        </section>
-      )}
-    </div>
+            <div>
+              <Rotulo>Contato da clínica para confirmação</Rotulo>
+              <CampoTelefone name="contatoClinica" inicial={telefoneClinica} obrigatorio />
+              <div className="text-[10px] text-gray-400 mt-1">Para onde a central liga ou escreve.</div>
+            </div>
+            <div>
+              <Rotulo>Paciente (opcional)</Rotulo>
+              <Campo name="pacienteNome" value={pacienteNome} onChange={(e) => setPacienteNome(e.target.value)} />
+            </div>
+          </div>
+
+          <div>
+            <Rotulo>Observações do procedimento</Rotulo>
+            <Area name="observacoes" rows={2} value={observacoes} onChange={(e) => setObservacoes(e.target.value)} />
+          </div>
+
+          {estado.erro && <Aviso tom="erro">{estado.erro}</Aviso>}
+
+          <Botao type="submit" disabled={!horaLivre || linhas.length === 0}>
+            Solicitar agendamento
+          </Botao>
+          <div className="text-[10px] text-gray-400">A central confirma a solicitação e avisa pelo WhatsApp.</div>
+        </div>
+      </Etapa>
+    </form>
   );
 }

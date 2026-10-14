@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { exigirClinica } from "@/lib/sessao";
 import { cepValido } from "@/lib/documento";
+import { mesmoLocal } from "@/lib/endereco";
 import type { Resultado } from "./pedidos";
 
 /**
@@ -27,6 +28,25 @@ export async function adicionarEndereco(_anterior: Resultado, dados: FormData): 
 
   const numero = String(dados.get("numero") ?? "").trim();
   if (!numero) return { ok: false, erro: "Informe o número." };
+  const complemento = String(dados.get("complemento") ?? "").trim() || null;
+
+  // Sem duplicata (ata de 13/10): o mesmo lugar cadastrado duas vezes vira duas
+  // opções iguais na hora de agendar, e a central não sabe qual é a certa.
+  const clinica = await prisma.clinica.findUnique({
+    where: { id: sessao.clinicaId },
+    select: {
+      cep: true,
+      numero: true,
+      complemento: true,
+      enderecos: { where: { ativo: true }, select: { rotulo: true, cep: true, numero: true, complemento: true } },
+    },
+  });
+  const novo = { cep, numero, complemento };
+  if (clinica && mesmoLocal(novo, clinica)) {
+    return { ok: false, erro: "Esse endereço já é o do cadastro principal da clínica." };
+  }
+  const repetido = clinica?.enderecos.find((e) => mesmoLocal(novo, e));
+  if (repetido) return { ok: false, erro: `Esse endereço já está cadastrado como "${repetido.rotulo}".` };
 
   await prisma.enderecoClinica.create({
     data: {
@@ -35,7 +55,7 @@ export async function adicionarEndereco(_anterior: Resultado, dados: FormData): 
       cep,
       endereco,
       numero,
-      complemento: String(dados.get("complemento") ?? "").trim() || null,
+      complemento,
       observacoes: String(dados.get("observacoes") ?? "").trim().slice(0, 500) || null,
       bairro: String(dados.get("bairro") ?? "").trim() || null,
       cidade: String(dados.get("cidade") ?? "").trim() || null,
