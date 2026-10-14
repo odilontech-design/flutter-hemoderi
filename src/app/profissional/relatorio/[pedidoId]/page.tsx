@@ -9,6 +9,10 @@ import { enderecoEmUmaLinha } from "@/lib/relatorio";
 import { comEnderecoDoPedido } from "@/lib/endereco";
 import { precosDosServicos, tabelasDaClinica } from "@/lib/preco";
 import { descricaoDoPreco } from "@/lib/cobranca";
+import { parametros } from "@/lib/alocacao";
+import { localRevelado } from "@/lib/sigilo";
+import { ResumoDoAtendimento } from "@/components/ResumoDoAtendimento";
+import { INCLUIR_ADICIONAIS, RelatorioPreenchido } from "@/components/RelatorioPreenchido";
 import { FormularioRelatorio } from "./FormularioRelatorio";
 
 export const dynamic = "force-dynamic";
@@ -22,9 +26,11 @@ export default async function Relatorio({ params }: { params: { pedidoId: string
     where: { id: params.pedidoId, profissionalId: sessao.profissionalId },
     include: {
       clinica: {
-        select: { nome: true, endereco: true, numero: true, bairro: true, cidade: true, uf: true },
+        select: { nome: true, endereco: true, numero: true, complemento: true, bairro: true, cidade: true, uf: true },
       },
-      endereco: { select: { endereco: true, numero: true, bairro: true, cidade: true, uf: true } },
+      endereco: {
+        select: { endereco: true, numero: true, complemento: true, bairro: true, cidade: true, uf: true, observacoes: true },
+      },
       servico: { select: { id: true, nome: true } },
       relatorio: {
         include: {
@@ -36,6 +42,14 @@ export default async function Relatorio({ params }: { params: { pedidoId: string
     },
   });
   if (!pedido) notFound();
+
+  const config = await parametros();
+  const revelado = localRevelado(pedido.data, pedido.horaInicio, config.horasRevelarLocal);
+  // Relatório aprovado: a página vira a leitura do que foi enviado (ata de
+  // 13/10 — "resumo detalhado ao clicar no relatório"), sem formulário.
+  const enviado = pedido.relatorio?.aprovadoEm
+    ? await prisma.relatorioAtendimento.findUnique({ where: { pedidoId: pedido.id }, include: INCLUIR_ADICIONAIS })
+    : null;
 
   // Todo o catálogo ativo, sem filtro de perfil ou praça: o que vale aqui é o
   // que a pessoa de fato executou, não o que a clínica poderia pedir.
@@ -101,6 +115,7 @@ export default async function Relatorio({ params }: { params: { pedidoId: string
     formaRecebimento: r?.formaRecebimento ?? "",
     valorRecebido:
       r?.valorRecebidoCentavos != null ? (r.valorRecebidoCentavos / 100).toFixed(2).replace(".", ",") : "",
+    observacaoRecebimento: r?.observacaoRecebimento ?? "",
     // O agendado é o ponto de partida; a correção já declarada, quando
     // existe, tem precedência — reabrir o relatório precisa mostrar o que a
     // pessoa escreveu, não jogá-la de volta ao valor que ela corrigiu.
@@ -129,6 +144,17 @@ export default async function Relatorio({ params }: { params: { pedidoId: string
             </div>
           )}
         </div>
+        {revelado && (
+          <div className="mb-4">
+            <ResumoDoAtendimento
+              dados={{
+                ...pedido,
+                onde: comEnderecoDoPedido(pedido.clinica, pedido.endereco),
+                referencias: pedido.endereco?.observacoes ?? null,
+              }}
+            />
+          </div>
+        )}
         {pedido.relatorio?.devolvidoEm && !pedido.relatorio.aprovadoEm && (
           <div className="mb-4">
             <Aviso tom="erro">
@@ -138,10 +164,13 @@ export default async function Relatorio({ params }: { params: { pedidoId: string
           </div>
         )}
         {pedido.relatorio?.aprovadoEm ? (
-          <Aviso tom="info">
-            Este relatório já foi conferido pela central e o valor do profissional está liberado. Para corrigir
-            alguma coisa, fale com a central.
-          </Aviso>
+          <div className="space-y-4">
+            <Aviso tom="info">
+              Este relatório já foi conferido pela central e o valor do profissional está liberado. Para corrigir
+              alguma coisa, fale com a central.
+            </Aviso>
+            {enviado && <RelatorioPreenchido relatorio={enviado} />}
+          </div>
         ) : (
           <FormularioRelatorio
             pedidoId={pedido.id}

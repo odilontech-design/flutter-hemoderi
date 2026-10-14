@@ -65,3 +65,44 @@ test("avaliação: respostas escritas rotuladas, com o comentário antigo", () =
     ["Comentário", "Menos gostou"]
   );
 });
+
+import { temNomeESobrenome } from "../src/lib/relatorio";
+import { situacaoDoDia } from "../src/lib/minha-disponibilidade";
+import { situacaoDoGanho } from "../src/lib/ganhos";
+
+test("relatório: doutor com nome e sobrenome, sem contar o título", () => {
+  assert.equal(temNomeESobrenome("André Miguel"), true);
+  assert.equal(temNomeESobrenome("Dra. Ana Paula Souza"), true);
+  assert.equal(temNomeESobrenome("André"), false);
+  assert.equal(temNomeESobrenome("Dr. André"), false);
+  assert.equal(temNomeESobrenome("Dr(a) André"), false);
+  assert.equal(temNomeESobrenome("  "), false);
+  assert.equal(temNomeESobrenome("André M."), false);
+});
+
+test("disponibilidade: disponível, ausente e não declarado", () => {
+  const manha = [{ horaInicio: "08:00", horaFim: "12:00" }];
+  assert.equal(situacaoDoDia(manha, []).estado, "disponivel");
+  assert.equal(situacaoDoDia(manha, [{ horaInicio: null, horaFim: null, motivo: "férias" }]).estado, "ausente");
+  assert.equal(situacaoDoDia([], []).estado, "nao-declarado");
+  const parcial = situacaoDoDia(manha, [{ horaInicio: "09:00", horaFim: "10:00", motivo: null }]);
+  assert.equal(parcial.estado, "disponivel");
+  assert.deepEqual(parcial.ausenciasParciais, ["09:00–10:00"]);
+});
+
+test("ganhos: a situação segue o relatório e o repasse", () => {
+  const hoje = new Date("2026-10-14T00:00:00Z");
+  const ontem = new Date("2026-10-13T00:00:00Z");
+  const amanha = new Date("2026-10-15T00:00:00Z");
+  const base = { status: "ALOCADO", data: ontem, hoje, relatorio: null, repasse: null };
+  assert.equal(situacaoDoGanho(base), "relatorio-pendente");
+  assert.equal(situacaoDoGanho({ ...base, data: amanha }), "agendado");
+  assert.equal(situacaoDoGanho({ ...base, relatorio: { aprovadoEm: null, devolvidoEm: null } }), "em-conferencia");
+  assert.equal(situacaoDoGanho({ ...base, relatorio: { aprovadoEm: null, devolvidoEm: ontem } }), "devolvido");
+  assert.equal(
+    situacaoDoGanho({ ...base, status: "REALIZADO", relatorio: { aprovadoEm: hoje, devolvidoEm: null }, repasse: { status: "PENDENTE" } }),
+    "a-receber"
+  );
+  assert.equal(situacaoDoGanho({ ...base, status: "REALIZADO", repasse: { status: "PAGO" } }), "pago");
+  assert.equal(situacaoDoGanho({ ...base, status: "FALTOU", relatorio: { aprovadoEm: null, devolvidoEm: null } }), "faltou");
+});

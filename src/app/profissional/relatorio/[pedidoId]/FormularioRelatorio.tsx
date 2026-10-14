@@ -334,6 +334,65 @@ function BlocoRecebimento({
           )}
         </>
       )}
+
+      {situacao && (
+        <div>
+          <Rotulo>Algo fora do habitual no pagamento? (opcional)</Rotulo>
+          <Area
+            name="observacaoRecebimento"
+            rows={2}
+            maxLength={500}
+            defaultValue={valores.observacaoRecebimento}
+          />
+          <div className="text-[10px] text-gray-500 mt-1 leading-relaxed">
+            Descreva aqui quando o pagamento não foi o padrão — por exemplo: parte em Pix direto para a Hemoderi e
+            parte para você; valor parcial com o restante combinado para depois; a clínica vai pagar por boleto ou
+            transferência. Informe quanto foi para quem. É o que a central usa para fechar a conta com a clínica.
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/**
+ * Ajuda de custo (ata de 13/10): sem valor de exemplo e escondida por padrão —
+ * o "150,00" de exemplo virava valor preenchido. Só aparece aberta quando a
+ * logística já combinou uma na alocação (ou o relatório já declarou uma);
+ * fora isso, um botão abre os campos vazios para o caso raro de algo
+ * combinado por fora.
+ */
+function BlocoAjudaDeCusto({ valores }: { valores: ValoresRelatorio }) {
+  const combinada = Boolean(valores.ajudaCusto);
+  const [aberto, setAberto] = useState(combinada);
+
+  if (!aberto) {
+    return (
+      <div className="text-[11px] text-gray-500">
+        Sem ajuda de custo combinada.{" "}
+        <button type="button" onClick={() => setAberto(true)} className="font-semibold text-bordo hover:underline">
+          A logística combinou uma com você?
+        </button>
+      </div>
+    );
+  }
+  return (
+    <div className="rounded-xl border border-gray-200 p-3 space-y-2">
+      <div className="text-[11px] text-gray-500 leading-relaxed">
+        {combinada
+          ? "Valor combinado pela logística na alocação. Só altere se o combinado mudou."
+          : "Preencha só o valor que a logística combinou com você — a central confere antes de pagar."}
+      </div>
+      <div className="grid grid-cols-2 gap-2">
+        <div>
+          <Rotulo>Ajuda de custo (R$)</Rotulo>
+          <Campo name="ajudaCusto" inputMode="decimal" defaultValue={valores.ajudaCusto} />
+        </div>
+        <div>
+          <Rotulo>Motivo</Rotulo>
+          <Campo name="ajudaCustoJustificativa" defaultValue={valores.ajudaCustoJustificativa} />
+        </div>
+      </div>
     </div>
   );
 }
@@ -489,25 +548,7 @@ export function FormularioRelatorio({
             </Selecao>
           </div>
 
-          <div className="grid grid-cols-2 gap-2">
-            <div>
-              <Rotulo>Ajuda de custo (R$)</Rotulo>
-              <Campo
-                name="ajudaCusto"
-                inputMode="decimal"
-                defaultValue={valores.ajudaCusto}
-                placeholder="150,00"
-              />
-            </div>
-            <div>
-              <Rotulo>Por quê?</Rotulo>
-              <Campo
-                name="ajudaCustoJustificativa"
-                defaultValue={valores.ajudaCustoJustificativa}
-                placeholder="210 km, carro"
-              />
-            </div>
-          </div>
+          <BlocoAjudaDeCusto valores={valores} />
 
           <BlocoRecebimento valores={valores} comprovanteAtual={comprovanteAtual} />
         </>

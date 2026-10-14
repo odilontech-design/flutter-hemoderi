@@ -113,9 +113,10 @@ export default async function Disponibilidade({
                 {diaTodoBloqueado ? (
                   <div className="text-red-600 font-semibold mt-1">Ausente</div>
                 ) : janelasDoDia.length === 0 ? (
-                  <div className="text-gray-400 mt-1">sem janela</div>
+                  <div className="text-gray-400 mt-1">Não declarado</div>
                 ) : (
                   <div className="text-gray-600 mt-1 space-y-0.5">
+                    <div className="text-emerald-700 font-semibold">Disponível</div>
                     {janelasDoDia.map((j) => (
                       <div key={j.id}>{rotuloDaJanela(j.horaInicio, j.horaFim)}</div>
                     ))}
@@ -151,7 +152,7 @@ export default async function Disponibilidade({
           </div>
         </div>
         <div className="text-[11px] text-gray-500 mb-3">
-          Verde é dia com janela declarada no padrão semanal; vermelho é ausência marcada.
+          Verde é disponível (janela no padrão semanal), vermelho é ausente e cinza é não declarado.
         </div>
 
         <div className="grid grid-cols-7 gap-1 text-center text-[10px] text-gray-400 mb-1">
@@ -168,7 +169,7 @@ export default async function Disponibilidade({
             return (
               <div
                 key={chave}
-                title={ausente ? "Ausência marcada" : temJanela ? "Dia com janela" : "Sem janela"}
+                title={ausente ? "Ausente" : temJanela ? "Disponível" : "Não declarado"}
                 className={`aspect-square rounded-lg flex items-center justify-center text-[11px] font-semibold ${
                   ausente
                     ? "bg-red-100 text-red-700"

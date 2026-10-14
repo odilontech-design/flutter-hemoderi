@@ -2,13 +2,15 @@ import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 import { exigirProfissional } from "@/lib/sessao";
 import { Cartao, SeloStatus, Titulo, Vazio } from "@/components/ui";
-import { formatarDataCurta, formatarDiaEData, hojeUTC, instanteDoAtendimento, proximosDias } from "@/lib/data";
+import { formatarDataCurta, formatarDiaEData, hojeUTC, instanteDoAtendimento, isoDeData, proximosDias } from "@/lib/data";
 import { formatarReais } from "@/lib/dinheiro";
 import { parametros } from "@/lib/alocacao";
 import { LOCAL_FECHADO, localRevelado } from "@/lib/sigilo";
 import { AdicionarAgenda } from "@/components/AdicionarAgenda";
 import { houveAtraso } from "@/lib/atraso";
 import { comEnderecoDoPedido } from "@/lib/endereco";
+import { ResumoDoAtendimento } from "@/components/ResumoDoAtendimento";
+import { ROTULO_ESTADO_DO_DIA, situacaoDoDia } from "@/lib/minha-disponibilidade";
 import { AceiteAlocacao, BotaoCheckin } from "./AcoesAtendimento";
 
 type PedidoParaCalendario = {
@@ -49,6 +51,27 @@ function eventoDoPedido(pedido: PedidoParaCalendario & { id: string }, revelado:
 
 export const dynamic = "force-dynamic";
 
+/** "Campinas/SP" — a cidade aparece desde a alocação (ata de 13/10), mesmo com a clínica ainda em sigilo. */
+function cidadeDoPedido(pedido: {
+  clinica: { cidade: string | null; uf?: string | null };
+  endereco: { cidade: string | null; uf?: string | null } | null;
+}) {
+  const onde = comEnderecoDoPedido(pedido.clinica, pedido.endereco);
+  return [onde.cidade, onde.uf].filter(Boolean).join("/");
+}
+
+/** A clínica quando já revelada; antes disso, o aviso de sigilo com a cidade. */
+function ondeE(revelado: boolean, pedido: Parameters<typeof cidadeDoPedido>[0] & { clinica: { nome: string } }) {
+  const cidade = cidadeDoPedido(pedido);
+  if (revelado) return <>{pedido.clinica.nome}{cidade ? ` · ${cidade}` : ""}</>;
+  return (
+    <>
+      {cidade && <strong className="font-semibold text-gray-600">{cidade} · </strong>}
+      <span className="italic text-gray-400">{LOCAL_FECHADO}</span>
+    </>
+  );
+}
+
 /** "· ajuda de custo R$ 150,00" quando a logística combinou uma na alocação. */
 function ajudaDeCusto(centavos: number | null) {
   return centavos != null ? ` · ajuda de custo ${formatarReais(centavos)}` : "";
@@ -71,8 +94,12 @@ export default async function MinhaAgenda() {
 
   const meus = { profissionalId: sessao.profissionalId, status: "ALOCADO" as const };
   const dadosDoPedido = {
-    clinica: { select: { nome: true, endereco: true, numero: true, bairro: true, cidade: true, uf: true } },
-    endereco: { select: { endereco: true, numero: true, bairro: true, cidade: true, uf: true } },
+    clinica: {
+      select: { nome: true, endereco: true, numero: true, complemento: true, bairro: true, cidade: true, uf: true },
+    },
+    endereco: {
+      select: { endereco: true, numero: true, complemento: true, bairro: true, cidade: true, uf: true, observacoes: true },
+    },
     servico: { select: { nome: true, duracaoMin: true, descricao: true } },
   };
 
@@ -81,7 +108,7 @@ export default async function MinhaAgenda() {
   const semana = proximosDias(7);
   const fimDaSemana = semana[semana.length - 1];
 
-  const [config, devolvidos, aguardandoAceite, deHoje, atrasados, proximos, daSemana] = await Promise.all([
+  const [config, devolvidos, aguardandoAceite, deHoje, atrasados, proximos, daSemana, janelas, bloqueios] = await Promise.all([
     parametros(),
     // Relatórios que a central recusou: vêm antes de tudo, porque travam o
     // repasse e só o próprio profissional resolve.
@@ -112,6 +139,17 @@ export default async function MinhaAgenda() {
       where: { ...meus, data: { gte: hoje, lte: fimDaSemana } },
       orderBy: [{ data: "asc" }, { horaInicio: "asc" }],
       include: dadosDoPedido,
+    }),
+    // A disponibilidade declarada da semana, para a coluna "Minha
+    // disponibilidade" (ata de 13/10).
+    prisma.disponibilidade.findMany({
+      where: { profissionalId: sessao.profissionalId },
+      select: { diaSemana: true, horaInicio: true, horaFim: true },
+      orderBy: { horaInicio: "asc" },
+    }),
+    prisma.bloqueio.findMany({
+      where: { profissionalId: sessao.profissionalId, data: { gte: hoje, lte: fimDaSemana } },
+      select: { data: true, horaInicio: true, horaFim: true, motivo: true },
     }),
   ]);
 
@@ -170,7 +208,7 @@ export default async function MinhaAgenda() {
                       )}
                       <div>
                         <strong>Serviço:</strong> {pedido.servico.nome}
-                        {pedido.quantidade > 1 ? ` × ${pedido.quantidade}` : ""} · {pedido.servico.duracaoMin} min
+                        {pedido.quantidade > 1 ? ` × ${pedido.quantidade}` : ""}
                       </div>
                       {pedido.servico.descricao && (
                         <div className="text-gray-400 line-clamp-2">{pedido.servico.descricao}</div>
@@ -198,6 +236,22 @@ export default async function MinhaAgenda() {
                   {pedido.servico.nome} · valor do profissional: {formatarReais(pedido.valorRepasseCentavos)}
                   {ajudaDeCusto(pedido.ajudaCustoCentavos)}
                 </div>
+                {/* Endereço e resumo à mão o tempo todo (ata de 13/10): é o que
+                    o profissional procura na hora de chegar e de registrar a
+                    chegada. */}
+                {localRevelado(pedido.data, pedido.horaInicio, config.horasRevelarLocal) ? (
+                  <div className="mb-2">
+                    <ResumoDoAtendimento
+                      dados={{
+                        ...pedido,
+                        onde: comEnderecoDoPedido(pedido.clinica, pedido.endereco),
+                        referencias: pedido.endereco?.observacoes ?? null,
+                      }}
+                    />
+                  </div>
+                ) : (
+                  <div className="text-[11px] text-gray-500 mb-2">{ondeE(false, pedido)}</div>
+                )}
                 <div className="flex flex-wrap items-center gap-2">
                   {pedido.checkinEm ? (
                     <span className="text-[11px] font-semibold text-green-700">
@@ -271,26 +325,68 @@ export default async function MinhaAgenda() {
         </Cartao>
       )}
 
+      {/* Duas colunas (ata de 13/10): o que EU declarei e o que a Hemoderi
+          marcou. Juntas numa lista só, "livre" ficava ambíguo — livre porque
+          está disponível, ou livre porque não disse nada? */}
       <Cartao className="mb-3">
-        <div className="font-display font-bold text-bordo text-sm mb-1">Próximos 7 dias</div>
+        <div className="flex flex-wrap items-baseline justify-between gap-2 mb-1">
+          <div className="font-display font-bold text-bordo text-sm">Próximos 7 dias</div>
+          <Link href="/profissional/disponibilidade" className="text-[11px] font-semibold text-bordo hover:underline">
+            Atualizar minha disponibilidade →
+          </Link>
+        </div>
         <div className="text-[11px] text-gray-500 mb-3">
-          A clínica aparece {config.horasRevelarLocal}h antes do atendimento — até lá, só o dia, o horário
-          e o serviço.
+          A cidade aparece desde a alocação; a clínica e o endereço, {config.horasRevelarLocal}h antes do atendimento.
+        </div>
+        <div className="hidden sm:grid grid-cols-[7rem_minmax(0,1fr)_minmax(0,1.6fr)] gap-3 pb-1 border-b border-gray-100 text-[10px] font-semibold uppercase tracking-wide text-gray-400">
+          <div>Dia</div>
+          <div>Minha disponibilidade</div>
+          <div>Agendamentos Hemoderi</div>
         </div>
         <div className="divide-y divide-gray-100">
           {semana.map((dia) => {
             const doDia = daSemana.filter((p) => p.data.getTime() === dia.getTime());
+            const situacao = situacaoDoDia(
+              janelas.filter((j) => j.diaSemana === dia.getUTCDay()),
+              bloqueios.filter((b) => isoDeData(b.data) === isoDeData(dia))
+            );
+            const cor =
+              situacao.estado === "disponivel"
+                ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+                : situacao.estado === "ausente"
+                  ? "bg-red-50 text-red-700 border-red-200"
+                  : "bg-gray-50 text-gray-500 border-gray-200";
             return (
-              <div key={dia.toISOString()} className="py-2 flex gap-3">
-                <div className="w-28 shrink-0 text-xs font-semibold text-bordo">
+              <div
+                key={dia.toISOString()}
+                className="py-2 grid grid-cols-1 sm:grid-cols-[7rem_minmax(0,1fr)_minmax(0,1.6fr)] gap-x-3 gap-y-1.5"
+              >
+                <div className="text-xs font-semibold text-bordo">
                   {formatarDiaEData(dia)}
                   {dia.getTime() === hoje.getTime() && (
-                    <span className="block text-[10px] font-normal text-gray-400">hoje</span>
+                    <span className="sm:block text-[10px] font-normal text-gray-400"> hoje</span>
                   )}
                 </div>
-                <div className="flex-1 min-w-0 space-y-2">
+                <div className="text-[11px]">
+                  <span className="sm:hidden text-[10px] text-gray-400 mr-1">Minha disponibilidade:</span>
+                  <span className={`inline-block rounded-md border px-1.5 py-0.5 text-[10px] font-semibold ${cor}`}>
+                    {ROTULO_ESTADO_DO_DIA[situacao.estado]}
+                  </span>
+                  {situacao.janelas.length > 0 && (
+                    <span className="ml-1 text-gray-500">{situacao.janelas.join(", ")}</span>
+                  )}
+                  {situacao.ausenciasParciais.length > 0 && (
+                    <div className="text-[10px] text-red-600 mt-0.5">
+                      {situacao.estado === "ausente" ? situacao.ausenciasParciais.join(", ") : `ausente ${situacao.ausenciasParciais.join(", ")}`}
+                    </div>
+                  )}
+                </div>
+                <div className="min-w-0 space-y-2">
                   {doDia.length === 0 ? (
-                    <div className="text-[11px] text-gray-400">Livre</div>
+                    <div className="text-[11px] text-gray-400">
+                      <span className="sm:hidden text-[10px] mr-1">Agendamentos Hemoderi:</span>
+                      Nenhum agendamento
+                    </div>
                   ) : (
                     doDia.map((pedido) => (
                       <div key={pedido.id} className="text-xs">
@@ -299,14 +395,10 @@ export default async function MinhaAgenda() {
                           {pedido.quantidade > 1 ? ` × ${pedido.quantidade}` : ""}
                         </div>
                         <div className="text-[11px] text-gray-500">
-                          {localRevelado(pedido.data, pedido.horaInicio, config.horasRevelarLocal) ? (
-                            <>
-                              {pedido.clinica.nome}
-                              {pedido.doutorNome ? ` · Dr(a). ${pedido.doutorNome}` : ""}
-                            </>
-                          ) : (
-                            <span className="italic text-gray-400">{LOCAL_FECHADO}</span>
-                          )}{" "}
+                          {ondeE(localRevelado(pedido.data, pedido.horaInicio, config.horasRevelarLocal), pedido)}
+                          {localRevelado(pedido.data, pedido.horaInicio, config.horasRevelarLocal) && pedido.doutorNome
+                            ? ` · ${/^dr/i.test(pedido.doutorNome) ? pedido.doutorNome : `Dr(a). ${pedido.doutorNome}`}`
+                            : ""}{" "}
                           · valor do profissional: {formatarReais(pedido.valorRepasseCentavos)}
                           {ajudaDeCusto(pedido.ajudaCustoCentavos)}
                           {!pedido.aceitoEm && <span className="ml-1 font-semibold text-amber-700">· aguardando seu aceite</span>}
@@ -338,15 +430,8 @@ export default async function MinhaAgenda() {
                     {formatarDataCurta(pedido.data)} · {pedido.horaInicio}
                   </div>
                   <div className="text-gray-500">
-                    {localRevelado(pedido.data, pedido.horaInicio, config.horasRevelarLocal) ? (
-                      <>
-                        {pedido.clinica.nome}
-                        {pedido.doutorNome ? ` · Dr(a). ${pedido.doutorNome}` : ""}
-                      </>
-                    ) : (
-                      <span className="italic text-gray-400">{LOCAL_FECHADO}</span>
-                    )}{" "}
-                    · {pedido.servico.nome}
+                    {ondeE(localRevelado(pedido.data, pedido.horaInicio, config.horasRevelarLocal), pedido)} ·{" "}
+                    {pedido.servico.nome}
                   </div>
                   <AdicionarAgenda variante="link" evento={eventoDoPedido(pedido, localRevelado(pedido.data, pedido.horaInicio, config.horasRevelarLocal))} />
                 </div>

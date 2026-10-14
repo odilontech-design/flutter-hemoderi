@@ -136,6 +136,11 @@ export function RelatorioPreenchido({ relatorio }: { relatorio: RelatorioComplet
             {relatorio.formaRecebimento && ` · ${rotuloDaForma(relatorio.formaRecebimento)}`}
             {relatorio.valorRecebidoCentavos != null && ` · ${formatarReais(relatorio.valorRecebidoCentavos)}`}
           </div>
+          {relatorio.observacaoRecebimento && (
+            <div className="text-amber-800 whitespace-pre-line mt-0.5">
+              <strong>Fora do habitual:</strong> {relatorio.observacaoRecebimento}
+            </div>
+          )}
           {relatorio.comprovante && (
             <a
               href={`/api/comprovantes/${relatorio.id}`}

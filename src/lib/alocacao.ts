@@ -196,12 +196,15 @@ export async function verificarAlocacao(
       bd.bloqueio.findMany({ where: { profissionalId, data } }),
     ]);
 
+    // Ausência é aviso, não trava (ata de 13/10): a disponibilidade é
+    // autodeclarada, e a logística pode ligar para o profissional e combinar.
+    // O aceite dele continua sendo pedido — se não puder, ele recusa.
     const ausencias = intervalosDeBloqueio(bloqueios);
     if (ausencias.some((a) => haSobreposicao(alvo, a))) {
       impedimentos.push({
         tipo: "BLOQUEIO",
-        mensagem: "Profissional marcou ausência nesse dia/horário.",
-        bloqueante: true,
+        mensagem: "Atenção: o profissional marcou ausência nesse dia/horário — confirme com ele.",
+        bloqueante: false,
       });
     }
 
@@ -510,8 +513,10 @@ export async function horariosDisponiveisConjunto({
 }
 
 /**
- * Quem, dentre os profissionais ativos, já não serve para este horário — está
- * em outro atendimento que se sobrepõe, ou marcou ausência. Não olha
+ * Quem, dentre os profissionais ativos, não serve ou merece aviso para este
+ * horário: `ocupados` já estão em outro atendimento que se sobrepõe (fato
+ * físico, sai da lista); `ausentes` marcaram ausência (ata de 13/10: continua
+ * na lista, com aviso — a logística pode combinar com a pessoa). Não olha
  * disponibilidade declarada (isso é aviso, não bloqueio — ver `Impedimento`).
  *
  * Alimenta o seletor de "alocar profissional" na esteira. Com meia dúzia de
@@ -525,7 +530,7 @@ export async function profissionaisIndisponiveis(
   horaInicio: string,
   duracaoMin: number,
   ignorarPedidoId?: string
-): Promise<Set<string>> {
+): Promise<{ ocupados: Set<string>; ausentes: Set<string> }> {
   const alvo = intervaloDe(horaInicio, duracaoMin);
 
   const [pedidosDoDia, bloqueiosDoDia] = await Promise.all([
@@ -544,19 +549,20 @@ export async function profissionaisIndisponiveis(
     }),
   ]);
 
-  const indisponiveis = new Set<string>();
+  const ocupados = new Set<string>();
   for (const p of pedidosDoDia) {
     if (p.profissionalId && haSobreposicao(alvo, intervaloDe(p.horaInicio, p.duracaoMin))) {
-      indisponiveis.add(p.profissionalId);
+      ocupados.add(p.profissionalId);
     }
   }
+  const ausentes = new Set<string>();
   for (const b of bloqueiosDoDia) {
     const ausencia =
       b.horaInicio && b.horaFim ? { inicio: paraMinutos(b.horaInicio), fim: paraMinutos(b.horaFim) } : { inicio: 0, fim: 24 * 60 };
-    if (haSobreposicao(alvo, ausencia)) indisponiveis.add(b.profissionalId);
+    if (haSobreposicao(alvo, ausencia)) ausentes.add(b.profissionalId);
   }
 
-  return indisponiveis;
+  return { ocupados, ausentes };
 }
 
 /**

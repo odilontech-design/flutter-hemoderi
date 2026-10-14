@@ -11,6 +11,8 @@ import {
   divergiu,
   enderecoEmUmaLinha,
   lerServicosAdicionais,
+  LIMITE_OBSERVACAO_RECEBIMENTO,
+  temNomeESobrenome,
 } from "@/lib/relatorio";
 import { comprovanteAceito, lerRecebimento } from "@/lib/recebimento";
 import { registrarResultado, type Resultado } from "./pedidos";
@@ -160,6 +162,15 @@ export async function enviarRelatorio(_anterior: Resultado, dados: FormData): Pr
   const clinicaNome = String(dados.get("clinicaNomeInformado") ?? "").trim();
   const endereco = String(dados.get("enderecoInformado") ?? "").trim();
   const doutor = String(dados.get("doutorNomeInformado") ?? "").trim();
+  // Nome e sobrenome do doutor (ata de 13/10) — só quando houve atendimento:
+  // numa falta, quem recebe não chegou a existir.
+  if (compareceu && !temNomeESobrenome(doutor)) {
+    return { ok: false, erro: "Informe o nome e o sobrenome do(a) doutor(a) responsável (ex.: André Miguel)." };
+  }
+  const observacaoRecebimento = String(dados.get("observacaoRecebimento") ?? "").trim();
+  if (observacaoRecebimento.length > LIMITE_OBSERVACAO_RECEBIMENTO) {
+    return { ok: false, erro: `A observação do recebimento passa de ${LIMITE_OBSERVACAO_RECEBIMENTO} caracteres.` };
+  }
   const correcoesDoAgendamento = {
     clinicaNomeInformado: divergiu(pedido.clinica.nome, clinicaNome) ? clinicaNome : null,
     enderecoInformado: divergiu(enderecoEmUmaLinha(comEnderecoDoPedido(pedido.clinica, pedido.endereco)), endereco) ? endereco : null,
@@ -183,6 +194,7 @@ export async function enviarRelatorio(_anterior: Resultado, dados: FormData): Pr
     recebimento: recebimento?.ok ? recebimento.dados.recebimento : null,
     formaRecebimento: recebimento?.ok ? recebimento.dados.formaRecebimento : null,
     valorRecebidoCentavos: recebimento?.ok ? recebimento.dados.valorRecebidoCentavos : null,
+    observacaoRecebimento: compareceu ? observacaoRecebimento || null : null,
     // A chave PIX deixou de ser pedida a cada relatório (ata de 02/10): é
     // única e fixa no cadastro do profissional, e é dela que sai o pagamento.
     // Os dados do agendamento como ele aconteceu (ata de 28/09). Guardados

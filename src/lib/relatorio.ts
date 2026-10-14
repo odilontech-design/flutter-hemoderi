@@ -96,8 +96,8 @@ export const CAMPOS_AGENDAMENTO = [
   },
   {
     nome: "doutorNomeInformado",
-    rotulo: "Doutor(a) responsável",
-    ajuda: "Quem de fato recebeu, se não foi quem estava no agendamento.",
+    rotulo: "Doutor(a) responsável — nome e sobrenome",
+    ajuda: "Quem de fato recebeu, com nome e sobrenome (ex.: André Miguel).",
   },
 ] as const;
 
@@ -162,3 +162,22 @@ export function lerServicosAdicionais(
   });
   return Array.from(porServico, ([servicoId, quantidade]) => ({ servicoId, quantidade }));
 }
+
+/** Títulos que não contam como nome: "Dr. André" ainda é só o primeiro nome. */
+const TITULOS = new Set(["dr", "dra", "dr(a)", "doutor", "doutora", "prof", "profa"]);
+
+/**
+ * O doutor foi registrado com nome e sobrenome? (ata de 13/10: "André Miguel",
+ * não só "André" — com o primeiro nome só, a central não sabe quem é quando a
+ * clínica tem dois Andrés.)
+ */
+export function temNomeESobrenome(nome: string | null | undefined): boolean {
+  const partes = (nome ?? "")
+    .split(/\s+/)
+    .map((p) => p.replace(/\.$/, "").toLowerCase())
+    .filter((p) => p && !TITULOS.has(p));
+  return partes.filter((p) => p.replace(/[^\p{L}]/gu, "").length >= 2).length >= 2;
+}
+
+/** Teto do texto livre sobre o recebimento fora do habitual. */
+export const LIMITE_OBSERVACAO_RECEBIMENTO = 500;

@@ -14,6 +14,9 @@ import { etapaDoPerfil, etapasDoPerfil } from "@/lib/esteira";
 import { formatarAtraso, houveAtraso, minutosDeAtraso } from "@/lib/atraso";
 import { linkWhatsapp, mensagemDeFeedback } from "@/lib/whatsapp-link";
 import { profissionaisIndisponiveis } from "@/lib/alocacao";
+
+/** Marca no seletor quem declarou ausência no horário — alocável, com aviso. */
+const AVISO_AUSENTE = "⚠ marcou ausência";
 import { AcoesPedido, EditarAjudaDeCusto } from "./AcoesPedido";
 import { CondicaoPagamento } from "./CondicaoPagamento";
 import { ConferenciaRelatorio } from "./ConferenciaRelatorio";
@@ -88,11 +91,15 @@ export default async function Esteira({
   // a clínica pediu continua na lista mesmo ocupado, para a equipe ver que o
   // pedido dela esbarrou em alguma coisa, e não simplesmente sumir da tela.
   const indisponiveisPorPedido = new Map<string, Set<string>>();
+  // Ausentes continuam na lista (ata de 13/10), só com o aviso no nome.
+  const ausentesPorPedido = new Map<string, Set<string>>();
   await Promise.all(
     pedidos
       .filter((p) => p.status === "CONFIRMADO")
       .map(async (p) => {
-        indisponiveisPorPedido.set(p.id, await profissionaisIndisponiveis(p.data, p.horaInicio, p.duracaoMin, p.id));
+        const { ocupados, ausentes } = await profissionaisIndisponiveis(p.data, p.horaInicio, p.duracaoMin, p.id);
+        indisponiveisPorPedido.set(p.id, ocupados);
+        ausentesPorPedido.set(p.id, ausentes);
       })
   );
 
@@ -185,7 +192,10 @@ export default async function Esteira({
                           )
                         )
                     )
-                    .map(({ id, nome }) => ({ id, nome }))}
+                    .map(({ id, nome }) => ({
+                      id,
+                      nome: membros.some((m) => ausentesPorPedido.get(m.id)?.has(id)) ? `${nome} ${AVISO_AUSENTE}` : nome,
+                    }))}
                   // Para "um profissional por serviço" (ata de 05/10): cada
                   // serviço com os que estão aptos a ele e livres no horário dele.
                   profissionaisPorServico={Object.fromEntries(
@@ -201,7 +211,10 @@ export default async function Esteira({
                                 m.servicoId
                               ) && !indisponiveisPorPedido.get(m.id)?.has(prof.id)
                           )
-                          .map(({ id, nome }) => ({ id, nome })),
+                          .map(({ id, nome }) => ({
+                            id,
+                            nome: ausentesPorPedido.get(m.id)?.has(id) ? `${nome} ${AVISO_AUSENTE}` : nome,
+                          })),
                       ])
                   )}
                 />
@@ -452,7 +465,10 @@ export default async function Esteira({
                     const indisponiveis = indisponiveisPorPedido.get(pedido.id);
                     return !indisponiveis || p.id === pedido.profissionalId || !indisponiveis.has(p.id);
                   })
-                  .map(({ id, nome }) => ({ id, nome }))}
+                  .map(({ id, nome }) => ({
+                    id,
+                    nome: ausentesPorPedido.get(pedido.id)?.has(id) ? `${nome} ${AVISO_AUSENTE}` : nome,
+                  }))}
                 profissionalSolicitadoId={pedido.profissionalId}
                 ajudaCustoCentavos={pedido.ajudaCustoCentavos}
               />

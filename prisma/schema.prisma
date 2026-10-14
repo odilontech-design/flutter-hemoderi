@@ -1162,6 +1162,10 @@ model RelatorioAtendimento {
   recebimento           String?
   formaRecebimento      String?
   valorRecebidoCentavos Int?
+  /// Pagamento fora do habitual, nas palavras do profissional (ata de 13/10):
+  /// parte em Pix direto para a Hemoderi e parte para ele, parcial com o resto
+  /// combinado para depois, clínica que vai pagar por boleto…
+  observacaoRecebimento String?
   comprovante           ComprovanteRecebimento?
 
   /// A chave PIX que o profissional confirma NO relatório, que pode ser
