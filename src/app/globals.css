@@ -28,3 +28,18 @@ input,
 textarea {
   cursor: text;
 }
+
+/* Jeito de app no celular (reunião de 20/10). */
+html {
+  /* Sem o retângulo cinza que o navegador pinta em cada toque. */
+  -webkit-tap-highlight-color: transparent;
+}
+@media (max-width: 768px) {
+  /* Abaixo de 16px o Safari do iPhone dá zoom na tela a cada toque num campo
+     e não volta sozinho — no app instalado isso parece defeito. */
+  input,
+  select,
+  textarea {
+    font-size: 16px !important;
+  }
+}

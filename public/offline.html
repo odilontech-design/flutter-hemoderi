@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#6E2620" />
+    <title>Sem conexão · Hemoderi</title>
+    <style>
+      body { margin: 0; min-height: 100vh; display: flex; align-items: center; justify-content: center;
+        background: #faf5f2; color: #241412; font-family: system-ui, -apple-system, "Segoe UI", sans-serif; padding: 24px; box-sizing: border-box; }
+      .cartao { max-width: 360px; text-align: center; background: #fff; border: 1px solid #eee; border-radius: 16px; padding: 28px 24px; }
+      .marca { width: 64px; height: 64px; border-radius: 16px; background: #6E2620; display: inline-flex; align-items: center; justify-content: center; }
+      h1 { font-size: 18px; color: #9C3A32; margin: 16px 0 8px; }
+      p { font-size: 14px; line-height: 1.5; color: #555; margin: 0 0 20px; }
+      button { background: #9C3A32; color: #fff; border: 0; border-radius: 10px; padding: 12px 20px; font-size: 14px; font-weight: 600; }
+    </style>
+  </head>
+  <body>
+    <div class="cartao">
+      <div class="marca"><img src="/logo-hemoderi-icone.svg" alt="Hemoderi" width="40" height="40" /></div>
+      <h1>Sem conexão com a internet</h1>
+      <p>O Hemoderi precisa de internet para mostrar a agenda e os pedidos atualizados. Confira o Wi-Fi ou os dados móveis e tente de novo.</p>
+      <button onclick="location.reload()">Tentar de novo</button>
+    </div>
+  </body>
+</html>
