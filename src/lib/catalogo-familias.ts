@@ -1,5 +1,6 @@
 /**
- * O descritivo de cada seção do catálogo institucional 2026 (PDF), para a
+ * O descritivo de cada seção do catálogo institucional 2026 — revisão de
+ * outubro (CAT_LOGO_HEMODERI_2026 - Out.26, curadoria do André) —, para a
  * vitrine do portal da clínica (pedido de 06/10): a foto da capa da seção e os
  * blocos "Serviços / Equipe / O que inclui / Principais indicações" como estão
  * no PDF. O preço NÃO está aqui — vem do cadastro de serviços e tabelas, para
@@ -25,13 +26,12 @@ export type DescritivoDaFamilia = {
   observacao?: string;
 };
 
-const GRANDE_SP =
-  "Valores válidos para a Grande São Paulo. Procedimentos num raio acima de 150 km de São Paulo têm taxa de deslocamento de R$ 200,00.";
+const RAIO_150 = "Valores válidos para um raio de até 150 km de São Paulo.";
 
 export const DESCRITIVO_DAS_FAMILIAS: Record<string, DescritivoDaFamilia> = {
   "AirFlow GBT Machine": {
     imagem: "/catalogo/airflow.webp",
-    legenda: "GBT Machine – AirFlow",
+    legenda: "Locação GBT Machine – AirFlow",
     blocos: [
       {
         titulo: "Guided Biofilm Therapy — Método GBT",
@@ -42,12 +42,13 @@ export const DESCRITIVO_DAS_FAMILIAS: Record<string, DescritivoDaFamilia> = {
         titulo: "O que inclui",
         itens: [
           "Locação do equipamento GBT Machine;",
-          "1 profissional cirurgião-dentista com treinamento na metodologia GBT;",
-          "Insumos: Airflow Prophylaxis Powder (pó de eritritol), revelador Biofilm Discloser, ponta Perioflow descartável e ponta ultrassônica PS.",
+          "Cirurgião-dentista com treinamento GBT para montar e orientar o primeiro paciente;",
+          "Insumos: pó de eritritol, revelador de biofilme, ponta Perioflow e ponta PS;",
+          "Instrumentais Hu-Friedy Group.",
         ],
       },
     ],
-    observacao: GRANDE_SP,
+    observacao: `Quanto mais pacientes no mesmo atendimento, menor o valor por paciente. ${RAIO_150}`,
   },
 
   "LiteTouch™": {
@@ -62,13 +63,13 @@ export const DESCRITIVO_DAS_FAMILIAS: Record<string, DescritivoDaFamilia> = {
       {
         titulo: "Equipe",
         texto:
-          "Cirurgião-dentista habilitado, com treinamento completo e experiência com adultos, crianças e pacientes com necessidades especiais. Atendemos remoção de lentes, facetas e coroas, procedimentos cirúrgicos e dessensibilização dentária.",
+          "Cirurgião-dentista habilitado, com experiência em adultos, crianças e pacientes com necessidades especiais. Lentes, facetas, coroas, cirurgias, cárie, ronco e dessensibilização.",
       },
       {
         titulo: "O que inclui",
         itens: [
-          "Profissional cirurgião-dentista habilitado para operação do equipamento e assistente;",
-          "Todos os insumos e instrumentais para a realização do procedimento;",
+          "Profissional cirurgião-dentista habilitado para operação do equipamento;",
+          "Todos os insumos e instrumentais Hu-Friedy Group para a realização do procedimento;",
           "Logística do equipamento;",
           "Ponteiras para todas as especialidades;",
           "Montagem e desmontagem do equipamento seguindo normas de segurança;",
@@ -76,7 +77,7 @@ export const DESCRITIVO_DAS_FAMILIAS: Record<string, DescritivoDaFamilia> = {
         ],
       },
     ],
-    observacao: GRANDE_SP,
+    observacao: `${RAIO_150} Atendemos os estados do RJ e PR, com deslocamento de R$ 500,00.`,
   },
 
   "Rotamix Sedação Consciente": {
@@ -95,38 +96,42 @@ export const DESCRITIVO_DAS_FAMILIAS: Record<string, DescritivoDaFamilia> = {
       {
         titulo: "O que inclui",
         itens: [
-          "Cirurgião-dentista para a realização da sedação;",
+          "Cirurgião-dentista para a realização da sedação, durante todo o procedimento;",
           "5 opções de máscara;",
-          "Locação do equipamento com os cilindros;",
+          "Locação do equipamento com os cilindros de oxigênio e óxido nitroso medicinal;",
           "Logística, montagem, desmontagem e assepsia do equipamento;",
           "Monitoramento dos sinais vitais durante todo o procedimento.",
         ],
       },
     ],
     observacao:
-      "Atendimentos na Grande São Paulo e no interior até 150 km. Consulte o deslocamento para distâncias acima de 150 km da cidade de São Paulo.",
+      "Valores para até 3 horas de atendimento; a hora adicional é de R$ 200,00, cobrada integralmente a partir do 16º minuto adicional. Atendimentos na Grande São Paulo e no interior até 150 km — consulte o deslocamento para distâncias maiores.",
   },
 
   "Piezosurgery Mectron Touch": {
     imagem: "/catalogo/piezosurgery.webp",
-    legenda: "Locação de equipamento de Piezo com pontas",
+    legenda: "Locação de Piezosurgery Mectron Touch com pontas",
     blocos: [
       { titulo: "Serviços", texto: "Locação de equipamento Piezosurgery Mectron Touch com pontas inclusas." },
       {
         titulo: "Equipe",
-        texto:
-          "Profissionais da saúde com experiência em UTI e centro cirúrgico para fazer a instrumentação do equipamento, mantendo todas as melhores práticas de assepsia e biossegurança.",
+        texto: "Profissionais com experiência em UTI e centro cirúrgico para instrumentar, com assepsia e biossegurança.",
       },
       {
         titulo: "O que inclui",
         itens: [
-          "Profissional para instrumentação;",
-          "Locação do equipamento com as pontas disponíveis;",
+          "Profissional para instrumentação cirúrgica;",
+          "Locação do equipamento com as pontas disponíveis, para 1 cirurgia/paciente;",
           "Seguro do equipamento;",
           "EPIs.",
         ],
       },
+      {
+        titulo: "Pacote promocional",
+        texto: "Piezo + Stickybone + Membranas: inclui a produção de membranas e Stickybone.",
+      },
     ],
+    observacao: RAIO_150,
   },
 
   "Cobertura Fotográfica": {
@@ -139,49 +144,45 @@ export const DESCRITIVO_DAS_FAMILIAS: Record<string, DescritivoDaFamilia> = {
       },
       {
         titulo: "Equipe",
-        texto:
-          "Profissionais especializados em fotografia odontológica. Captura e tratamento de imagens de pacientes, cirurgias, planejamentos, congressos, indústria de implantes, equipamentos, instrumentais e aulas.",
+        texto: "Especialistas em fotografia odontológica: pacientes, cirurgias, planejamentos, congressos, indústria e aulas.",
       },
       {
         titulo: "O que inclui",
         itens: [
           "Contratação do profissional e deslocamento;",
-          "Máquina fotográfica profissional;",
-          "Materiais estéreis e EPIs;",
-          "Tratamento das fotos.",
+          "Profissional disponível por 4 horas;",
+          "Máquina fotográfica profissional, iluminação, materiais estéreis e EPIs;",
+          "Fotos tratadas em Photoshop e arquivo completo.",
         ],
       },
     ],
-    observacao: "Adicional de deslocamento para cidades fora das regiões metropolitanas.",
+    observacao: RAIO_150,
   },
 
   "Ultrassom Micro Focado": {
     imagem: "/catalogo/ultrassom.webp",
-    legenda: "Locação de Ultrassom Micro e Macro Focado — Atria®",
+    legenda: "Locação de Ultrassom Microfocado — Atria®",
     blocos: [
       {
         titulo: "Serviços",
-        texto:
-          "Locação de equipamento Atria® + logística + profissional com ampla experiência para acompanhar a montagem e a regulagem do equipamento.",
+        texto: "Equipamento Atria® + logística + profissional experiente para montagem e regulagem.",
       },
       {
         titulo: "Equipe",
-        texto:
-          "Biomédico esteta especialista. O profissional irá instrumentar o equipamento, fornecer os protocolos indicados pelo fabricante e orientar as melhores práticas.",
+        texto: "Especialista que instrumenta o equipamento e orienta os protocolos do fabricante e as melhores práticas.",
       },
       {
         titulo: "O que inclui",
         itens: [
-          "Profissional biomédico esteta;",
-          "Todos os insumos e EPIs;",
-          "Logística do equipamento;",
+          "Profissional biomédico esteta ou dentista especialista;",
+          "Todos os insumos, EPIs e logística do equipamento;",
           "2 handpieces;",
           "Insumos carregados nas profundidades: Atria Pen 1,5 mm, 3 mm e 4,5 mm · Atria Scan Microfocado 1,5 mm, 2 mm, 3 mm e 4,5 mm · Atria Scan Macrofocado 6 mm, 9 mm e 13 mm;",
           "Montagem e desmontagem do equipamento seguindo normas de segurança.",
         ],
       },
     ],
-    observacao: GRANDE_SP,
+    observacao: `Cancelamento com menos de 48 h: 50% do valor. ${RAIO_150}`,
   },
 
   "Megaderme – Radiofrequência Microagulhada": {
@@ -190,13 +191,11 @@ export const DESCRITIVO_DAS_FAMILIAS: Record<string, DescritivoDaFamilia> = {
     blocos: [
       {
         titulo: "Serviços",
-        texto:
-          "Locação de equipamento Megaderme® + logística + profissional com ampla experiência para acompanhar a montagem e a regulagem do equipamento.",
+        texto: "Equipamento Megaderme® + logística + profissional experiente para montagem e regulagem.",
       },
       {
         titulo: "Equipe",
-        texto:
-          "Biomédico esteta especialista. O profissional irá instrumentar o equipamento, fornecer os protocolos indicados pelo fabricante e orientar as melhores práticas.",
+        texto: "Especialista que instrumenta o equipamento e orienta os protocolos do fabricante e as melhores práticas.",
       },
       {
         titulo: "O que inclui",
@@ -205,7 +204,7 @@ export const DESCRITIVO_DAS_FAMILIAS: Record<string, DescritivoDaFamilia> = {
           "Todos os insumos e EPIs;",
           "Logística do equipamento;",
           "1 handpiece Eletroderme RF;",
-          "Insumos individuais e estéreis por paciente;",
+          "Insumos individuais e estéreis por paciente — 1 spot com 40 agulhas por paciente (corporal e facial na mesma sessão);",
           "Montagem e desmontagem do equipamento seguindo normas de segurança.",
         ],
       },
@@ -214,26 +213,26 @@ export const DESCRITIVO_DAS_FAMILIAS: Record<string, DescritivoDaFamilia> = {
         itens: [
           "Tratamento de estrias;",
           "Tratamento de melasma;",
-          "Cicatrizes: de acne, de queimadura e cirúrgica;",
+          "Cicatrizes: de acne, de queimadura e cirúrgicas;",
           "Skin tightening para regiões de face e pescoço;",
           "Resurfacing: redução de rugas em face e pescoço;",
           "Poros dilatados — melhora da textura da pele.",
         ],
       },
     ],
-    observacao: GRANDE_SP,
+    observacao: `Nos pacotes, a locação é de 2 h (2 pacientes), 3 h (3 pacientes) ou 4 h (4 pacientes). ${RAIO_150}`,
   },
 
   "Platinum Platform": {
     imagem: "/catalogo/platinum.webp",
-    legenda: "Locação Platinum Platform",
+    legenda: "Locação Plataforma Platinum",
     blocos: [
       {
         titulo: "Luz Intensa Pulsada — principais indicações",
         itens: [
           "Acne ativa;",
           "Estímulo de colágeno e rejuvenescimento;",
-          "Hemangiomas planos — manchas vinho do porto;",
+          "Hemangiomas planos — manchas vinho do Porto;",
           "Lesões pigmentadas benignas;",
           "Poiquilodermia e rosácea;",
           "Olheiras.",
@@ -257,12 +256,12 @@ export const DESCRITIVO_DAS_FAMILIAS: Record<string, DescritivoDaFamilia> = {
       {
         titulo: "O que inclui",
         itens: [
-          "Locação do equipamento Platinum Platform com ponteiras IPL, Er:YAG e Q-Switched;",
+          "Plataforma Platinum com ponteiras IPL, Er:YAG e Q-Switched;",
           "Procedimento acompanhado por biomédico esteta especialista Hemoderi.",
         ],
       },
     ],
-    observacao: GRANDE_SP,
+    observacao: `Nas locações de 4 e 8 horas, sem limite de pacientes. ${RAIO_150}`,
   },
 
   "Laser Therapy EC": {
@@ -272,17 +271,50 @@ export const DESCRITIVO_DAS_FAMILIAS: Record<string, DescritivoDaFamilia> = {
       {
         titulo: "O que inclui",
         itens: [
-          "Locação do Laser Therapy EC;",
-          "Procedimento acompanhado por profissional, com as orientações de uso do equipamento;",
-          "Acompanha ILIB.",
+          "Terapia fotodinâmica com ILIB;",
+          "Procedimento acompanhado por profissional, com orientações de uso do equipamento.",
         ],
       },
       {
-        titulo: "Adicional",
-        texto: "Valor exclusivo para contratação junto com outro serviço Hemoderi.",
+        titulo: "Combine e economize",
+        texto: "Valor de adicional exclusivo na contratação junto com outro serviço Hemoderi.",
       },
     ],
-    observacao: GRANDE_SP,
+    observacao: RAIO_150,
+  },
+
+  "Laser CO2 Fracionado": {
+    imagem: "/catalogo/co2-fracionado.webp",
+    legenda: "Locação CO2 Fracionado com Microcoring — Fraxion SmartGR",
+    blocos: [
+      {
+        titulo: "Serviços",
+        texto: "Equipamento Fraxion SmartGR + logística + profissional experiente para montagem e regulagem.",
+      },
+      {
+        titulo: "Equipe",
+        texto: "Especialista que instrumenta o equipamento e orienta os protocolos do fabricante e as melhores práticas.",
+      },
+      {
+        titulo: "O que inclui",
+        itens: [
+          "Profissional biomédico esteta ou dentista especialista;",
+          "Todos os insumos e EPIs;",
+          "Logística do equipamento;",
+          "Ponteiras fracionadas, cirúrgicas e íntimas;",
+          "Montagem e desmontagem seguindo normas de segurança.",
+        ],
+      },
+      {
+        titulo: "CO2 Day — modalidades",
+        itens: [
+          "Essencial: sua equipe opera — montamos, testamos e deixamos tudo pronto (4, 6 ou 8 horas);",
+          "Assistido: tudo do Essencial + profissional Hemoderi na sala (4, 6 ou 8 horas);",
+          "CO2 Curso: valor por paciente, desconto exclusivo para o serviço CO2 Fracionado.",
+        ],
+      },
+    ],
+    observacao: RAIO_150,
   },
 
   "Bisturi Elétrico": {
@@ -291,13 +323,12 @@ export const DESCRITIVO_DAS_FAMILIAS: Record<string, DescritivoDaFamilia> = {
     blocos: [
       {
         titulo: "Serviços",
-        texto:
-          "Locação de bisturi elétrico + logística + profissional com ampla experiência para acompanhar a montagem e a regulagem do equipamento.",
+        texto: "Bisturi elétrico + logística + profissional experiente para montagem e regulagem.",
       },
       {
         titulo: "Equipe",
         texto:
-          "A equipe Hemoderi organiza a logística, confere o equipamento e auxilia na montagem. O procedimento permanece sob responsabilidade do cirurgião.",
+          "Organizamos a logística, conferimos o equipamento e auxiliamos na montagem. O procedimento é do cirurgião.",
       },
       {
         titulo: "O que inclui",
@@ -322,7 +353,7 @@ export const DESCRITIVO_DAS_FAMILIAS: Record<string, DescritivoDaFamilia> = {
         ],
       },
     ],
-    observacao: GRANDE_SP,
+    observacao: `Por cirurgia: o profissional acompanha a cirurgia, com as pontas do kit odontológico EMAI inclusas. Diária (até 8 horas): retirada ao final do dia, com horários flexíveis. Em todos, entrega e teste do equipamento por profissional Hemoderi. ${RAIO_150}`,
   },
 
   "Motor de Implante": {
@@ -331,13 +362,12 @@ export const DESCRITIVO_DAS_FAMILIAS: Record<string, DescritivoDaFamilia> = {
     blocos: [
       {
         titulo: "Serviços",
-        texto:
-          "Locação de motor de implante + logística + profissional com ampla experiência para acompanhar a montagem e a regulagem do equipamento.",
+        texto: "Motor de implante + logística + profissional experiente para montagem e regulagem.",
       },
       {
         titulo: "Equipe",
         texto:
-          "A equipe Hemoderi organiza a logística, confere o equipamento e auxilia na montagem. O procedimento permanece sob responsabilidade do cirurgião.",
+          "Organizamos a logística, conferimos o equipamento e auxiliamos na montagem. O procedimento é do cirurgião.",
       },
       {
         titulo: "O que inclui",
@@ -351,7 +381,7 @@ export const DESCRITIVO_DAS_FAMILIAS: Record<string, DescritivoDaFamilia> = {
         ],
       },
     ],
-    observacao: `Não garantimos a marca do motor que será enviada. ${GRANDE_SP}`,
+    observacao: `Por cirurgia: o profissional acompanha a cirurgia; não inclui contra-ângulo e peça reta. Diária (até 8 horas): retirada ao final do dia, com horários flexíveis. Em todos, entrega e teste do equipamento por profissional Hemoderi. Não garantimos a marca do motor que será enviada. ${RAIO_150}`,
   },
 
   "PRF – Coleta e Produção": {
@@ -362,7 +392,7 @@ export const DESCRITIVO_DAS_FAMILIAS: Record<string, DescritivoDaFamilia> = {
         titulo: "O que está incluso ao escolher um serviço Hemoderi",
         itens: [
           "1. Contratação e deslocamento do profissional;",
-          "2. Materiais de coleta (tubos, escape, luvas, garrote, stopblood e álcool 70%);",
+          "2. Materiais de coleta (tubos, escalpe, luvas, garrote, stopblood e álcool 70%);",
           "3. Materiais e instrumentos para manipulação dos concentrados sanguíneos: centrífuga, PRF Box estéril e placa de Petri estéril;",
           "4. Acompanhamento e suporte do início ao fim do procedimento, com coletas ilimitadas;",
           "5. Produção de mais de 11 produtos personalizados para cirurgia e HOF, entre eles membranas, supermembrana, Stickybone/PRF Block e plasma gel.",
@@ -396,13 +426,13 @@ export const DESCRITIVO_DAS_FAMILIAS: Record<string, DescritivoDaFamilia> = {
         ],
       },
       {
-        titulo: "P.A.D. — Protocolo Anti Desperdício",
+        titulo: "P.A.D. — Protocolo Antidesperdício",
         texto:
-          "Com a experiência de mais de 3.000 procedimentos, desenvolvemos um protocolo para evitar o desperdício de biomateriais em suas cirurgias: confirmação do procedimento, planejamento cirúrgico presencial, planejamento de coleta de tubos validado com o cirurgião e produção de membranas, supermembranas, plugs e I-PRF na quantidade que o cirurgião deseja para cada procedimento. Acompanhamos o procedimento do início ao fim.",
+          "Com a experiência de mais de 3.000 procedimentos, desenvolvemos um protocolo para evitar o desperdício de biomateriais: confirmação do procedimento; planejamento cirúrgico presencial; planejamento de coleta de tubos validado com o cirurgião; coleta e centrifugação na quantidade que o cirurgião deseja; personalização de espessura, formato, altura e técnica do Stickybone; Stickybone feito só com a confirmação do enxerto pelo cirurgião; produção fracionada conforme as embalagens de biomateriais; e produção ilimitada — sem adicional para novas coletas e produção de PRF no mesmo procedimento. Acompanhamos do início ao fim.",
       },
     ],
     observacao:
-      "*Para produção de PRP utilizamos o tubo de tampa azul, com anticoagulante. Cada protocolo tem sua variável de força G e tempo específicos. Personalizamos tamanho, espessura e formato. Não fornecemos biomaterial para o Stickybone: ele deve ser fornecido pelo cirurgião. Acompanhamento não disponível no serviço Membranas.",
+      "*Para produção de PRP utilizamos o tubo de tampa azul, com anticoagulante. Cada protocolo tem sua variável de força G e tempo específicos. Personalizamos tamanho, espessura e formato. Não fornecemos biomaterial para o Stickybone: ele deve ser fornecido pelo cirurgião. Acompanhamento não disponível no serviço Membranas. Valores válidos para um raio de até 150 km de São Paulo; Membranas nas regiões metropolitanas de SP, RJ, Curitiba e Vila Velha.",
   },
 };
 

@@ -31,3 +31,11 @@ test("catálogo: cada bloco tem título e ao menos texto ou itens", () => {
 test("catálogo: família desconhecida não tem descritivo", () => {
   assert.equal(descritivoDaFamilia("Laser"), null);
 });
+
+import { familiaDoNome } from "../src/lib/familia";
+
+test("CO2 Fracionado (catálogo de outubro) é uma família própria, não 'Laser'", () => {
+  assert.equal(familiaDoNome("Laser CO2 Fracionado – Essencial 4 horas"), "Laser CO2 Fracionado");
+  assert.equal(familiaDoNome("CO2 Curso – por paciente"), "Laser CO2 Fracionado");
+  assert.equal(familiaDoNome("Laser Therapy EC + ILIB"), "Laser Therapy EC");
+});

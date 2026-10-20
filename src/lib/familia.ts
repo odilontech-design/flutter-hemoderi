@@ -32,12 +32,14 @@ export const CATEGORIAS_DO_CATALOGO = [
   "Megaderme – Radiofrequência Microagulhada",
   "Platinum Platform",
   "Laser Therapy EC",
+  // Nova no catálogo de outubro (revisão Out.26).
+  "Laser CO2 Fracionado",
   "Bisturi Elétrico",
   "Motor de Implante",
   "PRF – Coleta e Produção",
 ] as const;
 
-const [AIRFLOW, LITETOUCH, SEDACAO, PIEZO, FOTO, ULTRASSOM, MEGADERME, PLATINUM, LASER_THERAPY, BISTURI, IMPLANTE, PRF] =
+const [AIRFLOW, LITETOUCH, SEDACAO, PIEZO, FOTO, ULTRASSOM, MEGADERME, PLATINUM, LASER_THERAPY, CO2, BISTURI, IMPLANTE, PRF] =
   CATEGORIAS_DO_CATALOGO;
 
 /**
@@ -53,6 +55,7 @@ const REGRAS: { familia: string; padrao: RegExp }[] = [
   // escondia justamente a escolha que o cliente precisa fazer.
   { familia: LITETOUCH, padrao: /lite ?touch|light ?touch/i },
   { familia: LASER_THERAPY, padrao: /laser ?therapy|ilib/i },
+  { familia: CO2, padrao: /\bco2\b|co₂|fraxion/i },
   { familia: "Laser", padrao: /laser/i },
   { familia: ULTRASSOM, padrao: /ultrassom|atria/i },
   { familia: MEGADERME, padrao: /radiofrequ|megaderme/i },
