@@ -189,7 +189,7 @@ function AcaoReagendar({ disabled, onConfirmar }: { disabled?: boolean; onConfir
       <Campo
         aria-label="Novo horário"
         type="time"
-        step={900}
+        step={60}
         value={hora}
         onChange={(e) => setHora(e.target.value)}
         className="!w-auto !py-1.5"

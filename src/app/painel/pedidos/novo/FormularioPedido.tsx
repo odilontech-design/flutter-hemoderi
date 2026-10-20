@@ -70,7 +70,7 @@ export function FormularioPedido({
         </div>
         <div>
           <Rotulo>Hora de início</Rotulo>
-          <Campo name="horaInicio" type="time" required step={900} />
+          <Campo name="horaInicio" type="time" required step={60} />
         </div>
         <div>
           <Rotulo>Profissional</Rotulo>

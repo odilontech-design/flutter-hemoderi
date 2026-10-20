@@ -59,7 +59,7 @@ export function EditarAgendamento({
             </div>
             <div>
               <Rotulo>Horário agendado com o paciente</Rotulo>
-              <Campo name="horaInicio" type="time" required step={900} defaultValue={dados.horaInicio} />
+              <Campo name="horaInicio" type="time" required step={60} defaultValue={dados.horaInicio} />
             </div>
             <div>
               <Rotulo>Serviço</Rotulo>
