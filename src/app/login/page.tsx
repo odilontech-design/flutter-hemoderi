@@ -21,6 +21,11 @@ export default function Login() {
             Criar cadastro
           </Link>
         </div>
+        <div className="text-center text-xs text-white/70 mt-2">
+          <Link href="/instalar" className="font-semibold text-white underline">
+            Como instalar o app no celular
+          </Link>
+        </div>
         <div className="text-center text-[10px] text-white/30 mt-6">Dilon Tech</div>
       </div>
     </div>

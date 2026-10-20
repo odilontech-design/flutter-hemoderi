@@ -49,7 +49,7 @@ export default async function DetalheDoPedido({ params }: { params: { pedidoId: 
 
   // Edição do resumo (ata de 02/10): só para quem atende o telefone e só
   // enquanto o atendimento ainda está de pé.
-  const podeEditar = perfilPermite(sessao.perfil, "COMERCIAL", "ATENDENTE") && STATUS_ATIVOS.includes(pedido.status);
+  const podeEditar = perfilPermite(sessao.perfil, "COMERCIAL", "ATENDENTE", "POS_VENDA") && STATUS_ATIVOS.includes(pedido.status);
   const [servicosDoCatalogo, locais] = podeEditar
     ? await Promise.all([
         prisma.servico.findMany({

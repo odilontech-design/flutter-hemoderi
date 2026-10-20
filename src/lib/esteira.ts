@@ -41,8 +41,10 @@ export const ETAPAS: Etapa[] = [
   {
     chave: "parados",
     rotulo: "Parados",
-    descricao: "Tudo que espera alguém da equipe — a triagem e a alocação juntas.",
-    onde: { status: { in: ["SOLICITADO", "CONFIRMADO"] satisfies StatusPedido[] } },
+    descricao: "Tudo que espera alguém da equipe — para confirmar, para alocar e para conferir, somados.",
+    // A soma das três filas da equipe (ata de 20/10): antes ficava de fora o
+    // relatório esperando conferência, e o número não batia com as abas.
+    onde: { OR: [{ status: { in: ["SOLICITADO", "CONFIRMADO"] satisfies StatusPedido[] } }, PENDENTE_DE_CONFERENCIA] },
   },
   {
     chave: "triagem",
@@ -140,7 +142,8 @@ const ETAPAS_DO_PERFIL: Partial<Record<PerfilInterno, string[]>> = {
   COMERCIAL: ["triagem", "alocados", "fechados", "cancelados", "todos"],
   ATENDENTE: ["triagem", "alocados", "fechados", "cancelados", "todos"],
   LOGISTICA: ["alocar", "alocados", "cancelados"],
-  POS_VENDA: ["conferir", "devolvidos", "fechados"],
+  // Desde a ata de 20/10 o pós-venda também lança e confirma os pedidos do dia.
+  POS_VENDA: ["conferir", "devolvidos", "triagem", "fechados", "todos"],
 };
 
 export function etapasDoPerfil(perfil: PerfilInterno): Etapa[] {

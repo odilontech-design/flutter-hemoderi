@@ -45,9 +45,11 @@ test("relatório devolvido sai da conferência e aparece em Devolvidos", () => {
   assert.equal(etapaPorChave("devolvidos")?.dono, undefined);
 });
 
-test("triagem e alocação juntas são exatamente a visão de quem gerencia", () => {
+test("parados soma as três filas da equipe: confirmar, alocar e conferir (ata de 20/10)", () => {
   const parados = etapaPorChave("parados");
-  assert.deepEqual(parados?.onde, { status: { in: ["SOLICITADO", "CONFIRMADO"] } });
+  assert.deepEqual(parados?.onde, {
+    OR: [{ status: { in: ["SOLICITADO", "CONFIRMADO"] } }, etapaPorChave("conferir")?.onde],
+  });
 });
 
 test("todas as etapas têm chave única — a chave vai para a URL", () => {
@@ -72,7 +74,7 @@ test("a etapa `todos` não filtra nada", () => {
 test("cada perfil vê só as etapas do seu setor; gestão e responsável veem tudo", () => {
   const chaves = (perfil: Parameters<typeof etapasDoPerfil>[0]) => etapasDoPerfil(perfil).map((e) => e.chave);
   assert.deepEqual(chaves("LOGISTICA"), ["alocar", "alocados", "cancelados"]);
-  assert.deepEqual(chaves("POS_VENDA"), ["conferir", "devolvidos", "fechados"]);
+  assert.deepEqual(chaves("POS_VENDA"), ["triagem", "conferir", "devolvidos", "fechados", "todos"]);
   assert.equal(chaves("COMERCIAL").includes("alocar"), false);
   assert.equal(chaves("COMERCIAL").includes("triagem"), true);
   assert.equal(etapasDoPerfil("RESPONSAVEL").length, ETAPAS.length);

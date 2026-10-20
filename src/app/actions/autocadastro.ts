@@ -5,6 +5,7 @@ import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { cepValido, cnpjValido, cpfValido } from "@/lib/documento";
 import { formatarTelefoneBrasileiro, lerTelefoneBrasileiro, MENSAGEM_TELEFONE_INVALIDO } from "@/lib/telefone";
+import { camposDoFormulario, lerResponsavelFinanceiro } from "@/lib/responsavel-financeiro";
 import { conferirSenhaNova } from "@/lib/senha";
 import { PERFIS_DO_AUTOCADASTRO } from "@/lib/visibilidade";
 import { conselhoValido, registroDeConselho } from "@/lib/conselhos";
@@ -62,6 +63,9 @@ export async function autocadastrar(_anterior: Resultado, dados: FormData): Prom
     return { ok: false, erro: "CNPJ (ou CPF) inválido — confira se algum dígito ficou trocado." };
   }
 
+  const financeiro = lerResponsavelFinanceiro(camposDoFormulario(dados));
+  if (!financeiro.ok) return { ok: false, erro: financeiro.erro };
+
   const cep = String(dados.get("cep") ?? "").trim();
   const endereco = String(dados.get("endereco") ?? "").trim();
   const numero = String(dados.get("numero") ?? "").trim();
@@ -93,6 +97,7 @@ export async function autocadastrar(_anterior: Resultado, dados: FormData): Prom
       cnpj: documento || null,
       telefone,
       email,
+      ...financeiro.dados,
       cep,
       endereco,
       numero,

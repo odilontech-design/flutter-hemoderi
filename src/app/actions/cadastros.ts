@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { Prisma, type CategoriaServico, type UnidadeCobranca } from "@prisma/client";
 import { exigirInterno } from "@/lib/sessao";
+import { camposDoFormulario, lerResponsavelFinanceiro } from "@/lib/responsavel-financeiro";
 import { gerarSlug } from "@/lib/slug";
 import { lerCentavos } from "@/lib/dinheiro";
 import { cepValido, cnpjValido, cpfValido } from "@/lib/documento";
@@ -49,6 +50,9 @@ export async function salvarClinica(_anterior: Resultado, dados: FormData): Prom
     return { ok: false, erro: "Informe um CEP válido: é dele que sai o endereço do atendimento." };
   }
 
+  const financeiro = lerResponsavelFinanceiro(camposDoFormulario(dados));
+  if (!financeiro.ok) return { ok: false, erro: financeiro.erro };
+
   const salas = Number(dados.get("salas") ?? 1);
   const condicaoInformada = String(dados.get("condicaoPagamento") ?? "").trim();
   const comum = {
@@ -69,6 +73,7 @@ export async function salvarClinica(_anterior: Resultado, dados: FormData): Prom
     // significando a mesma coisa no fechamento do mês.
     condicaoPagamento: condicaoValida(condicaoInformada) ? condicaoInformada : null,
     observacoes: String(dados.get("observacoes") ?? "") || null,
+    ...financeiro.dados,
   };
 
   if (id) {

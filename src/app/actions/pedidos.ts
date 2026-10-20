@@ -466,7 +466,7 @@ async function transicionar(pedidoId: string, para: StatusPedido, usuarioId: str
  */
 export async function confirmarPedido(pedidoId: string): Promise<Resultado> {
   const sessao = await exigirInterno();
-  if (!perfilPermite(sessao.perfil, "COMERCIAL", "ATENDENTE")) {
+  if (!perfilPermite(sessao.perfil, "COMERCIAL", "ATENDENTE", "POS_VENDA")) {
     return { ok: false, erro: "A triagem é do comercial — quem confirma o agendamento é quem atende a clínica." };
   }
   const resultado = await transicionar(pedidoId, "CONFIRMADO", sessao.usuarioId);
@@ -1389,7 +1389,7 @@ export async function reagendarPedidoInterno(pedidoId: string, dataISO: string, 
  */
 export async function editarAgendamento(_anterior: Resultado, dados: FormData): Promise<Resultado> {
   const sessao = await exigirInterno();
-  if (!perfilPermite(sessao.perfil, "COMERCIAL", "ATENDENTE")) {
+  if (!perfilPermite(sessao.perfil, "COMERCIAL", "ATENDENTE", "POS_VENDA")) {
     return { ok: false, erro: "Só o comercial edita o agendamento." };
   }
 

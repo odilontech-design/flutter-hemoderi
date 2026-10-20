@@ -85,8 +85,10 @@ function ajudaDeCusto(centavos: number | null) {
  * A ordem é por urgência de QUEM ABRE a tela. O aceite vem primeiro desde a
  * ata de 21/09: é a única coisa aqui que alguém do outro lado está esperando
  * — a clínica tem horário marcado e a logística não sabe se vai ter gente.
- * Relatório atrasado trava o pagamento da própria pessoa, o que é grave mas
- * não é de ninguém mais.
+ * Depois os compromissos (hoje e os próximos 7 dias) e só então os
+ * relatórios por preencher ou corrigir (ata de 20/10): relatório atrasado
+ * trava o pagamento da própria pessoa, o que é grave mas não é de ninguém
+ * mais.
  */
 export default async function MinhaAgenda() {
   const sessao = await exigirProfissional();
@@ -156,18 +158,6 @@ export default async function MinhaAgenda() {
   return (
     <>
       <Titulo>Minha agenda</Titulo>
-
-      {devolvidos > 0 && (
-        <Cartao className="mb-3 border-red-300">
-          <div className="font-display font-bold text-red-700 text-sm mb-1">
-            {devolvidos} relatório(s) devolvido(s) para correção
-          </div>
-          <div className="text-[11px] text-gray-500 mb-2">A central pediu um ajuste. O valor do profissional espera o reenvio.</div>
-          <Link href="/profissional/relatorios" className="text-xs font-semibold text-bordo hover:underline">
-            Ver o que corrigir →
-          </Link>
-        </Cartao>
-      )}
 
       {aguardandoAceite.length > 0 && (
         <Cartao className="mb-3 border-bordo">
@@ -291,40 +281,6 @@ export default async function MinhaAgenda() {
         </Cartao>
       )}
 
-      {atrasados.length > 0 && (
-        <Cartao className="mb-3 border-red-200">
-          <div className="font-display font-bold text-red-600 text-sm mb-1">
-            {atrasados.length} atendimento(s) esperando relatório
-          </div>
-          <div className="text-[11px] text-gray-500 mb-3">
-            O valor do profissional é liberado quando o relatório é enviado e a central confere.
-          </div>
-          <div className="space-y-2">
-            {atrasados.map((pedido) => (
-              <div
-                key={pedido.id}
-                className="flex flex-wrap items-center justify-between gap-2 border-b border-gray-100 pb-2 last:border-0 last:pb-0"
-              >
-                <div className="text-xs">
-                  <div className="font-semibold text-bordo">
-                    {formatarDataCurta(pedido.data)} · {pedido.horaInicio} · {pedido.clinica.nome}
-                  </div>
-                  <div className="text-gray-500">
-                    {pedido.servico.nome} · valor do profissional: {formatarReais(pedido.valorRepasseCentavos)}
-                  </div>
-                </div>
-                <Link
-                  href={`/profissional/relatorio/${pedido.id}`}
-                  className="bg-bordo text-white text-xs font-semibold px-3 py-2 rounded-lg hover:bg-bordoEscuro"
-                >
-                  Preencher relatório
-                </Link>
-              </div>
-            ))}
-          </div>
-        </Cartao>
-      )}
-
       {/* Duas colunas (ata de 13/10): o que EU declarei e o que a Hemoderi
           marcou. Juntas numa lista só, "livre" ficava ambíguo — livre porque
           está disponível, ou livre porque não disse nada? */}
@@ -412,6 +368,54 @@ export default async function MinhaAgenda() {
           })}
         </div>
       </Cartao>
+
+      {/* Relatórios depois dos compromissos (ata de 20/10): quem abre a agenda
+          quer saber primeiro aonde vai; o que falta preencher vem em seguida. */}
+      {devolvidos > 0 && (
+        <Cartao className="mb-3 border-red-300">
+          <div className="font-display font-bold text-red-700 text-sm mb-1">
+            {devolvidos} relatório(s) devolvido(s) para correção
+          </div>
+          <div className="text-[11px] text-gray-500 mb-2">A central pediu um ajuste. O valor do profissional espera o reenvio.</div>
+          <Link href="/profissional/relatorios" className="text-xs font-semibold text-bordo hover:underline">
+            Ver o que corrigir →
+          </Link>
+        </Cartao>
+      )}
+
+      {atrasados.length > 0 && (
+        <Cartao className="mb-3 border-red-200">
+          <div className="font-display font-bold text-red-600 text-sm mb-1">
+            {atrasados.length} atendimento(s) esperando relatório
+          </div>
+          <div className="text-[11px] text-gray-500 mb-3">
+            O valor do profissional é liberado quando o relatório é enviado e a central confere.
+          </div>
+          <div className="space-y-2">
+            {atrasados.map((pedido) => (
+              <div
+                key={pedido.id}
+                className="flex flex-wrap items-center justify-between gap-2 border-b border-gray-100 pb-2 last:border-0 last:pb-0"
+              >
+                <div className="text-xs">
+                  <div className="font-semibold text-bordo">
+                    {formatarDataCurta(pedido.data)} · {pedido.horaInicio} · {pedido.clinica.nome}
+                  </div>
+                  <div className="text-gray-500">
+                    {pedido.servico.nome} · valor do profissional: {formatarReais(pedido.valorRepasseCentavos)}
+                  </div>
+                </div>
+                <Link
+                  href={`/profissional/relatorio/${pedido.id}`}
+                  className="bg-bordo text-white text-xs font-semibold px-3 py-2 rounded-lg hover:bg-bordoEscuro"
+                >
+                  Preencher relatório
+                </Link>
+              </div>
+            ))}
+          </div>
+        </Cartao>
+      )}
 
       <Cartao>
         <div className="font-display font-bold text-bordo text-sm mb-3">Mais adiante</div>

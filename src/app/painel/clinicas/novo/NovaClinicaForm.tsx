@@ -6,6 +6,7 @@ import { FormularioAcao } from "@/components/FormularioAcao";
 import { CamposEndereco } from "@/components/CamposEndereco";
 import { CampoDocumento } from "@/components/CampoDocumento";
 import { salvarClinica } from "@/app/actions/cadastros";
+import { CamposResponsavelFinanceiro } from "@/components/CamposResponsavelFinanceiro";
 import { CONDICOES_PAGAMENTO } from "@/lib/pagamento";
 import { ROTULO_PERFIL_CLIENTE, TODOS_OS_PERFIS } from "@/lib/visibilidade";
 
@@ -59,6 +60,7 @@ export function NovaClinicaForm() {
           dois profissionais no mesmo horário sem que o sistema veja conflito.
         </div>
       </div>
+      <CamposResponsavelFinanceiro />
       <div>
         <Rotulo>Condição de pagamento</Rotulo>
         <Selecao name="condicaoPagamento" defaultValue="">

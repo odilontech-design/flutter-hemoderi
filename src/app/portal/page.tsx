@@ -145,7 +145,19 @@ export default async function MeusAgendamentos() {
                         a confirmar
                       </span>
                     ) : profissionais.length > 0 ? (
-                      profissionais.join(", ")
+                      <>
+                        {profissionais.join(", ")}
+                        {/* A chegada que o profissional registra no "Cheguei no
+                            local" aparece para a clínica (ata de 20/10). */}
+                        {itens.find((p) => p.checkinEm)?.checkinEm && (
+                          <span className="block text-[10px] font-semibold text-green-700">
+                            chegou às{" "}
+                            {itens
+                              .find((p) => p.checkinEm)!
+                              .checkinEm!.toLocaleTimeString("pt-BR", { timeZone: "America/Sao_Paulo", hour: "2-digit", minute: "2-digit" })}
+                          </span>
+                        )}
+                      </>
                     ) : (
                       <span className="text-gray-400">a definir</span>
                     )}

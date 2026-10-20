@@ -2,10 +2,10 @@ import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { exigirProfissional } from "@/lib/sessao";
 import { Aviso, Cartao, Titulo } from "@/components/ui";
-import { formatarData } from "@/lib/data";
+import { formatarData, hojeUTC } from "@/lib/data";
 import { codigoDoPedido } from "@/lib/numeracao";
 import { formatarReais } from "@/lib/dinheiro";
-import { enderecoEmUmaLinha } from "@/lib/relatorio";
+import { CAMPOS_CLINICOS, enderecoEmUmaLinha } from "@/lib/relatorio";
 import { comEnderecoDoPedido } from "@/lib/endereco";
 import { precosDosServicos, tabelasDaClinica } from "@/lib/preco";
 import { descricaoDoPreco } from "@/lib/cobranca";
@@ -13,11 +13,21 @@ import { parametros } from "@/lib/alocacao";
 import { localRevelado } from "@/lib/sigilo";
 import { ResumoDoAtendimento } from "@/components/ResumoDoAtendimento";
 import { INCLUIR_ADICIONAIS, RelatorioPreenchido } from "@/components/RelatorioPreenchido";
+import { BotaoCheckin } from "../../AcoesAtendimento";
+import { houveAtraso } from "@/lib/atraso";
+import { CompartilharWhatsapp } from "@/components/CompartilharWhatsapp";
+import { textoDoRelatorio } from "@/lib/relatorio-texto";
 import { FormularioRelatorio } from "./FormularioRelatorio";
 
 export const dynamic = "force-dynamic";
 
-export default async function Relatorio({ params }: { params: { pedidoId: string } }) {
+export default async function Relatorio({
+  params,
+  searchParams,
+}: {
+  params: { pedidoId: string };
+  searchParams: { enviado?: string };
+}) {
   const sessao = await exigirProfissional();
 
   // O filtro por profissionalId é o que impede abrir o atendimento de outra
@@ -46,9 +56,36 @@ export default async function Relatorio({ params }: { params: { pedidoId: string
   const config = await parametros();
   const revelado = localRevelado(pedido.data, pedido.horaInicio, config.horasRevelarLocal);
   // Relatório aprovado: a página vira a leitura do que foi enviado (ata de
-  // 13/10 — "resumo detalhado ao clicar no relatório"), sem formulário.
-  const enviado = pedido.relatorio?.aprovadoEm
+  // 13/10 — "resumo detalhado ao clicar no relatório"), sem formulário. Já
+  // enviado (aprovado ou não): também vira o texto para o grupo de WhatsApp.
+  const enviado = pedido.relatorio
     ? await prisma.relatorioAtendimento.findUnique({ where: { pedidoId: pedido.id }, include: INCLUIR_ADICIONAIS })
+    : null;
+  const textoParaOGrupo = enviado
+    ? textoDoRelatorio({
+        codigo: codigoDoPedido(pedido.numero, pedido.clinica.nome, pedido.data),
+        data: formatarData(pedido.data),
+        hora: pedido.horaInicio,
+        profissional: sessao.profissionalNome,
+        clinica: enviado.clinicaNomeInformado ?? pedido.clinica.nome,
+        doutor: enviado.doutorNomeInformado ?? pedido.doutorNome,
+        servico: enviado.servicoRealizado?.nome ?? pedido.servico.nome,
+        quantidade: enviado.quantidade,
+        adicionais: enviado.adicionais.map((a) => ({ nome: a.servico.nome, quantidade: a.quantidade })),
+        justificativaAdicionais: enviado.servicosAdicionais,
+        compareceu: enviado.compareceu,
+        inicioReal: enviado.inicioReal,
+        fimReal: enviado.fimReal,
+        intercorrencia: enviado.intercorrencia,
+        sinais: Object.fromEntries(
+          CAMPOS_CLINICOS.map((c) => [c.nome, (enviado as unknown as Record<string, string | null>)[c.nome] ?? null])
+        ),
+        recebimento: enviado.recebimento,
+        formaRecebimento: enviado.formaRecebimento,
+        valorRecebido: enviado.valorRecebidoCentavos != null ? formatarReais(enviado.valorRecebidoCentavos) : null,
+        observacaoRecebimento: enviado.observacaoRecebimento,
+        observacoes: enviado.observacoes,
+      })
     : null;
 
   // Todo o catálogo ativo, sem filtro de perfil ou praça: o que vale aqui é o
@@ -144,6 +181,30 @@ export default async function Relatorio({ params }: { params: { pedidoId: string
             </div>
           )}
         </div>
+        {/* Relatório no grupo de WhatsApp (ata de 20/10): na transição, o
+            relatório vai para o sistema e para o grupo da equipe. */}
+        {textoParaOGrupo && (
+          <div className={`mb-4 rounded-xl border p-3 ${searchParams.enviado ? "border-green-300 bg-green-50" : "border-gray-200"}`}>
+            <div className="text-xs font-semibold text-gray-800 mb-1">
+              {searchParams.enviado ? "Relatório enviado ✓ Agora compartilhe no grupo da equipe." : "Compartilhar este relatório no grupo da equipe"}
+            </div>
+            <div className="text-[11px] text-gray-500 mb-2">
+              Durante a transição o relatório também vai para o grupo de WhatsApp. O texto já sai pronto, sem dados do
+              paciente.
+            </div>
+            <CompartilharWhatsapp texto={textoParaOGrupo} />
+          </div>
+        )}
+        {/* Quem abre direto o relatório também registra a chegada (ata de
+            20/10): o botão não fica só no cartão de hoje da agenda. */}
+        {pedido.status === "ALOCADO" && !pedido.checkinEm && pedido.data.getTime() === hojeUTC().getTime() && (
+          <div className="mb-4 flex flex-wrap items-center gap-3 rounded-xl border border-bordo/30 bg-bege/50 p-3">
+            <div className="text-[11px] text-gray-600 flex-1 min-w-[12rem]">
+              Ainda sem chegada registrada. Registre ao chegar na clínica, antes do relatório.
+            </div>
+            <BotaoCheckin pedidoId={pedido.id} atrasado={houveAtraso(pedido.data, pedido.horaInicio, new Date())} />
+          </div>
+        )}
         {revelado && (
           <div className="mb-4">
             <ResumoDoAtendimento

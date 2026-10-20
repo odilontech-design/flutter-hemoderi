@@ -432,8 +432,10 @@ export function FormularioRelatorio({
   const [buscandoLocal, setBuscandoLocal] = useState(false);
 
   useEffect(() => {
-    if (estado.ok) router.push("/profissional");
-  }, [estado.ok, router]);
+    // Volta para a própria página do relatório, com o botão de compartilhar no
+    // grupo de WhatsApp à mão (ata de 20/10).
+    if (estado.ok) router.push(`/profissional/relatorio/${pedidoId}?enviado=1`);
+  }, [estado.ok, router, pedidoId]);
 
   // Sem action={} no <form>: a submissão inteira passa por aqui, de propósito
   // — é o que permite esperar a localização (assíncrono) ANTES de montar o

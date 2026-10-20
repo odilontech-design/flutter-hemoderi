@@ -21,7 +21,18 @@ export type RelatorioCompleto = Prisma.RelatorioAtendimentoGetPayload<{ include:
  *
  * Só leitura. As ações (conferir, aprovar) ficam na esteira.
  */
-export function RelatorioPreenchido({ relatorio }: { relatorio: RelatorioCompleto }) {
+export function RelatorioPreenchido({
+  relatorio,
+  paraClinica = false,
+}: {
+  relatorio: RelatorioCompleto;
+  /**
+   * A cópia que a clínica vê no portal (ata de 20/10): o atendimento como foi
+   * feito, sem o que é da operação — ajuda de custo, o que o profissional
+   * declarou ter recebido e a localização do envio.
+   */
+  paraClinica?: boolean;
+}) {
   const temCorrecoes =
     relatorio.clinicaNomeInformado || relatorio.enderecoInformado || relatorio.doutorNomeInformado;
 
@@ -118,7 +129,7 @@ export function RelatorioPreenchido({ relatorio }: { relatorio: RelatorioComplet
         </div>
       )}
 
-      {relatorio.ajudaCustoCentavos != null && (
+      {!paraClinica && relatorio.ajudaCustoCentavos != null && (
         <div className="text-xs">
           <div className="text-gray-400 mb-0.5">Ajuda de custo</div>
           <div className="text-amber-800">
@@ -128,7 +139,7 @@ export function RelatorioPreenchido({ relatorio }: { relatorio: RelatorioComplet
         </div>
       )}
 
-      {relatorio.compareceu && (
+      {!paraClinica && relatorio.compareceu && (
         <div className="text-xs">
           <div className="text-gray-400 mb-0.5">Recebimento no atendimento</div>
           <div className={relatorio.recebimento === "NAO" ? "text-gray-700" : "text-green-800 font-semibold"}>
@@ -161,7 +172,7 @@ export function RelatorioPreenchido({ relatorio }: { relatorio: RelatorioComplet
         </div>
       )}
 
-      {relatorio.latitude != null && relatorio.longitude != null && (
+      {!paraClinica && relatorio.latitude != null && relatorio.longitude != null && (
         <div className="text-xs">
           <div className="text-gray-400 mb-0.5">Local no envio do relatório</div>
           <a

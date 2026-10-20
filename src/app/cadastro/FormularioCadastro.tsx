@@ -11,6 +11,7 @@ import { autocadastrar } from "@/app/actions/autocadastro";
 import type { Resultado } from "@/app/actions/pedidos";
 import { PERFIS_DO_AUTOCADASTRO, ROTULO_PERFIL_CLIENTE } from "@/lib/visibilidade";
 import { CampoTelefone } from "@/components/CampoTelefone";
+import { CamposResponsavelFinanceiro } from "@/components/CamposResponsavelFinanceiro";
 
 const INICIAL: Resultado = { ok: false };
 
@@ -105,6 +106,8 @@ export function FormularioCadastro() {
       </div>
 
       <CampoDocumento tipo="cnpj" name="cnpj" rotulo="CNPJ ou CPF" obrigatorio />
+
+      <CamposResponsavelFinanceiro />
 
       <div>
         <div className="font-display font-bold text-bordo text-sm mb-2">Onde atendemos você</div>

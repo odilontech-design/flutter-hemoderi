@@ -62,7 +62,7 @@ enum PapelUsuario {
 enum PerfilInterno {
   ATENDENTE // sem função definida — esteira, agenda, cadastros e triagem
   LOGISTICA // Joyce: cadastro, alocação de profissionais, gestão de entregas
-  POS_VENDA // Stephanie: financeiro do cliente, pesquisas, aprovação de relatório
+  POS_VENDA // Stephanie: aprovação de relatório, pesquisas e — desde a ata de 20/10 — confirmar e editar pedidos (lança a agenda do dia)
   COMERCIAL // Ana: atendimento, preços, agendamento, cancelamento
   GESTAO // Ingrid: pessoas — ganhos, feedbacks e disponibilidade dos profissionais
   RESPONSAVEL // André e Naiara: tudo isso, mais repasse e gestão de acesso
@@ -191,6 +191,15 @@ model Clinica {
   cnpj     String?
   telefone String?
   email    String?
+
+  /// Responsável financeiro (ata de 20/10): quem recebe a cobrança quando não é
+  /// a própria clínica — o sócio que paga, a empresa que fatura. A Hemoderi
+  /// cobra a clínica, nunca o paciente; vazio = a própria clínica (CNPJ e
+  /// telefone do cadastro). Preenchido, documento e telefone são obrigatórios.
+  financeiroNome      String?
+  financeiroDocumento String?
+  financeiroTelefone  String?
+  financeiroEmail     String?
 
   /// Registro no conselho de classe do responsável (CRO, CRM, CRBM…) — a régua
   /// mínima de identificação, o equivalente ao CPF/CNPJ (ata de 05/10).

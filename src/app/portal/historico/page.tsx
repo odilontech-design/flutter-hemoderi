@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 import { exigirClinica } from "@/lib/sessao";
 import { Cartao, Kpi, Tabela, Titulo, Vazio } from "@/components/ui";
@@ -32,7 +33,7 @@ export default async function HistoricoEAvaliacoes() {
         avaliacao: { select: { nota: true } },
         fatura: { select: { status: true } },
         // O que o profissional declarou ter recebido no ato conta como pago.
-        relatorio: { select: { recebimento: true } },
+        relatorio: { select: { recebimento: true, aprovadoEm: true } },
       },
     }),
     prisma.avaliacao.findMany({ where: { clinicaId: sessao.clinicaId }, select: { nota: true } }),
@@ -142,6 +143,18 @@ export default async function HistoricoEAvaliacoes() {
                   </td>
                   <td className="py-2 pr-3">
                     <SeloStatusCliente status={primeiro.status} />
+                    {/* Relatório do atendimento, depois que a central aprova (ata de 20/10). */}
+                    {itens
+                      .filter((p) => p.relatorio?.aprovadoEm)
+                      .map((p) => (
+                        <Link
+                          key={p.id}
+                          href={`/portal/relatorio/${p.id}`}
+                          className="block text-[11px] font-semibold text-bordo hover:underline mt-1 whitespace-nowrap"
+                        >
+                          Ver relatório{itens.length > 1 ? ` · ${p.servico.nome}` : ""}
+                        </Link>
+                      ))}
                   </td>
                   <td className="py-2 min-w-[180px]">
                     {/* Só atendimento realizado com profissional se avalia:

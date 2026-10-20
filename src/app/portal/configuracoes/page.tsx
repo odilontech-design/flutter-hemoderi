@@ -20,7 +20,18 @@ export default async function Configuracoes() {
   const [clinica, acessos, vinculos] = await Promise.all([
     prisma.clinica.findUnique({
       where: { id: sessao.clinicaId },
-      select: { nome: true, cnpj: true, telefone: true, email: true, conselho: true, registroConselho: true },
+      select: {
+        nome: true,
+        cnpj: true,
+        telefone: true,
+        email: true,
+        conselho: true,
+        registroConselho: true,
+        financeiroNome: true,
+        financeiroDocumento: true,
+        financeiroTelefone: true,
+        financeiroEmail: true,
+      },
     }),
     prisma.usuario.findMany({
       where: { clinicaId: sessao.clinicaId, papel: "CLINICA" },
@@ -64,6 +75,12 @@ export default async function Configuracoes() {
             cnpj={documento}
             conselho={clinica.conselho ?? ""}
             registroConselho={clinica.registroConselho ?? ""}
+            financeiro={{
+              nome: clinica.financeiroNome,
+              documento: clinica.financeiroDocumento,
+              telefone: clinica.financeiroTelefone,
+              email: clinica.financeiroEmail,
+            }}
             podeEditar={ehTitular}
           />
           {!ehTitular && (

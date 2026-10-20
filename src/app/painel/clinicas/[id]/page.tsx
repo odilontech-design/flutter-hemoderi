@@ -7,6 +7,7 @@ import { FormularioAcao } from "@/components/FormularioAcao";
 import { CamposEndereco } from "@/components/CamposEndereco";
 import { CartaoDivulgacao } from "@/components/CartaoDivulgacao";
 import { salvarClinica } from "@/app/actions/cadastros";
+import { CamposResponsavelFinanceiro } from "@/components/CamposResponsavelFinanceiro";
 import { CONDICOES_PAGAMENTO } from "@/lib/pagamento";
 import { TabelaPrecos } from "./TabelaPrecos";
 import { formatarData } from "@/lib/data";
@@ -142,6 +143,14 @@ export default async function DetalheClinica({ params }: { params: { id: string 
                   Uso interno da equipe — a clínica não vê isto no portal dela.
                 </div>
               </div>
+              <CamposResponsavelFinanceiro
+                inicial={{
+                  nome: clinica.financeiroNome,
+                  documento: clinica.financeiroDocumento,
+                  telefone: clinica.financeiroTelefone,
+                  email: clinica.financeiroEmail,
+                }}
+              />
               <div>
                 <Rotulo>Observações</Rotulo>
                 <Area name="observacoes" rows={2} defaultValue={clinica.observacoes ?? ""} />

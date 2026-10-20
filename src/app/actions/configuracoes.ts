@@ -10,6 +10,7 @@ import { gerarSenha } from "@/lib/senha";
 import { cnpjValido, cpfValido } from "@/lib/documento";
 import { conselhoValido, registroDeConselho } from "@/lib/conselhos";
 import { tituloDe } from "@/lib/crm";
+import { camposDoFormulario, lerResponsavelFinanceiro } from "@/lib/responsavel-financeiro";
 import { formatarTelefoneBrasileiro, lerTelefoneBrasileiro, MENSAGEM_TELEFONE_INVALIDO } from "@/lib/telefone";
 import type { Resultado } from "./pedidos";
 import type { Credencial } from "./acessos";
@@ -64,7 +65,7 @@ export async function salvarDadosDaClinica(_anterior: Resultado, dados: FormData
 
   const atual = await prisma.clinica.findUnique({
     where: { id: sessao.clinicaId },
-    select: { cnpj: true, conselho: true, registroConselho: true },
+    select: { cnpj: true, conselho: true, registroConselho: true, financeiroDocumento: true },
   });
   if (!atual) return { ok: false, erro: "Cadastro não encontrado." };
 
@@ -88,18 +89,34 @@ export async function salvarDadosDaClinica(_anterior: Resultado, dados: FormData
     }
   }
 
-  const conselho = String(dados.get("conselho") ?? "").trim();
-  const registroBruto = String(dados.get("registroConselho") ?? "").trim();
-  const registro = registroBruto ? registroDeConselho(registroBruto) : null;
-  if (conselho && !conselhoValido(conselho)) return { ok: false, erro: "Escolha o conselho de classe da lista." };
-  if (registroBruto && !registro) {
-    return { ok: false, erro: "Número do registro inválido — use de 3 a 20 caracteres, com ao menos um número." };
+  // Conselho e registro: mesma regra do documento (ata de 20/10) — só se
+  // preenchem enquanto estão vazios.
+  let conselhoFinal = atual.conselho;
+  let registroFinal = atual.registroConselho;
+  if (!atual.conselho || !atual.registroConselho) {
+    const conselho = String(dados.get("conselho") ?? "").trim();
+    const registroBruto = String(dados.get("registroConselho") ?? "").trim();
+    const registro = registroBruto ? registroDeConselho(registroBruto) : null;
+    if (conselho && !conselhoValido(conselho)) return { ok: false, erro: "Escolha o conselho de classe da lista." };
+    if (registroBruto && !registro) {
+      return { ok: false, erro: "Número do registro inválido — use de 3 a 20 caracteres, com ao menos um número." };
+    }
+    if (registro && !conselho) return { ok: false, erro: "Escolha o conselho de classe do registro informado." };
+    conselhoFinal = conselho || null;
+    registroFinal = registro;
   }
-  if (registro && !conselho) return { ok: false, erro: "Escolha o conselho de classe do registro informado." };
+
+  // Responsável financeiro: preenchido uma vez pela clínica; depois, só a central.
+  let financeiro = {};
+  if (!atual.financeiroDocumento) {
+    const lido = lerResponsavelFinanceiro(camposDoFormulario(dados));
+    if (!lido.ok) return { ok: false, erro: lido.erro };
+    financeiro = lido.dados;
+  }
 
   await prisma.clinica.update({
     where: { id: sessao.clinicaId },
-    data: { telefone, email, cnpj, conselho: conselho || null, registroConselho: registro },
+    data: { telefone, email, cnpj, conselho: conselhoFinal, registroConselho: registroFinal, ...financeiro },
   });
   await registrarAuditoria(sessao.usuarioId, "Clinica", sessao.clinicaId, "DADOS_EDITADOS_PELO_PORTAL");
   atualizarTela();
