@@ -1,7 +1,24 @@
 import { writeFileSync } from "node:fs";
-import { SERVICOS_DO_CATALOGO, SERVICOS_APOSENTADOS, dadosDoServico } from "../src/lib/inicializar";
+import {
+  ALTERADOS_NO_CATALOGO_OUT26,
+  EQUIPAMENTOS_DO_CATALOGO,
+  SERVICOS_APOSENTADOS,
+  SERVICOS_DO_CATALOGO,
+  dadosDoServico,
+} from "../src/lib/inicializar";
 
-const itens = SERVICOS_DO_CATALOGO.map((def) => {
+// Uso: npx tsx scripts/gerar-sql-catalogo.ts <saida.sql> [--out26]
+// Com --out26, só os serviços que a revisão de outubro mudou (e o equipamento
+// novo): os demais ficam como a equipe deixou no painel.
+const out26 = process.argv.includes("--out26");
+const definicoes = out26
+  ? SERVICOS_DO_CATALOGO.filter((def) => ALTERADOS_NO_CATALOGO_OUT26.includes(def.nome))
+  : SERVICOS_DO_CATALOGO;
+if (out26 && definicoes.length !== ALTERADOS_NO_CATALOGO_OUT26.length) {
+  throw new Error("ALTERADOS_NO_CATALOGO_OUT26 cita serviço que não está em SERVICOS_DO_CATALOGO");
+}
+
+const itens = definicoes.map((def) => {
   const d = dadosDoServico(def);
   return {
     nome: d.nome,
@@ -26,7 +43,34 @@ const json = JSON.stringify(itens);
 if (json.includes("$json$")) throw new Error("delimitador no conteúdo");
 const aposentados = JSON.stringify(SERVICOS_APOSENTADOS);
 
-const sql = `-- Atualização do catálogo de serviços para o catálogo 2026 (ata e catálogo de 01/10/2026).
+// Equipamento que o catálogo de outubro trouxe: cria uma unidade de cada tipo
+// que ainda não existe (patrimônio só se o número estiver livre).
+const tiposNovos = out26 ? EQUIPAMENTOS_DO_CATALOGO.filter((e) => e.tipo === "Laser CO2 Fracionado") : [];
+const equipamentosSql = tiposNovos
+  .map(
+    ({ tipo }) => `  INSERT INTO "Equipamento" ("id", "nome", "tipo", "patrimonio", "status", "criadoEm", "atualizadoEm")
+  SELECT gen_random_uuid()::text, '${tipo}', '${tipo}',
+         CASE WHEN EXISTS (SELECT 1 FROM "Equipamento" WHERE "patrimonio" = 'HMD-012') THEN NULL ELSE 'HMD-012' END,
+         'DISPONIVEL', NOW(), NOW()
+  WHERE NOT EXISTS (SELECT 1 FROM "Equipamento" WHERE "tipo" = '${tipo}');
+`
+  )
+  .join("");
+
+const cabecalho = out26
+  ? `-- Revisão de outubro do catálogo 2026 (CAT_LOGO_HEMODERI_2026 - Out.26), aprovada em 20/10/2026.
+--
+-- Só o que mudou: AirFlow por número de pacientes, ultrassom por disparo,
+-- Megaderme 3 pacientes, Laser CO2 Fracionado (novo, com o equipamento) e o
+-- pacote Stickybone + Membranas + Piezo + Sedação. Os demais serviços não são
+-- tocados — preservam o que a equipe ajustou pelo painel.
+--
+-- Fonte: src/lib/inicializar.ts. Gerado por: npx tsx scripts/gerar-sql-catalogo.ts <saida> --out26
+--
+-- Idempotente e numa transação só (um bloco DO): serviço existente é
+-- atualizado no lugar, o que falta é criado, e os pacotes antigos são
+-- DESATIVADOS (nunca apagados — pedidos antigos apontam para eles).`
+  : `-- Atualização do catálogo de serviços para o catálogo 2026 (ata e catálogo de 01/10/2026).
 --
 -- Fonte: src/lib/inicializar.ts (SERVICOS_DO_CATALOGO), serializada abaixo em JSON.
 -- Preços: Grande São Paulo. Gerado por: npx tsx scripts/gerar-sql-catalogo.ts
@@ -36,12 +80,14 @@ const sql = `-- Atualização do catálogo de serviços para o catálogo 2026 (a
 -- valendo —, e o que não existe é criado. Nada é apagado: o que saiu do
 -- catálogo é desativado. Roda numa transação só (um bloco DO).
 --
--- Rodar UMA vez, depois que a migration 20261001180000 estiver aplicada.
+-- Rodar UMA vez, depois que a migration 20261001180000 estiver aplicada.`;
+
+const sql = `${cabecalho}
 DO $catalogo$
 DECLARE
   r jsonb;
 BEGIN
-  FOR r IN SELECT * FROM jsonb_array_elements($json$${json}$json$::jsonb) LOOP
+${equipamentosSql}  FOR r IN SELECT * FROM jsonb_array_elements($json$${json}$json$::jsonb) LOOP
     UPDATE "Servico" SET
       "nome" = r->>'nome',
       "familia" = r->>'familia',

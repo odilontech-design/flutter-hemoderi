@@ -93,7 +93,26 @@ export function familiaDoNome(nome: string): string {
  * catálogo — é a ordem que o portal usa; a vitrine pública, que premia o que
  * mais vende, continua pelo tamanho.
  */
-export function agruparPorFamilia<T extends { nome: string; familia?: string | null }>(
+type OrdenavelPorPreco = {
+  valorPadraoCentavos?: number;
+  permiteQuantidade?: boolean;
+  quantidadeMinima?: number;
+  quantidadeIncluida?: number | null;
+};
+
+/**
+ * O menor total que se paga pelo serviço — é por ele que a família se ordena.
+ * Preço por unidade com quantidade mínima ("9 ou mais pacientes a R$ 330")
+ * conta o mínimo inteiro (R$ 2.970), senão viria antes do atendimento de 1
+ * paciente.
+ */
+function menorTotal(s: OrdenavelPorPreco): number {
+  const valor = s.valorPadraoCentavos ?? 0;
+  if (s.permiteQuantidade && s.quantidadeIncluida == null) return valor * Math.max(1, s.quantidadeMinima ?? 1);
+  return valor;
+}
+
+export function agruparPorFamilia<T extends { nome: string; familia?: string | null } & OrdenavelPorPreco>(
   servicos: T[],
   {
     fundirSolitarias = true,
@@ -129,7 +148,15 @@ export function agruparPorFamilia<T extends { nome: string; familia?: string | n
   return [...grupos.entries()]
     .map(([familia, lista]) => ({
       familia,
-      servicos: [...lista].sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR")),
+      // Dentro da família, do mais barato ao mais caro (catálogo de outubro):
+      // é a ordem das tabelas do catálogo — 1 paciente antes do pacote, a
+      // sessão antes do dia completo. Empate (ou sem preço) vai pelo nome.
+      servicos: [...lista].sort((a, b) => {
+        const va = menorTotal(a);
+        const vb = menorTotal(b);
+        if (va !== vb && va > 0 && vb > 0) return va - vb;
+        return a.nome.localeCompare(b.nome, "pt-BR", { numeric: true });
+      }),
     }))
     .sort((a, b) => {
       if (a.familia === OUTROS) return 1;

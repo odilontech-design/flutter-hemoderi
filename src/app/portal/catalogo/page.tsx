@@ -247,7 +247,7 @@ export default async function CatalogoDaClinica({ searchParams }: { searchParams
                     <div className="text-[10px] text-gray-500">
                       {servico.permiteQuantidade
                         ? `Você informa a quantidade${servico.rotuloQuantidade ? ` de ${servico.rotuloQuantidade}` : ""}${
-                            servico.quantidadeMinima > 1 ? ` (mínimo ${servico.quantidadeMinima})` : ""
+                            servico.quantidadeMinima > 1 ? ` (mínimo ${servico.quantidadeMinima.toLocaleString("pt-BR")})` : ""
                           }.`
                         : "Uma unidade por agendamento — para repetir, faça outro agendamento."}
                     </div>

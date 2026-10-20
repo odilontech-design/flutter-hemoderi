@@ -70,13 +70,58 @@ export const EQUIPAMENTOS_DO_CATALOGO: DefinicaoEquipamento[] = [
   { tipo: "Platinum Platform", unidades: 1 },
   { tipo: "Megaderme", unidades: 1 },
   { tipo: "Atria Ultrassom", unidades: 1 },
+  // Catálogo de outubro (Out.26). Unidade a confirmar com a Hemoderi.
+  { tipo: "Laser CO2 Fracionado", unidades: 1 },
 ];
 
 /**
  * Nomes de serviços do catálogo anterior que não existem mais no atual — a
  * atualização os DESATIVA (nunca apaga: pedidos antigos apontam para eles).
  */
-export const SERVICOS_APOSENTADOS: string[] = ["PRF – Coleta e Produção de Concentrados Plaquetários"];
+export const SERVICOS_APOSENTADOS: string[] = [
+  "PRF – Coleta e Produção de Concentrados Plaquetários",
+  // Catálogo de outubro (Out.26): o AirFlow passou a ter valor por número de
+  // pacientes e o ultrassom, valor por disparo — os pacotes antigos saem.
+  "AirFlow – GBT Machine (pacote 9 pacientes)",
+  "Ultrassom Atria® – Tratamento Facial",
+  "Ultrassom Atria® – Tratamento Corporal",
+  "Ultrassom Atria® – Facial 900 disparos (4 h)",
+  "Ultrassom Atria® – Facial 1600 disparos (8 h)",
+  "Ultrassom Atria® – Facial 3000 disparos (8 h)",
+  "Ultrassom Atria® – Facial 5000 disparos (12 h)",
+  "Ultrassom Atria® – Facial 7000 disparos (12 h)",
+];
+
+/**
+ * O que a revisão de outubro do catálogo (Out.26) mudou — e só isso: a
+ * atualização de produção (docs/catalogo-2026-10-20.sql) mexe nestes serviços
+ * e não nos outros, para não desfazer ajustes que a equipe tenha feito pelo
+ * painel nos serviços cujo preço não mudou.
+ */
+export const ALTERADOS_NO_CATALOGO_OUT26: string[] = [
+  "AirFlow – GBT Machine (1 paciente)",
+  "AirFlow – GBT Machine (pacote 2 pacientes)",
+  "AirFlow – GBT Machine (pacote 3 pacientes)",
+  "AirFlow – GBT Machine (pacote 4 pacientes)",
+  "AirFlow – GBT Machine (pacote 5 pacientes)",
+  "AirFlow – GBT Machine (pacote 6 pacientes)",
+  "AirFlow – GBT Machine (pacote 7 pacientes)",
+  "AirFlow – GBT Machine (pacote 8 pacientes)",
+  "AirFlow – GBT Machine (9 ou mais pacientes)",
+  "Ultrassom Atria® – Sessão (500 disparos)",
+  "Ultrassom Atria® – Meio período (4 h, 900 disparos)",
+  "Ultrassom Atria® – Dia completo (8 h, 1.600 disparos)",
+  "Ultrassom Atria® – Alto volume (8 h, 3.000 disparos)",
+  "Megaderme – Pacote 3 Pacientes",
+  "Laser CO2 Fracionado – Essencial 4 horas",
+  "Laser CO2 Fracionado – Essencial 6 horas",
+  "Laser CO2 Fracionado – Essencial 8 horas",
+  "Laser CO2 Fracionado – Assistido 4 horas",
+  "Laser CO2 Fracionado – Assistido 6 horas",
+  "Laser CO2 Fracionado – Assistido 8 horas",
+  "Laser CO2 Fracionado – CO2 Curso (por paciente)",
+  "Stickybone + Membranas + Piezo + Sedação",
+];
 
 // Segmentação: cada serviço clínico do sumário (página 2) é uma CATEGORIA
 // (`familia`) e cada procedimento dentro dele é uma subcategoria. A ordem
@@ -99,15 +144,31 @@ export const SERVICOS_APOSENTADOS: string[] = ["PRF – Coleta e Produção de C
 //     "só SP, RJ, PR e ES".
 export const SERVICOS_DO_CATALOGO: DefinicaoServico[] = [
   // ── AirFlow GBT Machine ────────────────────────────────────────────────
+  // Catálogo de outubro: valor por número de pacientes no mesmo atendimento
+  // (1 a 8 pacotes; de 9 em diante, valor fixo por paciente). Duração dos
+  // pacotes novos (2, 4, 5, 7 e 8) é estimativa entre os períodos que o
+  // catálogo anterior declarava (3 pacientes em 4 h, 6 em 6 h, 9 em 8 h).
   {
     nome: "AirFlow – GBT Machine (1 paciente)",
     nomesAnteriores: ["GBT Machine – AirFlow"],
     familia: "AirFlow GBT Machine",
     categoria: "ODONTOLOGIA",
     descricao:
-      "Tratamento por paciente (Guided Biofilm Therapy): locação do GBT Machine com 1 cirurgião dentista treinado na metodologia GBT. Insumos inclusos: pó de eritritol, revelador de biofilme, ponta Perioflow descartável e ponta ultrassônica PS.",
+      "Tratamento por paciente (Guided Biofilm Therapy). Inclui locação do GBT Machine, cirurgião-dentista com treinamento GBT para montar e orientar o primeiro paciente, insumos (pó de eritritol, revelador de biofilme, ponta Perioflow e ponta PS) e instrumentais Hu-Friedy Group.",
     duracaoMin: 60,
     valorPadraoCentavos: 50_000,
+    exigeEquipamento: true,
+    tipoEquipamento: "GBT AirFlow",
+  },
+  {
+    nome: "AirFlow – GBT Machine (pacote 2 pacientes)",
+    familia: "AirFlow GBT Machine",
+    categoria: "ODONTOLOGIA",
+    descricao:
+      "2 pacientes no mesmo atendimento — R$ 450,00 por paciente. Inclui locação do GBT Machine, cirurgião-dentista com treinamento GBT para montar e orientar o primeiro paciente, insumos (pó de eritritol, revelador de biofilme, ponta Perioflow e ponta PS) e instrumentais Hu-Friedy Group.",
+    duracaoMin: 150,
+    valorPadraoCentavos: 90_000,
+    unidadeCobranca: "PERIODO",
     exigeEquipamento: true,
     tipoEquipamento: "GBT AirFlow",
   },
@@ -116,9 +177,33 @@ export const SERVICOS_DO_CATALOGO: DefinicaoServico[] = [
     familia: "AirFlow GBT Machine",
     categoria: "ODONTOLOGIA",
     descricao:
-      "Locação do GBT Machine por 4 horas para 3 pacientes, com 1 cirurgião dentista (primeiro paciente), insumos e 1 câmara de pó AirFlow Plus.",
+      "3 pacientes no mesmo atendimento — R$ 400,00 por paciente. Inclui locação do GBT Machine, cirurgião-dentista com treinamento GBT para montar e orientar o primeiro paciente, insumos (pó de eritritol, revelador de biofilme, ponta Perioflow e ponta PS) e instrumentais Hu-Friedy Group.",
     duracaoMin: 240,
     valorPadraoCentavos: 120_000,
+    unidadeCobranca: "PERIODO",
+    exigeEquipamento: true,
+    tipoEquipamento: "GBT AirFlow",
+  },
+  {
+    nome: "AirFlow – GBT Machine (pacote 4 pacientes)",
+    familia: "AirFlow GBT Machine",
+    categoria: "ODONTOLOGIA",
+    descricao:
+      "4 pacientes no mesmo atendimento — R$ 385,00 por paciente. Inclui locação do GBT Machine, cirurgião-dentista com treinamento GBT para montar e orientar o primeiro paciente, insumos (pó de eritritol, revelador de biofilme, ponta Perioflow e ponta PS) e instrumentais Hu-Friedy Group.",
+    duracaoMin: 300,
+    valorPadraoCentavos: 154_000,
+    unidadeCobranca: "PERIODO",
+    exigeEquipamento: true,
+    tipoEquipamento: "GBT AirFlow",
+  },
+  {
+    nome: "AirFlow – GBT Machine (pacote 5 pacientes)",
+    familia: "AirFlow GBT Machine",
+    categoria: "ODONTOLOGIA",
+    descricao:
+      "5 pacientes no mesmo atendimento — R$ 365,00 por paciente. Inclui locação do GBT Machine, cirurgião-dentista com treinamento GBT para montar e orientar o primeiro paciente, insumos (pó de eritritol, revelador de biofilme, ponta Perioflow e ponta PS) e instrumentais Hu-Friedy Group.",
+    duracaoMin: 330,
+    valorPadraoCentavos: 182_500,
     unidadeCobranca: "PERIODO",
     exigeEquipamento: true,
     tipoEquipamento: "GBT AirFlow",
@@ -128,7 +213,7 @@ export const SERVICOS_DO_CATALOGO: DefinicaoServico[] = [
     familia: "AirFlow GBT Machine",
     categoria: "ODONTOLOGIA",
     descricao:
-      "Locação do GBT Machine por 6 horas para 6 pacientes, com 1 cirurgião dentista (primeiro paciente), insumos e 2 câmaras de pó AirFlow Plus.",
+      "6 pacientes no mesmo atendimento — R$ 350,00 por paciente. Inclui locação do GBT Machine, cirurgião-dentista com treinamento GBT para montar e orientar o primeiro paciente, insumos (pó de eritritol, revelador de biofilme, ponta Perioflow e ponta PS) e instrumentais Hu-Friedy Group.",
     duracaoMin: 360,
     valorPadraoCentavos: 210_000,
     unidadeCobranca: "PERIODO",
@@ -136,16 +221,40 @@ export const SERVICOS_DO_CATALOGO: DefinicaoServico[] = [
     tipoEquipamento: "GBT AirFlow",
   },
   {
-    nome: "AirFlow – GBT Machine (pacote 9 pacientes)",
+    nome: "AirFlow – GBT Machine (pacote 7 pacientes)",
     familia: "AirFlow GBT Machine",
     categoria: "ODONTOLOGIA",
     descricao:
-      "Locação do GBT Machine por 8 horas para 9 pacientes, com 1 cirurgião dentista (primeiro paciente), insumos e 3 câmaras de pó AirFlow Plus.",
-    duracaoMin: 480,
-    valorPadraoCentavos: 300_000,
+      "7 pacientes no mesmo atendimento — R$ 345,00 por paciente. Inclui locação do GBT Machine, cirurgião-dentista com treinamento GBT para montar e orientar o primeiro paciente, insumos (pó de eritritol, revelador de biofilme, ponta Perioflow e ponta PS) e instrumentais Hu-Friedy Group.",
+    duracaoMin: 420,
+    valorPadraoCentavos: 241_500,
     unidadeCobranca: "PERIODO",
     exigeEquipamento: true,
     tipoEquipamento: "GBT AirFlow",
+  },
+  {
+    nome: "AirFlow – GBT Machine (pacote 8 pacientes)",
+    familia: "AirFlow GBT Machine",
+    categoria: "ODONTOLOGIA",
+    descricao:
+      "8 pacientes no mesmo atendimento — R$ 340,00 por paciente. Inclui locação do GBT Machine, cirurgião-dentista com treinamento GBT para montar e orientar o primeiro paciente, insumos (pó de eritritol, revelador de biofilme, ponta Perioflow e ponta PS) e instrumentais Hu-Friedy Group.",
+    duracaoMin: 450,
+    valorPadraoCentavos: 272_000,
+    unidadeCobranca: "PERIODO",
+    exigeEquipamento: true,
+    tipoEquipamento: "GBT AirFlow",
+  },
+  {
+    nome: "AirFlow – GBT Machine (9 ou mais pacientes)",
+    familia: "AirFlow GBT Machine",
+    categoria: "ODONTOLOGIA",
+    descricao:
+      "A partir de 9 pacientes no mesmo atendimento, valor fixo de R$ 330,00 por paciente. Inclui locação do GBT Machine, cirurgião-dentista com treinamento GBT para montar e orientar o primeiro paciente, insumos (pó de eritritol, revelador de biofilme, ponta Perioflow e ponta PS) e instrumentais Hu-Friedy Group.",
+    duracaoMin: 480,
+    valorPadraoCentavos: 33_000,
+    exigeEquipamento: true,
+    tipoEquipamento: "GBT AirFlow",
+    quantidade: { rotulo: "pacientes", minima: 9 },
   },
 
   // ── LiteTouch™ ───────────────────────────────────────────────────────────
@@ -242,6 +351,20 @@ export const SERVICOS_DO_CATALOGO: DefinicaoServico[] = [
     exigeEquipamento: true,
     tipoEquipamento: "Piezosurgery Mectron Touch",
   },
+  {
+    // Pacote da tabela-resumo do catálogo de outubro. Um serviço só reserva um
+    // tipo de equipamento: fica o Piezo, que é o que define a cirurgia; a
+    // centrífuga e o Rotamix a logística confere na alocação.
+    nome: "Stickybone + Membranas + Piezo + Sedação",
+    familia: "Piezosurgery Mectron Touch",
+    categoria: "ODONTOLOGIA",
+    descricao:
+      "Pacote promocional por cirurgia/paciente: produção de membranas e Stickybone, locação do Piezosurgery Mectron Touch com profissional para instrumentação e sedação consciente com cirurgião-dentista habilitado (até 3 horas).",
+    duracaoMin: 180,
+    valorPadraoCentavos: 169_000,
+    exigeEquipamento: true,
+    tipoEquipamento: "Piezosurgery Mectron Touch",
+  },
 
   // ── Cobertura Fotográfica ───────────────────────────────────────────────
   {
@@ -257,95 +380,60 @@ export const SERVICOS_DO_CATALOGO: DefinicaoServico[] = [
   },
 
   // ── Ultrassom Micro Focado (Atria®) ─────────────────────────────────────
+  // Catálogo de outubro: valor por disparo, por faixa — R$ 1,89 até 899
+  // disparos (+ taxa de atendimento de R$ 250,00), R$ 1,79 de 900 a 1.800 e
+  // R$ 1,69 acima de 1.800. Os quatro pacotes são os da tabela do catálogo;
+  // o disparo além do incluído soma pelo valor da faixa do pacote.
   {
-    nome: "Ultrassom Atria® – Tratamento Facial",
-    nomesAnteriores: ["Ultrassom Micro e Macrofocado – Atria®"],
+    nome: "Ultrassom Atria® – Sessão (500 disparos)",
     familia: "Ultrassom Micro Focado",
     categoria: "ESTETICA",
     descricao:
-      "Por paciente, mínimo de 400 disparos (R$ 2,47 o disparo) = R$ 990,00; acima de 400, R$ 1,70 por disparo adicional. Acompanhado por biomédico esteta especialista Hemoderi.",
-    duracaoMin: 60,
-    valorPadraoCentavos: 99_000,
-    exigeEquipamento: true,
-    tipoEquipamento: "Atria Ultrassom",
-    quantidade: { rotulo: "disparos", minima: 400, incluida: 400, adicionalCentavos: 170 },
-  },
-  {
-    nome: "Ultrassom Atria® – Tratamento Corporal",
-    familia: "Ultrassom Micro Focado",
-    categoria: "ESTETICA",
-    descricao:
-      "Por paciente, mínimo de 900 disparos (R$ 2,00 o disparo) = R$ 1.800,00; acima de 900, R$ 1,70 por disparo adicional. Acompanhado por biomédico esteta especialista Hemoderi.",
+      "Sessão com 500 disparos a R$ 1,89 + taxa de atendimento de R$ 250,00; disparo adicional R$ 1,89. Atria®, biomédico esteta ou dentista especialista, insumos, EPIs, logística, montagem e desmontagem. Cancelamento com menos de 48 h: 50% do valor.",
     duracaoMin: 90,
-    valorPadraoCentavos: 180_000,
+    valorPadraoCentavos: 119_500,
     exigeEquipamento: true,
     tipoEquipamento: "Atria Ultrassom",
-    quantidade: { rotulo: "disparos", minima: 900, incluida: 900, adicionalCentavos: 170 },
+    quantidade: { rotulo: "disparos", minima: 500, incluida: 500, adicionalCentavos: 189 },
   },
   {
-    nome: "Ultrassom Atria® – Facial 900 disparos (4 h)",
+    nome: "Ultrassom Atria® – Meio período (4 h, 900 disparos)",
     familia: "Ultrassom Micro Focado",
     categoria: "ESTETICA",
     descricao:
-      "Locação do equipamento por período de 4 horas, mínimo de 900 disparos a R$ 2,00. Disparo adicional R$ 1,70. Acompanhado por biomédico esteta especialista Hemoderi.",
+      "Meio período de 4 horas com 900 disparos a R$ 1,79, sem taxa; disparo adicional R$ 1,79. Atria®, biomédico esteta ou dentista especialista, insumos, EPIs, logística, montagem e desmontagem. Cancelamento com menos de 48 h: 50% do valor.",
     duracaoMin: 240,
-    valorPadraoCentavos: 180_000,
+    valorPadraoCentavos: 161_100,
     unidadeCobranca: "PERIODO",
     exigeEquipamento: true,
     tipoEquipamento: "Atria Ultrassom",
-    quantidade: { rotulo: "disparos", minima: 900, incluida: 900, adicionalCentavos: 170 },
+    quantidade: { rotulo: "disparos", minima: 900, incluida: 900, adicionalCentavos: 179 },
   },
   {
-    nome: "Ultrassom Atria® – Facial 1600 disparos (8 h)",
+    nome: "Ultrassom Atria® – Dia completo (8 h, 1.600 disparos)",
     familia: "Ultrassom Micro Focado",
     categoria: "ESTETICA",
     descricao:
-      "Locação do equipamento por período de 8 horas, mínimo de 1600 disparos a R$ 2,00. Disparo adicional R$ 1,70. Acompanhado por biomédico esteta especialista Hemoderi.",
+      "Dia completo de 8 horas com 1.600 disparos a R$ 1,79, sem taxa; disparo adicional R$ 1,79. Atria®, biomédico esteta ou dentista especialista, insumos, EPIs, logística, montagem e desmontagem. Cancelamento com menos de 48 h: 50% do valor.",
     duracaoMin: 480,
-    valorPadraoCentavos: 320_000,
+    valorPadraoCentavos: 286_400,
     unidadeCobranca: "PERIODO",
     exigeEquipamento: true,
     tipoEquipamento: "Atria Ultrassom",
-    quantidade: { rotulo: "disparos", minima: 1600, incluida: 1600, adicionalCentavos: 170 },
+    quantidade: { rotulo: "disparos", minima: 1600, incluida: 1600, adicionalCentavos: 179 },
   },
   {
-    nome: "Ultrassom Atria® – Facial 3000 disparos (8 h)",
+    nome: "Ultrassom Atria® – Alto volume (8 h, 3.000 disparos)",
     familia: "Ultrassom Micro Focado",
     categoria: "ESTETICA",
     descricao:
-      "Locação do equipamento por período de 8 horas, a partir de 3000 disparos a R$ 1,86. Disparo adicional R$ 1,70. Acompanhado por biomédico esteta especialista Hemoderi.",
+      "Alto volume: 3.000 disparos a R$ 1,69, sem taxa; disparo adicional R$ 1,69. Atria®, biomédico esteta ou dentista especialista, insumos, EPIs, logística, montagem e desmontagem. Cancelamento com menos de 48 h: 50% do valor.",
     duracaoMin: 480,
-    valorPadraoCentavos: 558_000,
+    valorPadraoCentavos: 507_000,
     unidadeCobranca: "PERIODO",
     exigeEquipamento: true,
     tipoEquipamento: "Atria Ultrassom",
-    quantidade: { rotulo: "disparos", minima: 3000, incluida: 3000, adicionalCentavos: 170 },
-  },
-  {
-    nome: "Ultrassom Atria® – Facial 5000 disparos (12 h)",
-    familia: "Ultrassom Micro Focado",
-    categoria: "ESTETICA",
-    descricao:
-      "Locação do equipamento por período de 12 horas, a partir de 5000 disparos a R$ 1,79. Disparo adicional R$ 1,70. Acompanhado por biomédico esteta especialista Hemoderi.",
-    duracaoMin: 720,
-    valorPadraoCentavos: 895_000,
-    unidadeCobranca: "PERIODO",
-    exigeEquipamento: true,
-    tipoEquipamento: "Atria Ultrassom",
-    quantidade: { rotulo: "disparos", minima: 5000, incluida: 5000, adicionalCentavos: 170 },
-  },
-  {
-    nome: "Ultrassom Atria® – Facial 7000 disparos (12 h)",
-    familia: "Ultrassom Micro Focado",
-    categoria: "ESTETICA",
-    descricao:
-      "Locação do equipamento por período de 12 horas, a partir de 7000 disparos a R$ 1,70. Disparo adicional R$ 1,70. Acompanhado por biomédico esteta especialista Hemoderi.",
-    duracaoMin: 720,
-    valorPadraoCentavos: 1_190_000,
-    unidadeCobranca: "PERIODO",
-    exigeEquipamento: true,
-    tipoEquipamento: "Atria Ultrassom",
-    quantidade: { rotulo: "disparos", minima: 7000, incluida: 7000, adicionalCentavos: 170 },
+    quantidade: { rotulo: "disparos", minima: 3000, incluida: 3000, adicionalCentavos: 169 },
   },
 
   // ── Megaderme – Radiofrequência Microagulhada ───────────────────────────
@@ -378,7 +466,7 @@ export const SERVICOS_DO_CATALOGO: DefinicaoServico[] = [
     categoria: "ESTETICA",
     descricao: "Locação do Megaderme por 3 horas, 1 spot com 40 agulhas por paciente — R$ 670,00 por paciente.",
     duracaoMin: 180,
-    valorPadraoCentavos: 200_000,
+    valorPadraoCentavos: 201_000,
     unidadeCobranca: "PERIODO",
     exigeEquipamento: true,
     tipoEquipamento: "Megaderme",
@@ -455,6 +543,93 @@ export const SERVICOS_DO_CATALOGO: DefinicaoServico[] = [
     valorPadraoCentavos: 10_000,
     exigeEquipamento: true,
     tipoEquipamento: "Laser Therapy EC + ILIB",
+  },
+
+  // ── Laser CO2 Fracionado (novo no catálogo de outubro) ──────────────────
+  // CO2 Day: Essencial (a equipe da clínica opera; a Hemoderi monta, testa e
+  // deixa pronto) ou Assistido (com profissional Hemoderi na sala).
+  {
+    nome: "Laser CO2 Fracionado – Essencial 4 horas",
+    familia: "Laser CO2 Fracionado",
+    categoria: "ESTETICA",
+    descricao:
+      "CO2 Day Essencial, 4 horas: sua equipe opera — montamos, testamos e deixamos tudo pronto. Equipamento Fraxion SmartGR com ponteiras fracionadas, cirúrgicas e íntimas, insumos, EPIs, logística, montagem e desmontagem.",
+    duracaoMin: 240,
+    valorPadraoCentavos: 149_000,
+    unidadeCobranca: "PERIODO",
+    exigeEquipamento: true,
+    tipoEquipamento: "Laser CO2 Fracionado",
+  },
+  {
+    nome: "Laser CO2 Fracionado – Essencial 6 horas",
+    familia: "Laser CO2 Fracionado",
+    categoria: "ESTETICA",
+    descricao:
+      "CO2 Day Essencial, 6 horas: sua equipe opera — montamos, testamos e deixamos tudo pronto. Equipamento Fraxion SmartGR com ponteiras fracionadas, cirúrgicas e íntimas, insumos, EPIs, logística, montagem e desmontagem.",
+    duracaoMin: 360,
+    valorPadraoCentavos: 179_000,
+    unidadeCobranca: "PERIODO",
+    exigeEquipamento: true,
+    tipoEquipamento: "Laser CO2 Fracionado",
+  },
+  {
+    nome: "Laser CO2 Fracionado – Essencial 8 horas",
+    familia: "Laser CO2 Fracionado",
+    categoria: "ESTETICA",
+    descricao:
+      "CO2 Day Essencial, 8 horas: sua equipe opera — montamos, testamos e deixamos tudo pronto. Equipamento Fraxion SmartGR com ponteiras fracionadas, cirúrgicas e íntimas, insumos, EPIs, logística, montagem e desmontagem.",
+    duracaoMin: 480,
+    valorPadraoCentavos: 209_000,
+    unidadeCobranca: "PERIODO",
+    exigeEquipamento: true,
+    tipoEquipamento: "Laser CO2 Fracionado",
+  },
+  {
+    nome: "Laser CO2 Fracionado – Assistido 4 horas",
+    familia: "Laser CO2 Fracionado",
+    categoria: "ESTETICA",
+    descricao:
+      "CO2 Day Assistido, 4 horas: tudo do Essencial + profissional Hemoderi (biomédico esteta ou dentista especialista) na sala. Equipamento Fraxion SmartGR com ponteiras fracionadas, cirúrgicas e íntimas, insumos, EPIs, logística, montagem e desmontagem.",
+    duracaoMin: 240,
+    valorPadraoCentavos: 189_000,
+    unidadeCobranca: "PERIODO",
+    exigeEquipamento: true,
+    tipoEquipamento: "Laser CO2 Fracionado",
+  },
+  {
+    nome: "Laser CO2 Fracionado – Assistido 6 horas",
+    familia: "Laser CO2 Fracionado",
+    categoria: "ESTETICA",
+    descricao:
+      "CO2 Day Assistido, 6 horas: tudo do Essencial + profissional Hemoderi (biomédico esteta ou dentista especialista) na sala. Equipamento Fraxion SmartGR com ponteiras fracionadas, cirúrgicas e íntimas, insumos, EPIs, logística, montagem e desmontagem.",
+    duracaoMin: 360,
+    valorPadraoCentavos: 219_000,
+    unidadeCobranca: "PERIODO",
+    exigeEquipamento: true,
+    tipoEquipamento: "Laser CO2 Fracionado",
+  },
+  {
+    nome: "Laser CO2 Fracionado – Assistido 8 horas",
+    familia: "Laser CO2 Fracionado",
+    categoria: "ESTETICA",
+    descricao:
+      "CO2 Day Assistido, 8 horas: tudo do Essencial + profissional Hemoderi (biomédico esteta ou dentista especialista) na sala. Equipamento Fraxion SmartGR com ponteiras fracionadas, cirúrgicas e íntimas, insumos, EPIs, logística, montagem e desmontagem.",
+    duracaoMin: 480,
+    valorPadraoCentavos: 249_000,
+    unidadeCobranca: "PERIODO",
+    exigeEquipamento: true,
+    tipoEquipamento: "Laser CO2 Fracionado",
+  },
+  {
+    nome: "Laser CO2 Fracionado – CO2 Curso (por paciente)",
+    familia: "Laser CO2 Fracionado",
+    categoria: "ESTETICA",
+    descricao:
+      "CO2 Curso, valor por paciente — desconto exclusivo para o serviço CO2 Fracionado. Equipamento Fraxion SmartGR com ponteiras fracionadas, cirúrgicas e íntimas, insumos, EPIs, logística, montagem e desmontagem.",
+    duracaoMin: 60,
+    valorPadraoCentavos: 49_000,
+    exigeEquipamento: true,
+    tipoEquipamento: "Laser CO2 Fracionado",
   },
 
   // ── Bisturi Elétrico ─────────────────────────────────────────────────────

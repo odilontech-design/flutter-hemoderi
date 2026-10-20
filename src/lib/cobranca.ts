@@ -81,7 +81,7 @@ export function descricaoDoPreco(
 
   const rotulo = servico.rotuloQuantidade?.trim() || "unidades";
   const adicional = servico.valorAdicionalCentavos ?? 0;
-  const base = `${formatarReais(valorCentavos)} até ${servico.quantidadeIncluida} ${rotulo}`;
+  const base = `${formatarReais(valorCentavos)} até ${servico.quantidadeIncluida.toLocaleString("pt-BR")} ${rotulo}`;
   if (adicional <= 0) return base;
   // "dentes" → "dente", "disparos" → "disparo", "elementos" → "elemento"
   const singular = rotulo.endsWith("s") ? rotulo.slice(0, -1) : rotulo;

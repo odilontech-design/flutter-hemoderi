@@ -110,7 +110,7 @@ export default async function Agendar({ searchParams }: { searchParams: { servic
     precosPorUf[uf] = Object.fromEntries([...precos.entries()].map(([id, p]) => [id, p.valorCentavos]));
   }
 
-  const lista: ServicoDoCarrinho[] = servicos.map((s) => ({
+  const paraOCarrinho = (s: (typeof servicos)[number]): ServicoDoCarrinho => ({
     id: s.id,
     nome: s.nome,
     duracaoMin: s.duracaoMin,
@@ -123,8 +123,13 @@ export default async function Agendar({ searchParams }: { searchParams: { servic
     quantidadeIncluida: s.quantidadeIncluida,
     valorAdicionalCentavos: s.valorAdicionalCentavos,
     ufsIndisponiveis: s.ufsIndisponiveis,
+  });
+  // Agrupa com o preço padrão para a ordem ser a mesma do catálogo (do mais
+  // barato ao mais caro); o carrinho em si não precisa dele.
+  const grupos = agruparPorFamilia(servicos, { fundirSolitarias: false, ordemDoCatalogo: true }).map((g) => ({
+    familia: g.familia,
+    servicos: g.servicos.map(paraOCarrinho),
   }));
-  const grupos = agruparPorFamilia(lista, { fundirSolitarias: false, ordemDoCatalogo: true });
 
   return (
     <>
