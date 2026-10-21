@@ -25,7 +25,47 @@ export function subdominioDoPipedrive(valor: string | undefined | null): string 
 }
 
 export function urlDaApiPipedrive(dominio: string, token: string, caminho: string): string {
-  return `https://${dominio}.pipedrive.com/api/v1${caminho}?api_token=${encodeURIComponent(token.trim())}`;
+  const separador = caminho.includes("?") ? "&" : "?";
+  return `https://${dominio}.pipedrive.com/api/v1${caminho}${separador}api_token=${encodeURIComponent(token.trim())}`;
+}
+
+/** O funil onde todo agendamento nasce (ata de 21/10). */
+export const FUNIL_PADRAO = "Dilon Saúde";
+
+function normalizar(texto: string): string {
+  return texto
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
+}
+
+/**
+ * O funil pelo nome, sem depender de acento, caixa ou pontuação ("Dilon
+ * Saúde", "DILON SAUDE", "Dilon Saúde | Operações"). Nome exato primeiro;
+ * senão o único que contém o nome. Dois candidatos é ambíguo: melhor não
+ * criar do que criar no funil errado.
+ */
+export function escolherFunil<T extends { id: number; name: string; active?: boolean }>(
+  funis: T[],
+  nome: string
+): T | null {
+  const alvo = normalizar(nome);
+  const ativos = funis.filter((f) => f.active !== false);
+  const exato = ativos.find((f) => normalizar(f.name) === alvo);
+  if (exato) return exato;
+  const parecidos = ativos.filter((f) => normalizar(f.name).includes(alvo));
+  return parecidos.length === 1 ? parecidos[0] : null;
+}
+
+/** A primeira etapa do funil — onde o negócio nasce sem PIPEDRIVE_ID_ETAPA. */
+export function primeiraEtapa<T extends { id: number; order_nr?: number; active_flag?: boolean }>(etapas: T[]): T | null {
+  return (
+    etapas
+      .filter((e) => e.active_flag !== false)
+      .sort((a, b) => (a.order_nr ?? 0) - (b.order_nr ?? 0))[0] ?? null
+  );
 }
 
 /**

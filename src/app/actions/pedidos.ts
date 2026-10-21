@@ -28,7 +28,7 @@ import {
 } from "@/lib/data";
 import { enfileirarMensagem } from "@/lib/integracoes/whatsapp";
 import { sincronizarEvento } from "@/lib/integracoes/google-agenda";
-import { criarNegocio, marcarNegocioGanho } from "@/lib/integracoes/pipedrive";
+import { criarNegocio, marcarNegocioGanho, marcarNegocioPerdido } from "@/lib/integracoes/pipedrive";
 import { condicaoValida, formaDePagamentoValida } from "@/lib/pagamento";
 import { procedimentoEscolhido } from "@/lib/procedimentos";
 import { camposFaltando } from "@/lib/cadastro-completo";
@@ -913,6 +913,7 @@ export async function cancelarPedido(pedidoId: string, motivo: string): Promise<
     // cancelou — o jeito mais rápido de a agenda do Google deixar de ser
     // confiável.
     await sincronizarEvento(pedidoId);
+    await marcarNegocioPerdido(pedidoId, motivo);
     atualizarTelas();
   }
   return resultado;
@@ -1684,6 +1685,7 @@ export async function cancelarPeloPortal(pedidoId: string, motivo: string): Prom
       data: { status: "CANCELADA" },
     });
     await sincronizarEvento(membro.id);
+    await marcarNegocioPerdido(membro.id, motivo ? `Cancelado pela clínica: ${motivo}` : "Cancelado pela clínica.");
   }
 
   await registrarAuditoria(sessao.usuarioId, "Pedido", pedido.id, "cancelar-portal", motivo || undefined);

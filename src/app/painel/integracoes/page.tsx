@@ -14,6 +14,7 @@ export const dynamic = "force-dynamic";
 const ROTULO_ACAO: Record<string, string> = {
   "criar-negocio": "Criar negócio",
   "marcar-ganho": "Marcar como ganho",
+  "marcar-perdido": "Marcar como perdido",
 };
 
 /**

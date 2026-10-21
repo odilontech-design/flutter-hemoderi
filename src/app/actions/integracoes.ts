@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { exigirResponsavel } from "@/lib/sessao";
-import { criarNegocio, marcarNegocioGanho, pipedriveConfigurado, testarConexao } from "@/lib/integracoes/pipedrive";
+import { criarNegocio, marcarNegocioGanho, marcarNegocioPerdido, pipedriveConfigurado, testarConexao } from "@/lib/integracoes/pipedrive";
 import { pendenciasDeSincronizacao } from "@/lib/sincronizacao";
 import type { Resultado } from "./pedidos";
 
@@ -29,12 +29,14 @@ export async function reprocessarPipedrive(pedidoId: string): Promise<Resultado>
 async function reprocessarUm(pedidoId: string): Promise<Resultado> {
   const pedido = await prisma.pedido.findUnique({
     where: { id: pedidoId },
-    select: { id: true, status: true, pipedriveNegocioId: true },
+    select: { id: true, status: true, pipedriveNegocioId: true, motivoCancelamento: true },
   });
   if (!pedido) return { ok: false, erro: "Agendamento não encontrado." };
 
   if (pedido.status === "REALIZADO") {
     await marcarNegocioGanho(pedido.id);
+  } else if (pedido.status === "CANCELADO") {
+    await marcarNegocioPerdido(pedido.id, pedido.motivoCancelamento);
   } else if (pedido.pipedriveNegocioId) {
     // O negócio já existe (criado por outra tentativa): criarNegocio sairia
     // calado e a pendência antiga ficaria na lista para sempre. Registra o
