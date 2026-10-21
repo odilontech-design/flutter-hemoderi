@@ -9,6 +9,9 @@
  * Ordem, do mais específico para o mais genérico:
  *
  *   1. RegraRepasse (profissional × serviço) — o acerto individual.
+ *   1b. Serviço × praça (ata de 20/10) — a tabela que o pós-venda preenche por
+ *      estado: a mesma locação paga diferente na Grande SP e no Rio. Vence a
+ *      regra geral do serviço, que não sabe onde foi o atendimento.
  *   2. Serviço — a exceção existe justamente porque a estrutura de custo
  *      daquele procedimento é diferente; ela vence o percentual genérico do
  *      profissional. Quem precisar furar isso registra a regra do par (1).
@@ -29,11 +32,13 @@
 
 import { aplicarPercent } from "@/lib/dinheiro";
 
-export type OrigemRepasse = "REGRA_ESPECIFICA" | "SERVICO" | "PROFISSIONAL" | "GRUPO" | "PADRAO";
+export type OrigemRepasse = "REGRA_ESPECIFICA" | "PRACA" | "SERVICO" | "PROFISSIONAL" | "GRUPO" | "PADRAO";
 
 export type EntradaRepasse = {
   valorServicoCentavos: number;
   regra?: { percent: number | null; fixoCentavos: number | null } | null;
+  /** Regra do serviço na praça do atendimento (RepassePraca). */
+  praca?: { percent: number | null; fixoCentavos: number | null } | null;
   servico?: { repassePercent: number | null; repasseFixoCentavos: number | null } | null;
   profissional?: { repassePercentPadrao: number | null; repasseFixoCentavos?: number | null } | null;
   grupo?: { percent: number | null; fixoCentavos: number | null } | null;
@@ -48,7 +53,7 @@ export type ResultadoRepasse = {
 };
 
 export function calcularRepasse(entrada: EntradaRepasse): ResultadoRepasse {
-  const { valorServicoCentavos, regra, servico, profissional, grupo, percentPadrao } = entrada;
+  const { valorServicoCentavos, regra, praca, servico, profissional, grupo, percentPadrao } = entrada;
 
   if (regra) {
     if (regra.fixoCentavos != null) {
@@ -59,6 +64,19 @@ export function calcularRepasse(entrada: EntradaRepasse): ResultadoRepasse {
         valorCentavos: aplicarPercent(valorServicoCentavos, regra.percent),
         origem: "REGRA_ESPECIFICA",
         percent: regra.percent,
+      };
+    }
+  }
+
+  if (praca) {
+    if (praca.fixoCentavos != null) {
+      return { valorCentavos: praca.fixoCentavos, origem: "PRACA", percent: null };
+    }
+    if (praca.percent != null) {
+      return {
+        valorCentavos: aplicarPercent(valorServicoCentavos, praca.percent),
+        origem: "PRACA",
+        percent: praca.percent,
       };
     }
   }
@@ -113,6 +131,7 @@ export function calcularRepasse(entrada: EntradaRepasse): ResultadoRepasse {
 
 export const ROTULO_ORIGEM_REPASSE: Record<OrigemRepasse, string> = {
   REGRA_ESPECIFICA: "acerto específico deste profissional neste serviço",
+  PRACA: "tabela de repasse do serviço na praça do atendimento",
   SERVICO: "regra do serviço",
   PROFISSIONAL: "percentual do profissional",
   GRUPO: "grupo de repasse do profissional",

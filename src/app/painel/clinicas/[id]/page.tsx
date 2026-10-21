@@ -8,6 +8,7 @@ import { CamposEndereco } from "@/components/CamposEndereco";
 import { CartaoDivulgacao } from "@/components/CartaoDivulgacao";
 import { salvarClinica } from "@/app/actions/cadastros";
 import { CamposResponsavelFinanceiro } from "@/components/CamposResponsavelFinanceiro";
+import { VinculoPessoa } from "./VinculoPessoa";
 import { CONDICOES_PAGAMENTO } from "@/lib/pagamento";
 import { TabelaPrecos } from "./TabelaPrecos";
 import { formatarData } from "@/lib/data";
@@ -89,7 +90,10 @@ export default async function DetalheClinica({ params }: { params: { id: string 
                   </span>
                   {pessoa.observacoes && <div className="text-[10px] text-amber-700">{pessoa.observacoes}</div>}
                 </div>
-                <div className="text-[10px] text-gray-400">{pessoa.negociosFechados} negócio(s) fechado(s)</div>
+                <div className="text-right space-y-1">
+                  <div className="text-[10px] text-gray-400">{pessoa.negociosFechados} negócio(s) fechado(s)</div>
+                  <VinculoPessoa clinicaId={clinica.id} pessoaId={pessoa.id} nome={pessoa.nome} />
+                </div>
               </div>
             ))}
           </div>

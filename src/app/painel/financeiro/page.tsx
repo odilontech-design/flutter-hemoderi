@@ -124,6 +124,18 @@ export default async function Financeiro({ searchParams }: { searchParams: { com
             >
               ›
             </Link>
+            <Link
+              href={`/painel/financeiro/atendimentos?competencia=${competencia}`}
+              className="ml-2 border border-gray-300 rounded-lg px-3 py-1.5 min-h-[40px] sm:min-h-0 inline-flex items-center font-semibold text-bordo hover:bg-gray-50"
+            >
+              Atendimentos
+            </Link>
+            <Link
+              href="/painel/financeiro/repasses-por-praca"
+              className="ml-2 border border-gray-300 rounded-lg px-3 py-1.5 min-h-[40px] sm:min-h-0 inline-flex items-center font-semibold text-bordo hover:bg-gray-50"
+            >
+              Repasses por praça
+            </Link>
             <a
               href={`/painel/financeiro/exportar?competencia=${competencia}`}
               className="ml-2 border border-gray-300 rounded-lg px-3 py-1.5 min-h-[40px] sm:min-h-0 inline-flex items-center font-semibold text-bordo hover:bg-gray-50"

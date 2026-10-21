@@ -14,6 +14,7 @@ import {
   verificarAlocacao,
 } from "@/lib/alocacao";
 import { calcularRepasse } from "@/lib/repasse";
+import { pracaDoAtendimento } from "@/lib/praca";
 import { podeTransicionar, STATUS_ATIVOS } from "@/lib/pedido";
 import {
   competenciaDe,
@@ -80,8 +81,14 @@ async function valorDoServico(clinicaId: string, servicoId: string, uf?: string 
   return valorCentavos;
 }
 
-async function repasseDoPedido(profissionalId: string, servicoId: string, valorServicoCentavos: number) {
-  const [regra, servico, profissional, config] = await Promise.all([
+async function repasseDoPedido(
+  profissionalId: string,
+  servicoId: string,
+  valorServicoCentavos: number,
+  /** Onde é o atendimento: decide a praça da tabela de repasse (ata de 20/10). */
+  local: { clinicaId: string; enderecoId?: string | null }
+) {
+  const [regra, servico, profissional, config, endereco, clinica] = await Promise.all([
     prisma.regraRepasse.findUnique({
       where: { profissionalId_servicoId: { profissionalId, servicoId } },
       select: { percent: true, fixoCentavos: true },
@@ -92,14 +99,30 @@ async function repasseDoPedido(profissionalId: string, servicoId: string, valorS
     }),
     prisma.profissional.findUnique({
       where: { id: profissionalId },
-      select: { repassePercentPadrao: true, grupoRepasse: { select: { percent: true, fixoCentavos: true } } },
+      select: {
+        repassePercentPadrao: true,
+        // Sem isto o valor fixo do profissional nunca chegava ao cálculo.
+        repasseFixoCentavos: true,
+        grupoRepasse: { select: { percent: true, fixoCentavos: true } },
+      },
     }),
     parametros(),
+    local.enderecoId
+      ? prisma.enderecoClinica.findUnique({ where: { id: local.enderecoId }, select: { uf: true, cidade: true } })
+      : null,
+    prisma.clinica.findUnique({ where: { id: local.clinicaId }, select: { uf: true, cidade: true } }),
   ]);
+
+  const praca = pracaDoAtendimento(endereco ?? clinica ?? {});
+  const regraDaPraca = await prisma.repassePraca.findUnique({
+    where: { servicoId_praca: { servicoId, praca } },
+    select: { percent: true, fixoCentavos: true },
+  });
 
   return calcularRepasse({
     valorServicoCentavos,
     regra,
+    praca: regraDaPraca,
     servico,
     profissional,
     grupo: profissional?.grupoRepasse,
@@ -162,7 +185,9 @@ export async function criarPedido(_anterior: Resultado, dados: FormData): Promis
 
     let valorRepasseCentavos = 0;
     if (profissionalId) {
-      valorRepasseCentavos = (await repasseDoPedido(profissionalId, servicoId, valorServicoCentavos)).valorCentavos;
+      valorRepasseCentavos = (
+        await repasseDoPedido(profissionalId, servicoId, valorServicoCentavos, { clinicaId, enderecoId: null })
+      ).valorCentavos;
     }
 
     // Serviço com equipamento ilimitado não reserva unidade: o aparelho
@@ -482,6 +507,7 @@ type PedidoParaAlocar = {
   id: string;
   numero: number;
   clinicaId: string;
+  enderecoId: string | null;
   servicoId: string;
   data: Date;
   horaInicio: string;
@@ -571,7 +597,10 @@ async function alocarNaTransacao(
     return { ok: false as const, erro: "Nenhum equipamento livre nesse horário." };
   }
 
-  const repasse = await repasseDoPedido(profissionalId, pedido.servicoId, pedido.valorServicoCentavos);
+  const repasse = await repasseDoPedido(profissionalId, pedido.servicoId, pedido.valorServicoCentavos, {
+    clinicaId: pedido.clinicaId,
+    enderecoId: pedido.enderecoId,
+  });
 
   await tx.pedido.update({
     where: { id: pedido.id },
@@ -1728,14 +1757,17 @@ export async function definirValorServico(pedidoId: string, valorTexto: string):
 
   const pedido = await prisma.pedido.findUnique({
     where: { id: pedidoId },
-    select: { numero: true, servicoId: true, profissionalId: true, status: true },
+    select: { numero: true, servicoId: true, profissionalId: true, status: true, clinicaId: true, enderecoId: true },
   });
   if (!pedido) return { ok: false, erro: "Agendamento não encontrado." };
   if (pedido.status === "CANCELADO") return { ok: false, erro: "Pedido cancelado não tem valor para ajustar." };
 
   const dados: Prisma.PedidoUpdateInput = { valorServicoCentavos };
   if (pedido.profissionalId) {
-    const repasse = await repasseDoPedido(pedido.profissionalId, pedido.servicoId, valorServicoCentavos);
+    const repasse = await repasseDoPedido(pedido.profissionalId, pedido.servicoId, valorServicoCentavos, {
+      clinicaId: pedido.clinicaId,
+      enderecoId: pedido.enderecoId,
+    });
     dados.valorRepasseCentavos = repasse.valorCentavos;
   }
 

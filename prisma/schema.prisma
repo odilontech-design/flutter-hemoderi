@@ -410,6 +410,7 @@ model Servico {
   /// o insumo e por isso repassa menos.
   repassePercent      Float?
   repasseFixoCentavos Int?
+  repassesPorPraca    RepassePraca[]
 
   /// Agrupamento comercial — PRF, Piezo, Laser. Ortogonal à categoria: "PRF"
   /// aparece em odontologia, estética e saúde, e é assim que a operação fala
@@ -805,6 +806,31 @@ model RegraRepasse {
 /// Um grupo por nome, não uma coluna de UF na regra: assim o próximo
 /// critério (tempo de experiência, por exemplo) é só outro grupo, sem
 /// mexer no schema de novo.
+/// Repasse por serviço e praça (ata de 20/10): a mesma locação paga o
+/// profissional de um jeito na Grande São Paulo e de outro no Rio. Vem da
+/// planilha que o pós-venda preenche (Financeiro → Repasses por praça). A
+/// praça sai do endereço do atendimento (lib/praca.ts). Percentual em 0–100,
+/// como o resto do sistema; fixo vence percentual quando os dois existem.
+model RepassePraca {
+  id String @id @default(cuid())
+
+  servicoId String
+  servico   Servico @relation(fields: [servicoId], references: [id], onDelete: Cascade)
+
+  /// GRANDE_SP, INTERIOR_SP, RJ, PR, ES ou OUTROS — ver PRACAS em lib/praca.ts.
+  praca String
+
+  percent      Float?
+  fixoCentavos Int?
+  observacao   String?
+
+  criadoEm     DateTime @default(now())
+  atualizadoEm DateTime @updatedAt
+
+  @@unique([servicoId, praca])
+  @@index([praca])
+}
+
 model GrupoRepasse {
   id   String @id @default(cuid())
   nome String @unique
