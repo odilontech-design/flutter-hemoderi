@@ -23,6 +23,7 @@ export function BotaoAcao({
 }) {
   const [pendente, iniciar] = useTransition();
   const [erro, setErro] = useState("");
+  const [aviso, setAviso] = useState("");
 
   return (
     <span className="inline-flex items-center gap-2">
@@ -32,15 +33,18 @@ export function BotaoAcao({
         onClick={() => {
           if (confirmar && !window.confirm(confirmar)) return;
           setErro("");
+          setAviso("");
           iniciar(async () => {
             const resultado = await acao();
             if (!resultado.ok) setErro(resultado.erro ?? "Não foi possível concluir.");
+            else if (resultado.avisos?.length) setAviso(resultado.avisos.join(" "));
           });
         }}
       >
         {children}
       </Botao>
       {erro && <span className="text-[11px] text-red-600">{erro}</span>}
+      {aviso && <span className="text-[11px] text-emerald-700">{aviso}</span>}
     </span>
   );
 }

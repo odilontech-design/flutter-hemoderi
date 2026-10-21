@@ -14,6 +14,8 @@
  * coletar as chaves de API"):
  *   PIPEDRIVE_API_TOKEN, PIPEDRIVE_DOMINIO — sem os dois, toda chamada vira
  *     um registro em SincronizacaoExterna e a operação segue sem travar.
+ *     O domínio é o subdomínio da conta ("hemoderi-5c2c36"); o endereço
+ *     inteiro também é aceito (lib/integracoes/pipedrive-url.ts).
  *   PIPEDRIVE_CAMPO_NUMERO_PEDIDO — a chave (hash) do campo personalizado
  *     onde o número do pedido deve entrar (pergunta 36 do questionário
  *     técnico). Sem ela, o número ainda aparece no TÍTULO do negócio — só
@@ -25,15 +27,59 @@
 
 import { prisma } from "@/lib/prisma";
 import { codigoDoPedido } from "@/lib/numeracao";
+import {
+  descreverErroPipedrive,
+  mensagemDeHttpPipedrive,
+  subdominioDoPipedrive,
+  urlDaApiPipedrive,
+} from "./pipedrive-url";
 
-function configurado(): boolean {
-  return Boolean(process.env.PIPEDRIVE_API_TOKEN && process.env.PIPEDRIVE_DOMINIO);
+/** Sem resposta em 15 s, desiste: a criação do pedido não pode ficar esperando. */
+const TEMPO_LIMITE_MS = 15_000;
+
+export function pipedriveConfigurado(): boolean {
+  return Boolean(process.env.PIPEDRIVE_API_TOKEN?.trim() && subdominioDoPipedrive(process.env.PIPEDRIVE_DOMINIO));
 }
+const configurado = pipedriveConfigurado;
 
 function urlBase(caminho: string): string {
-  const dominio = process.env.PIPEDRIVE_DOMINIO;
-  const token = process.env.PIPEDRIVE_API_TOKEN;
-  return `https://${dominio}.pipedrive.com/api/v1${caminho}?api_token=${token}`;
+  return urlDaApiPipedrive(
+    subdominioDoPipedrive(process.env.PIPEDRIVE_DOMINIO) ?? "",
+    process.env.PIPEDRIVE_API_TOKEN ?? "",
+    caminho
+  );
+}
+
+async function chamar(caminho: string, metodo: "GET" | "POST" | "PUT", corpo?: unknown): Promise<unknown> {
+  const resposta = await fetch(urlBase(caminho), {
+    method: metodo,
+    headers: { "Content-Type": "application/json", Accept: "application/json" },
+    body: corpo === undefined ? undefined : JSON.stringify(corpo),
+    signal: AbortSignal.timeout(TEMPO_LIMITE_MS),
+    cache: "no-store",
+  });
+  const json = await resposta.json().catch(() => null);
+  if (!resposta.ok) throw new Error(mensagemDeHttpPipedrive(resposta.status, json));
+  return json;
+}
+
+/**
+ * Confere token e domínio sem escrever nada: lê o usuário dono do token. É o
+ * botão "testar conexão" da tela de integrações.
+ */
+export async function testarConexao(): Promise<{ ok: true; descricao: string } | { ok: false; erro: string }> {
+  if (!configurado()) {
+    return { ok: false, erro: "Faltam PIPEDRIVE_API_TOKEN e/ou PIPEDRIVE_DOMINIO (só o subdomínio da conta)." };
+  }
+  try {
+    const json = (await chamar("/users/me", "GET")) as {
+      data?: { name?: string; company_name?: string; company_domain?: string };
+    };
+    const d = json.data ?? {};
+    return { ok: true, descricao: `Conectado como ${d.name ?? "?"} em ${d.company_name ?? "?"} (${d.company_domain ?? "?"}).` };
+  } catch (erro) {
+    return { ok: false, erro: descreverErroPipedrive(erro) };
+  }
 }
 
 async function registrarSincronizacao(
@@ -95,15 +141,8 @@ export async function criarNegocio(pedidoId: string): Promise<void> {
   if (idEtapa) corpo.stage_id = Number(idEtapa);
 
   try {
-    const resposta = await fetch(urlBase("/deals"), {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(corpo),
-    });
-    if (!resposta.ok) throw new Error(`HTTP ${resposta.status}`);
-
-    const json = (await resposta.json()) as { data?: { id?: number } };
-    const negocioId = json.data?.id;
+    const json = (await chamar("/deals", "POST", corpo)) as { data?: { id?: number } } | null;
+    const negocioId = json?.data?.id;
     if (!negocioId) throw new Error("Resposta do PipeDrive sem id do negócio.");
 
     await prisma.pedido.update({ where: { id: pedido.id }, data: { pipedriveNegocioId: String(negocioId) } });
@@ -114,7 +153,7 @@ export async function criarNegocio(pedidoId: string): Promise<void> {
       "criar-negocio",
       false,
       undefined,
-      erro instanceof Error ? erro.message : String(erro)
+      descreverErroPipedrive(erro)
     );
   }
 }
@@ -161,12 +200,7 @@ export async function marcarNegocioGanho(pedidoId: string): Promise<void> {
   }
 
   try {
-    const resposta = await fetch(urlBase(`/deals/${pedido.pipedriveNegocioId}`), {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ status: "won" }),
-    });
-    if (!resposta.ok) throw new Error(`HTTP ${resposta.status}`);
+    await chamar(`/deals/${pedido.pipedriveNegocioId}`, "PUT", { status: "won" });
 
     await registrarSincronizacao(pedido.id, "marcar-ganho", true, pedido.pipedriveNegocioId);
   } catch (erro) {
@@ -175,7 +209,7 @@ export async function marcarNegocioGanho(pedidoId: string): Promise<void> {
       "marcar-ganho",
       false,
       pedido.pipedriveNegocioId,
-      erro instanceof Error ? erro.message : String(erro)
+      descreverErroPipedrive(erro)
     );
   }
 }

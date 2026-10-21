@@ -317,6 +317,10 @@ export async function vincularSolicitacao(
     "vincular-solicitacao",
     `${solicitacao.clinicaNome} · ${solicitacao.telefone}`
   );
+  // Todo agendamento vira negócio no PipeDrive (ata de 21/10), inclusive o
+  // que nasce de uma solicitação do site.
+  const { criarNegocio } = await import("@/lib/integracoes/pipedrive");
+  await criarNegocio(pedido.id);
 
   revalidatePath("/painel/solicitacoes");
   revalidatePath("/painel/pedidos");

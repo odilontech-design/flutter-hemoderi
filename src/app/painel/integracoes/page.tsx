@@ -6,7 +6,8 @@ import { BotaoAcao } from "@/components/BotaoAcao";
 import { codigoDoPedido } from "@/lib/numeracao";
 import { formatarData } from "@/lib/data";
 import { pendenciasDeSincronizacao } from "@/lib/sincronizacao";
-import { reprocessarPipedrive } from "@/app/actions/integracoes";
+import { reprocessarPipedrive, reprocessarTodasPipedrive, testarConexaoPipedrive } from "@/app/actions/integracoes";
+import { pipedriveConfigurado } from "@/lib/integracoes/pipedrive";
 
 export const dynamic = "force-dynamic";
 
@@ -55,7 +56,7 @@ export default async function Integracoes() {
   });
   const porId = new Map(pedidos.map((p) => [p.id, p]));
 
-  const configurado = Boolean(process.env.PIPEDRIVE_API_TOKEN && process.env.PIPEDRIVE_DOMINIO);
+  const configurado = pipedriveConfigurado();
 
   return (
     <>
@@ -65,11 +66,26 @@ export default async function Integracoes() {
         <Cartao className="mb-3 border-amber-200 bg-amber-50/40">
           <div className="text-[11px] text-amber-800 leading-relaxed">
             A integração ainda não está configurada (faltam <code>PIPEDRIVE_API_TOKEN</code> e{" "}
-            <code>PIPEDRIVE_DOMINIO</code>). Enquanto isso, cada agendamento registra a intenção
+            <code>PIPEDRIVE_DOMINIO</code>, que é só o subdomínio da conta — ex.: <code>hemoderi-5c2c36</code>). Enquanto isso, cada agendamento registra a intenção
             aqui como pendência e a operação segue normalmente — nada trava. Assim que as chaves
             entrarem no ambiente, use &quot;tentar de novo&quot; para sincronizar o que ficou para trás.
           </div>
         </Cartao>
+      )}
+
+      {configurado && (
+        <div className="flex flex-wrap items-center gap-3 mb-3">
+          <BotaoAcao acao={testarConexaoPipedrive}>Testar conexão</BotaoAcao>
+          {pendencias.length > 0 && (
+            <BotaoAcao
+              acao={reprocessarTodasPipedrive}
+              variante="primario"
+              confirmar="Criar no PipeDrive os negócios que ficaram pendentes (até 20 por clique)?"
+            >
+              Reprocessar pendências
+            </BotaoAcao>
+          )}
+        </div>
       )}
 
       <div className="grid grid-cols-3 gap-3 mb-3">
