@@ -58,6 +58,15 @@ export default async function MeusDados() {
               <Rotulo>Telefone (WhatsApp)</Rotulo>
               <CampoTelefone name="telefone" inicial={eu?.telefone ?? ""} obrigatorio />
             </div>
+            {!eu?.chavePix && (
+              <div>
+                <Rotulo>Chave Pix para receber os repasses</Rotulo>
+                <Campo name="chavePix" placeholder="CPF, e-mail, telefone ou chave aleatória" maxLength={140} />
+                <div className="text-[10px] text-amber-700 mt-1">
+                  Confira antes de salvar: depois de gravada, só a central troca a chave.
+                </div>
+              </div>
+            )}
             <div>
               <Rotulo>Agenda do Google (opcional)</Rotulo>
               <Campo name="googleAgendaId" type="email" defaultValue={eu?.googleAgendaId ?? ""} placeholder="voce@gmail.com" />

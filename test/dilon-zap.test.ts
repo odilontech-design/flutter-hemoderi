@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { corpoParaDilonZap, interpretarResposta, mensagemVencida } from "../src/lib/integracoes/dilon-zap";
+import { corpoParaDilonZap, descreverErroDeRede, interpretarResposta, mensagemVencida, urlDoDilonZap } from "../src/lib/integracoes/dilon-zap";
 
 test("corpo no formato da API do Dilon Zap", () => {
   assert.deepEqual(corpoParaDilonZap({ id: "m1", destinatario: "5511988887777", texto: "Olá", nome: "Clínica Exemplo" }), {
@@ -38,4 +38,32 @@ test("mensagem vencida não sai", () => {
     mensagemVencida({ tipo: "RESULTADO", criadaEm: new Date("2026-10-10T00:00:00Z"), inicioDoAtendimento: null, agora }),
     true
   );
+});
+
+test("404 sem corpo do Dilon Zap é endereço errado: para a fila em vez de marcar falha", () => {
+  const r = interpretarResposta(404, null);
+  assert.equal(r.resultado, "parar");
+  assert.match((r as { erro: string }).erro, /WHATSAPP_API_URL/);
+  assert.equal(interpretarResposta(404, { error: "contato não encontrado" }).resultado, "falha");
+});
+
+test("URL do Dilon Zap: aceita só o endereço ou o endpoint completo", () => {
+  const esperado = "https://zap.dilontech.com.br/api/integracao/mensagens";
+  for (const valor of [
+    "https://zap.dilontech.com.br",
+    "https://zap.dilontech.com.br/",
+    " zap.dilontech.com.br ",
+    "https://zap.dilontech.com.br/api/integracao/mensagens",
+    "https://zap.dilontech.com.br/api/integracao/mensagens/",
+  ]) {
+    assert.equal(urlDoDilonZap(valor), esperado, valor);
+  }
+  assert.equal(urlDoDilonZap(""), null);
+  assert.equal(urlDoDilonZap(undefined), null);
+});
+
+test("erro de rede diz a causa", () => {
+  const dns = new TypeError("fetch failed", { cause: { code: "ENOTFOUND", hostname: "zap.errado" } });
+  assert.match(descreverErroDeRede(dns), /endereço não encontrado \(zap\.errado\)/);
+  assert.equal(descreverErroDeRede(Object.assign(new Error("x"), { name: "TimeoutError" })), "sem resposta a tempo");
 });

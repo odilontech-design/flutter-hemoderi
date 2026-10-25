@@ -14,6 +14,11 @@ const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
  * Nome, CPF, registro e chave Pix continuam com a central: são os dados que
  * identificam quem atende e para onde vai o pagamento, e trocar a chave Pix
  * sozinho seria o atalho de quem quer desviar um repasse.
+ *
+ * Exceção (revisão de 25/10): a chave Pix VAZIA o próprio profissional
+ * informa, uma vez. Nenhum dos 47 cadastros tinha chave, e coletar uma a uma
+ * pela central atrasaria o primeiro repasse de todo mundo. Preenchida, trava
+ * — trocar continua sendo com a central, que é o que impede o desvio.
  */
 export async function salvarMeusDados(_anterior: Resultado, dados: FormData): Promise<Resultado> {
   const sessao = await exigirProfissional();
@@ -37,11 +42,21 @@ export async function salvarMeusDados(_anterior: Resultado, dados: FormData): Pr
     return { ok: false, erro: "Esse e-mail já está em outro cadastro. Use outro ou fale com a central." };
   }
 
+  const chavePix = String(dados.get("chavePix") ?? "").trim();
+  if (chavePix.length > 140) return { ok: false, erro: "Chave Pix longa demais." };
+
   const antes = await prisma.usuario.findUnique({ where: { id: sessao.usuarioId }, select: { email: true } });
+  const atual = await prisma.profissional.findUnique({ where: { id: sessao.profissionalId }, select: { chavePix: true } });
+  const pixNovo = chavePix && !atual?.chavePix ? chavePix : null;
   await prisma.$transaction([
     prisma.profissional.update({
       where: { id: sessao.profissionalId },
-      data: { email, telefone: formatarTelefoneBrasileiro(telefone), googleAgendaId: agenda || null },
+      data: {
+        email,
+        telefone: formatarTelefoneBrasileiro(telefone),
+        googleAgendaId: agenda || null,
+        ...(pixNovo ? { chavePix: pixNovo } : {}),
+      },
     }),
     prisma.usuario.update({ where: { id: sessao.usuarioId }, data: { email } }),
   ]);
@@ -50,9 +65,14 @@ export async function salvarMeusDados(_anterior: Resultado, dados: FormData): Pr
     "Profissional",
     sessao.profissionalId,
     "meus-dados",
-    antes?.email !== email ? `e-mail de acesso: ${antes?.email} → ${email}` : "contato atualizado"
+    [
+      antes?.email !== email ? `e-mail de acesso: ${antes?.email} → ${email}` : "contato atualizado",
+      pixNovo ? "chave Pix informada pelo profissional" : null,
+    ]
+      .filter(Boolean)
+      .join(" · ")
   );
-
+  revalidatePath("/profissional");
   revalidatePath("/profissional/meus-dados");
   revalidatePath("/profissional/disponibilidade");
   return { ok: true };

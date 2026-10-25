@@ -77,6 +77,26 @@ export async function avisosDoPainel(perfil: PerfilInterno): Promise<Aviso[]> {
     }
   }
 
+  // Atendimento que passou sem relatório (revisão de 25/10): sem ele não há
+  // conferência, repasse nem cobrança. A marca é o atendimento mais recente
+  // nessa situação — um novo atraso reabre o aviso.
+  if (perfilPermite(perfil, "POS_VENDA")) {
+    const semRelatorio = await prisma.pedido.findMany({
+      where: etapaPorChave("sem-relatorio")!.onde,
+      select: { data: true, horaInicio: true },
+    });
+    if (semRelatorio.length > 0) {
+      avisos.push({
+        chave: "sem-relatorio",
+        titulo: "Atendimento sem relatório",
+        texto: `${contar(semRelatorio.length, "atendimento já passou e espera", "atendimentos já passaram e esperam")} o relatório do profissional.`,
+        href: "/painel/pedidos?filtro=sem-relatorio",
+        rotuloLink: "Ver e cobrar →",
+        marca: maisRecente(semRelatorio.map((p) => instanteDoAtendimento(p.data, p.horaInicio))),
+      });
+    }
+  }
+
   if (perfil === "LOGISTICA") {
     const paraAlocar = await prisma.pedido.findMany({
       where: alocar.onde,

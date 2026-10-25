@@ -12,6 +12,7 @@ import { formatarDataCurta, formatarDataHora } from "@/lib/data";
 import { formatarReais } from "@/lib/dinheiro";
 import { etapaDoPerfil, etapasDoPerfil } from "@/lib/esteira";
 import { formatarAtraso, houveAtraso, minutosDeAtraso } from "@/lib/atraso";
+import { hojeUTC } from "@/lib/data";
 import { linkWhatsapp, mensagemDeFeedback } from "@/lib/whatsapp-link";
 import { profissionaisIndisponiveis } from "@/lib/alocacao";
 
@@ -66,7 +67,7 @@ export default async function Esteira({
         clinica: { select: { nome: true, telefone: true } },
         endereco: { select: { rotulo: true, endereco: true, numero: true, complemento: true, bairro: true, cidade: true, uf: true, observacoes: true } },
         servico: { select: { nome: true } },
-        profissional: { select: { nome: true } },
+        profissional: { select: { nome: true, telefone: true } },
         relatorio: { include: INCLUIR_ADICIONAIS },
       },
     }),
@@ -371,6 +372,30 @@ export default async function Esteira({
                       <div className="text-red-700/80 mt-0.5">Volta para a conferência quando ele reenviar.</div>
                     </div>
                   )}
+                  {/* Passou do dia e o relatório não veio (revisão de 25/10):
+                      quem cobra é a central, pelo WhatsApp do profissional. */}
+                  {pedido.status === "ALOCADO" &&
+                    !pedido.relatorio &&
+                    pedido.data.getTime() < hojeUTC().getTime() &&
+                    (() => {
+                      const link = linkWhatsapp(
+                        pedido.profissional?.telefone,
+                        `Olá, ${pedido.profissional?.nome?.split(" ")[0] ?? ""}! O relatório do atendimento de ${pedido.servico.nome} na ${pedido.clinica.nome} (${formatarDataCurta(pedido.data)}) ainda não chegou. Pode enviar pelo app da Hemoderi? O valor é liberado depois da conferência.`
+                      );
+                      return (
+                        <div className="mt-1 text-[10px] font-semibold text-amber-700">
+                          atendimento passou sem relatório
+                          {link && (
+                            <>
+                              {" · "}
+                              <a href={link} target="_blank" rel="noopener noreferrer" className="text-[#1EA952] hover:underline">
+                                cobrar no WhatsApp →
+                              </a>
+                            </>
+                          )}
+                        </div>
+                      );
+                    })()}
                   {pedido.relatorio &&
                     !pedido.relatorio.aprovadoEm &&
                     !pedido.relatorio.devolvidoEm &&

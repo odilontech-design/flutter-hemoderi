@@ -68,6 +68,26 @@ export default async function Profissionais() {
         Profissionais
       </Titulo>
 
+      {(() => {
+        // Prontidão para o lançamento (revisão de 25/10): sem telefone o aviso
+        // de alocação não chega, sem Pix não há repasse, e quem nunca entrou
+        // não vê a própria agenda.
+        const ativos = profissionais.filter((p) => p.ativo);
+        const semTelefone = ativos.filter((p) => !p.telefone).length;
+        const semPix = ativos.filter((p) => !p.chavePix).length;
+        const nuncaEntraram = ativos.filter((p) => p.usuarios.some((u) => !u.desativadoEm && u.senhaProvisoria)).length;
+        if (!semTelefone && !semPix && !nuncaEntraram) return null;
+        return (
+          <Cartao className="mb-3 border-amber-200 bg-amber-50/40">
+            <div className="text-[11px] text-amber-900 leading-relaxed">
+              <strong>Cadastros incompletos</strong> entre {ativos.length} ativos: {semTelefone} sem telefone · {semPix} sem
+              chave Pix · {nuncaEntraram} nunca entraram no portal. O próprio profissional completa telefone e Pix em
+              &quot;Meus dados&quot; no primeiro acesso.
+            </div>
+          </Cartao>
+        );
+      })()}
+
       <Cartao>
         {profissionais.length === 0 ? (
             <Vazio>Nenhum profissional cadastrado.</Vazio>

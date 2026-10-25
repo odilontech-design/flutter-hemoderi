@@ -1,4 +1,5 @@
 import type { Prisma, PerfilInterno, StatusPedido } from "@prisma/client";
+import { hojeUTC } from "@/lib/data";
 
 /**
  * As etapas da esteira, e de quem é cada uma.
@@ -63,8 +64,11 @@ export const ETAPAS: Etapa[] = [
   {
     chave: "alocados",
     rotulo: "Alocados",
-    descricao: "Com profissional indicado. O aceite dele é o que falta.",
-    onde: { status: "ALOCADO" },
+    descricao: "Com profissional indicado, de hoje em diante.",
+    // Getter: "hoje" é calculado a cada leitura, não uma vez no boot do servidor.
+    get onde(): Prisma.PedidoWhereInput {
+      return { status: "ALOCADO", data: { gte: hojeUTC() } };
+    },
   },
   {
     chave: "conferir",
@@ -72,6 +76,17 @@ export const ETAPAS: Etapa[] = [
     descricao: "Atendido, com relatório aguardando a conferência do pós-venda.",
     dono: "POS_VENDA",
     onde: PENDENTE_DE_CONFERENCIA,
+  },
+  {
+    chave: "sem-relatorio",
+    rotulo: "Sem relatório",
+    descricao: "O dia do atendimento passou e o profissional ainda não enviou o relatório — cobrar.",
+    // Revisão de 25/10: 19 atendimentos passados seguiam "alocados", sem
+    // relatório, misturados aos futuros. Sem relatório não há conferência,
+    // repasse nem cobrança — e ninguém via. O pós-venda é quem cobra.
+    get onde(): Prisma.PedidoWhereInput {
+      return { status: "ALOCADO", data: { lt: hojeUTC() } };
+    },
   },
   {
     chave: "devolvidos",
@@ -141,9 +156,9 @@ export function etapaPorChave(chave: string | undefined): Etapa | undefined {
 const ETAPAS_DO_PERFIL: Partial<Record<PerfilInterno, string[]>> = {
   COMERCIAL: ["triagem", "alocados", "fechados", "cancelados", "todos"],
   ATENDENTE: ["triagem", "alocados", "fechados", "cancelados", "todos"],
-  LOGISTICA: ["alocar", "alocados", "cancelados"],
+  LOGISTICA: ["alocar", "alocados", "sem-relatorio", "cancelados"],
   // Desde a ata de 20/10 o pós-venda também lança e confirma os pedidos do dia.
-  POS_VENDA: ["conferir", "devolvidos", "triagem", "fechados", "todos"],
+  POS_VENDA: ["conferir", "sem-relatorio", "devolvidos", "triagem", "fechados", "todos"],
 };
 
 export function etapasDoPerfil(perfil: PerfilInterno): Etapa[] {

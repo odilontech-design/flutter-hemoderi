@@ -65,6 +65,12 @@ export function interpretarResposta(status: number, corpo: unknown): Desfecho {
     if (erroDeLa && /optou/i.test(erroDeLa)) return { resultado: "falha", erro: detalhe("contato bloqueado") };
     return { resultado: "parar", erro: detalhe("nenhum número conectado") };
   }
+  // 404 sem corpo do Dilon Zap é página que não existe: endereço errado em
+  // WHATSAPP_API_URL, não problema desta mensagem (revisão de 25/10 — as três
+  // primeiras mensagens reais caíram como FALHA por isso).
+  if (status === 404 && !erroDeLa) {
+    return { resultado: "parar", erro: detalhe("endereço da API não encontrado — confira WHATSAPP_API_URL") };
+  }
   if (status >= 400 && status < 500) return { resultado: "falha", erro: detalhe("mensagem recusada") };
   return { resultado: "parar", erro: detalhe("serviço indisponível") };
 }
@@ -87,4 +93,34 @@ export function mensagemVencida(params: {
   if (params.tipo === "RESULTADO") return params.agora.getTime() - params.criadaEm.getTime() > VALIDADE_RESULTADO_MS;
   if (!params.inicioDoAtendimento) return false;
   return params.inicioDoAtendimento.getTime() <= params.agora.getTime();
+}
+
+const CAMINHO_DA_API = "/api/integracao/mensagens";
+
+/**
+ * O endpoint a partir do que foi colado em WHATSAPP_API_URL: aceita só o
+ * endereço do Dilon Zap ("https://zap.dilontech.com.br") ou o endpoint
+ * completo, com ou sem barra no fim.
+ */
+export function urlDoDilonZap(valor: string | undefined | null): string | null {
+  const limpo = (valor ?? "").trim().replace(/\/+$/, "");
+  if (!limpo) return null;
+  let url: URL;
+  try {
+    url = new URL(/^https?:\/\//i.test(limpo) ? limpo : `https://${limpo}`);
+  } catch {
+    return null;
+  }
+  const caminho = url.pathname.replace(/\/+$/, "");
+  if (!caminho.endsWith(CAMINHO_DA_API)) url.pathname = `${caminho}${CAMINHO_DA_API}`;
+  return url.toString();
+}
+
+/** "fetch failed" com a causa de verdade (endereço inexistente, recusa, tempo). */
+export function descreverErroDeRede(erro: unknown): string {
+  if (!(erro instanceof Error)) return String(erro);
+  if (erro.name === "TimeoutError" || erro.name === "AbortError") return "sem resposta a tempo";
+  const causa = (erro as Error & { cause?: { code?: string; hostname?: string } }).cause;
+  if (causa?.code === "ENOTFOUND") return `endereço não encontrado (${causa.hostname ?? "?"}) — confira WHATSAPP_API_URL`;
+  return causa?.code ? `${erro.message} (${causa.code})` : erro.message;
 }

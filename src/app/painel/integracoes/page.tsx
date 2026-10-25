@@ -4,9 +4,11 @@ import { exigirResponsavel } from "@/lib/sessao";
 import { Cartao, Kpi, Tabela, Titulo, Vazio } from "@/components/ui";
 import { BotaoAcao } from "@/components/BotaoAcao";
 import { codigoDoPedido } from "@/lib/numeracao";
-import { formatarData } from "@/lib/data";
+import { formatarData, formatarDataHora } from "@/lib/data";
 import { pendenciasDeSincronizacao } from "@/lib/sincronizacao";
-import { reprocessarPipedrive, reprocessarTodasPipedrive, testarConexaoPipedrive } from "@/app/actions/integracoes";
+import { reenviarFalhasWhatsapp, reprocessarPipedrive, reprocessarTodasPipedrive, testarConexaoPipedrive } from "@/app/actions/integracoes";
+import { integracaoConfigurada as googleConfigurado, agendaDaOperacao } from "@/lib/integracoes/google-api";
+import { configuradoSantander } from "@/lib/integracoes/santander-pix";
 import { pipedriveConfigurado } from "@/lib/integracoes/pipedrive";
 
 export const dynamic = "force-dynamic";
@@ -59,9 +61,88 @@ export default async function Integracoes() {
 
   const configurado = pipedriveConfigurado();
 
+  // A situação das outras integrações (revisão de 25/10): a fila do WhatsApp
+  // não aparecia em tela nenhuma, e as três primeiras mensagens reais falharam
+  // sem ninguém ver.
+  const umDiaAtras = new Date(Date.now() - 24 * 60 * 60 * 1000);
+  const [porStatusWhatsapp, ultimaFalhaWhatsapp, ultimaEnviada, falhasGoogle, ultimoSucessoPipedrive] = await Promise.all([
+    prisma.mensagemWhatsapp.groupBy({ by: ["status"], _count: { _all: true } }),
+    prisma.mensagemWhatsapp.findFirst({
+      where: { OR: [{ status: "FALHA" }, { status: "PENDENTE", erro: { not: null } }] },
+      orderBy: { criadaEm: "desc" },
+      select: { erro: true, criadaEm: true },
+    }),
+    prisma.mensagemWhatsapp.findFirst({ where: { status: "ENVIADA" }, orderBy: { enviadaEm: "desc" }, select: { enviadaEm: true } }),
+    prisma.sincronizacaoExterna.count({ where: { sistema: "GOOGLE_AGENDA", sucesso: false, criadaEm: { gte: umDiaAtras } } }),
+    prisma.sincronizacaoExterna.findFirst({
+      where: { sistema: "PIPEDRIVE", sucesso: true },
+      orderBy: { criadaEm: "desc" },
+      select: { criadaEm: true },
+    }),
+  ]);
+  const whatsapp = Object.fromEntries(porStatusWhatsapp.map((g) => [g.status, g._count._all])) as Record<string, number>;
+  const whatsappLigado = Boolean(process.env.WHATSAPP_API_URL);
+
+  const situacoes: { nome: string; ligado: boolean; linhas: string[]; alerta?: string | null }[] = [
+    {
+      nome: "PipeDrive",
+      ligado: configurado,
+      linhas: [
+        `${pendencias.length} pendência(s)`,
+        ultimoSucessoPipedrive ? `último sucesso: ${formatarDataHora(ultimoSucessoPipedrive.criadaEm)}` : "nenhum sucesso ainda",
+      ],
+    },
+    {
+      nome: "WhatsApp (Dilon Zap)",
+      ligado: whatsappLigado,
+      linhas: [
+        `${whatsapp.ENVIADA ?? 0} enviada(s) · ${whatsapp.PENDENTE ?? 0} na fila · ${whatsapp.FALHA ?? 0} falha(s)`,
+        ultimaEnviada?.enviadaEm ? `último envio: ${formatarDataHora(ultimaEnviada.enviadaEm)}` : "nenhuma mensagem entregue ainda",
+      ],
+      alerta: ultimaFalhaWhatsapp?.erro ?? null,
+    },
+    {
+      nome: "Google Agenda",
+      ligado: googleConfigurado() && Boolean(agendaDaOperacao()),
+      linhas: [`${falhasGoogle} falha(s) nas últimas 24h`],
+    },
+    {
+      nome: "Pix Santander",
+      ligado: configuradoSantander(),
+      linhas: ["cobrança Pix por agendamento"],
+      alerta: configuradoSantander() ? null : "Aguardando as credenciais do Santander.",
+    },
+  ];
+
   return (
     <>
-      <Titulo>Integração PipeDrive</Titulo>
+      <Titulo>Integrações</Titulo>
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 mb-4">
+        {situacoes.map((i) => (
+          <Cartao key={i.nome}>
+            <div className="flex items-center justify-between gap-2 mb-1">
+              <div className="font-display font-bold text-bordo text-sm">{i.nome}</div>
+              <span
+                className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${i.ligado ? "bg-green-100 text-green-800" : "bg-gray-100 text-gray-500"}`}
+              >
+                {i.ligado ? "ligada" : "desligada"}
+              </span>
+            </div>
+            {i.linhas.map((l) => (
+              <div key={l} className="text-[11px] text-gray-600">{l}</div>
+            ))}
+            {i.alerta && <div className="text-[11px] text-amber-700 mt-1">{i.alerta}</div>}
+            {i.nome.startsWith("WhatsApp") && whatsappLigado && (whatsapp.FALHA ?? 0) > 0 && (
+              <div className="mt-2">
+                <BotaoAcao acao={reenviarFalhasWhatsapp}>Reenviar falhas</BotaoAcao>
+              </div>
+            )}
+          </Cartao>
+        ))}
+      </div>
+
+      <div className="font-display font-bold text-bordo text-base mb-2">PipeDrive</div>
 
       {!configurado && (
         <Cartao className="mb-3 border-amber-200 bg-amber-50/40">

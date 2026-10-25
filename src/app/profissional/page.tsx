@@ -155,9 +155,29 @@ export default async function MinhaAgenda() {
     }),
   ]);
 
+  // Cadastro incompleto (revisão de 25/10): sem telefone a central não fala
+  // com a pessoa nem o aviso de alocação chega; sem chave Pix não há repasse.
+  const cadastro = await prisma.profissional.findUnique({
+    where: { id: sessao.profissionalId },
+    select: { telefone: true, chavePix: true },
+  });
+  const faltando = [!cadastro?.telefone && "telefone (WhatsApp)", !cadastro?.chavePix && "chave Pix"].filter(Boolean);
+
   return (
     <>
       <Titulo>Minha agenda</Titulo>
+
+      {faltando.length > 0 && (
+        <Cartao className="mb-3 border-amber-300 bg-amber-50/50">
+          <div className="text-[11px] text-amber-900">
+            <strong>Complete seu cadastro:</strong> falta {faltando.join(" e ")}. Sem isso a central não consegue
+            avisar você dos atendimentos{!cadastro?.chavePix && " nem pagar o seu repasse"}.{" "}
+            <Link href="/profissional/meus-dados" className="font-semibold text-bordo hover:underline">
+              Completar agora →
+            </Link>
+          </div>
+        </Cartao>
+      )}
 
       {aguardandoAceite.length > 0 && (
         <Cartao className="mb-3 border-bordo">

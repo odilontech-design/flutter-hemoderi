@@ -31,7 +31,7 @@ const ITENS = [
   { href: "/painel/catalogo", icone: <IconeCatalogo />, rotulo: "Serviços e equipamentos" },
   { href: "/painel/financeiro", icone: <IconeFinanceiro />, rotulo: "Financeiro" },
   { href: "/painel/cupons", icone: <IconeCatalogo />, rotulo: "Cupons de desconto" },
-  { href: "/painel/integracoes", icone: <IconeCatalogo />, rotulo: "Integração PipeDrive" },
+  { href: "/painel/integracoes", icone: <IconeCatalogo />, rotulo: "Integrações" },
   { href: "/painel/acessos", icone: <IconeAcessos />, rotulo: "Acessos" },
 ];
 

@@ -134,6 +134,17 @@ export async function exigirProfissional(): Promise<SessaoProfissional> {
   };
 }
 
+/**
+ * Quem está logado, sem redirecionar — para funções compartilhadas por mais
+ * de um portal que precisam conferir o chamador por conta própria.
+ */
+export async function sessaoAtual(): Promise<{ usuarioId: string; papel: string; profissionalId?: string } | null> {
+  const sessao = await getServerSession(authOptions);
+  if (!sessao?.user) return null;
+  const u = sessao.user as typeof sessao.user & { id: string; papel: string; profissionalId?: string };
+  return { usuarioId: u.id, papel: u.papel, profissionalId: u.profissionalId ?? undefined };
+}
+
 /** Rastro das ações que mexem em dinheiro ou em compromisso assumido. */
 export async function registrarAuditoria(
   usuarioId: string | null,

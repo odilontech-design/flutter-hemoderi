@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import type { Prisma, StatusPedido } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
-import { exigirClinica, exigirInterno, exigirProfissional, registrarAuditoria } from "@/lib/sessao";
+import { exigirClinica, exigirInterno, exigirProfissional, registrarAuditoria, sessaoAtual } from "@/lib/sessao";
 import {
   equipamentoLivre,
   horariosDisponiveis,
@@ -942,6 +942,18 @@ export async function registrarResultado(
     },
   });
   if (!pedido) return { ok: false, erro: "Pedido não encontrado." };
+
+  // Arquivo "use server": toda função exportada é chamável de fora, com
+  // qualquer argumento. Sem esta conferência, quem soubesse o id de um pedido
+  // o fechava como realizado — e o repasse nasce aqui. Só a equipe interna ou
+  // o profissional do próprio atendimento, e sempre em nome de si mesmo.
+  const chamador = await sessaoAtual();
+  const autorizado =
+    chamador !== null &&
+    chamador.usuarioId === usuarioId &&
+    (chamador.papel === "INTERNO" ||
+      (Boolean(chamador.profissionalId) && chamador.profissionalId === pedido.profissionalId));
+  if (!autorizado) return { ok: false, erro: "Sem permissão para fechar este atendimento." };
 
   const destino: StatusPedido = compareceu ? "REALIZADO" : "FALTOU";
   if (!podeTransicionar(pedido.status, destino)) {

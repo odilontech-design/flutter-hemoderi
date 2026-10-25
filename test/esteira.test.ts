@@ -73,8 +73,8 @@ test("a etapa `todos` não filtra nada", () => {
 
 test("cada perfil vê só as etapas do seu setor; gestão e responsável veem tudo", () => {
   const chaves = (perfil: Parameters<typeof etapasDoPerfil>[0]) => etapasDoPerfil(perfil).map((e) => e.chave);
-  assert.deepEqual(chaves("LOGISTICA"), ["alocar", "alocados", "cancelados"]);
-  assert.deepEqual(chaves("POS_VENDA"), ["triagem", "conferir", "devolvidos", "fechados", "todos"]);
+  assert.deepEqual(chaves("LOGISTICA"), ["alocar", "alocados", "sem-relatorio", "cancelados"]);
+  assert.deepEqual(chaves("POS_VENDA"), ["triagem", "conferir", "sem-relatorio", "devolvidos", "fechados", "todos"]);
   assert.equal(chaves("COMERCIAL").includes("alocar"), false);
   assert.equal(chaves("COMERCIAL").includes("triagem"), true);
   assert.equal(etapasDoPerfil("RESPONSAVEL").length, ETAPAS.length);
@@ -85,4 +85,15 @@ test("a etapa de abertura de cada perfil está entre as que ele vê", () => {
   for (const perfil of ["COMERCIAL", "ATENDENTE", "LOGISTICA", "POS_VENDA", "GESTAO", "RESPONSAVEL"] as const) {
     assert.equal(etapasDoPerfil(perfil).some((e) => e.chave === etapaDoPerfil(perfil).chave), true, perfil);
   }
+});
+
+test("atendimento que passou sem relatório sai de Alocados e vai para Sem relatório", () => {
+  const alocados = etapaPorChave("alocados")!.onde as { status: string; data: { gte: Date } };
+  const semRelatorio = etapaPorChave("sem-relatorio")!.onde as { status: string; data: { lt: Date } };
+  assert.equal(alocados.status, "ALOCADO");
+  assert.equal(semRelatorio.status, "ALOCADO");
+  // Mesmo corte: o que não está em um está no outro.
+  assert.equal(alocados.data.gte.getTime(), semRelatorio.data.lt.getTime());
+  assert.ok(etapasDoPerfil("POS_VENDA").some((e) => e.chave === "sem-relatorio"));
+  assert.ok(etapasDoPerfil("LOGISTICA").some((e) => e.chave === "sem-relatorio"));
 });

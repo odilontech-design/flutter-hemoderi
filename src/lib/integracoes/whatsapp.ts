@@ -12,7 +12,7 @@
 
 import { prisma } from "@/lib/prisma";
 import { formatarData, instanteDoAtendimento } from "@/lib/data";
-import { corpoParaDilonZap, interpretarResposta, mensagemVencida } from "@/lib/integracoes/dilon-zap";
+import { corpoParaDilonZap, descreverErroDeRede, interpretarResposta, mensagemVencida, urlDoDilonZap } from "@/lib/integracoes/dilon-zap";
 import { codigoDoPedido } from "@/lib/numeracao";
 import { normalizarTelefone } from "@/lib/slug";
 import type { TipoMensagem } from "@prisma/client";
@@ -126,8 +126,8 @@ export async function despacharPendentes(
   /** Só esta mensagem — o envio imediato logo depois de enfileirar. */
   somenteId?: string
 ): Promise<{ enviadas: number; falhas: number; canceladas: number; interrompido?: string }> {
-  const url = process.env.WHATSAPP_API_URL;
-  const token = process.env.WHATSAPP_API_TOKEN;
+  const url = urlDoDilonZap(process.env.WHATSAPP_API_URL);
+  const token = process.env.WHATSAPP_API_TOKEN?.trim();
   if (!url) return { enviadas: 0, falhas: 0, canceladas: 0 };
 
   const agora = new Date();
@@ -183,7 +183,7 @@ export async function despacharPendentes(
       desfecho = interpretarResposta(resposta.status, await resposta.json().catch(() => null));
     } catch (erro) {
       // Rede ou tempo esgotado: problema da integração, não da mensagem.
-      desfecho = { resultado: "parar", erro: `Dilon Zap fora do alcance: ${erro instanceof Error ? erro.message : String(erro)}` };
+      desfecho = { resultado: "parar", erro: `Dilon Zap fora do alcance: ${descreverErroDeRede(erro)}` };
     }
 
     if (desfecho.resultado === "enviada") {

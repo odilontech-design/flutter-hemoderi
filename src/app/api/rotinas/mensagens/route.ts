@@ -3,6 +3,8 @@ import { despacharPendentes, enfileirarMensagem } from "@/lib/integracoes/whatsa
 import { hojeUTC, somarDias } from "@/lib/data";
 import { parametros } from "@/lib/alocacao";
 import { gerarPesquisasNps } from "@/lib/rotinas/nps";
+import { reprocessarPendenciasPipedrive } from "@/lib/integracoes/pipedrive-pendencias";
+import { pipedriveConfigurado } from "@/lib/integracoes/pipedrive";
 
 // Rota de dados vivos: nunca pré-renderizada no build.
 export const dynamic = "force-dynamic";
@@ -29,6 +31,9 @@ export const dynamic = "force-dynamic";
  * rotina diária e idempotente, encaixada aqui pelo mesmo motivo do parágrafo
  * acima — é o único cron que o plano atual permite.
  */
+// Despacho + NPS + PipeDrive: o padrão de 10s fica curto.
+export const maxDuration = 60;
+
 export async function GET(requisicao: Request) {
   const segredo = process.env.CRON_SECRET;
   if (segredo) {
@@ -57,6 +62,9 @@ export async function GET(requisicao: Request) {
 
   const entrega = await despacharPendentes();
   const nps = await gerarPesquisasNps();
+  // O que ficou para trás no PipeDrive (revisão de 25/10): uma queda de rede
+  // à tarde não pode depender de alguém lembrar de clicar em "reprocessar".
+  const pipedrive = pipedriveConfigurado() ? await reprocessarPendenciasPipedrive(20) : null;
 
-  return Response.json({ enfileirados: pedidos.length, ...entrega, nps });
+  return Response.json({ enfileirados: pedidos.length, ...entrega, nps, pipedrive });
 }

@@ -3,70 +3,21 @@
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { exigirResponsavel } from "@/lib/sessao";
-import { criarNegocio, marcarNegocioGanho, marcarNegocioPerdido, pipedriveConfigurado, testarConexao } from "@/lib/integracoes/pipedrive";
-import { pendenciasDeSincronizacao } from "@/lib/sincronizacao";
+import { testarConexao } from "@/lib/integracoes/pipedrive";
+import { reprocessarPedidoPipedrive, reprocessarPendenciasPipedrive } from "@/lib/integracoes/pipedrive-pendencias";
+import { despacharPendentes } from "@/lib/integracoes/whatsapp";
 import type { Resultado } from "./pedidos";
 
 /**
  * Reprocessa uma sincronização do PipeDrive que ficou pendente (ata de
- * 28/09).
- *
- * Restrito ao responsável: reprocessar dispara escrita num sistema externo, e
- * quem responde pela operação é quem decide refazer. A ação certa é decidida
- * pelo ESTADO do pedido, não pela ação que falhou: um pedido já realizado
- * precisa acabar como "ganho" (e marcarNegocioGanho cria o negócio antes, se
- * faltar), enquanto um ainda em aberto só precisa do negócio criado. Assim o
- * reprocessamento conserta a lacuna inteira de uma vez, não só a etapa que
- * registrou o erro.
+ * 28/09). Restrito ao responsável: reprocessar escreve num sistema externo.
+ * A regra de qual ação refazer está em lib/integracoes/pipedrive-pendencias.ts.
  */
 export async function reprocessarPipedrive(pedidoId: string): Promise<Resultado> {
   await exigirResponsavel();
-  const resultado = await reprocessarUm(pedidoId);
+  const r = await reprocessarPedidoPipedrive(pedidoId);
   revalidatePath("/painel/integracoes");
-  return resultado;
-}
-
-async function reprocessarUm(pedidoId: string): Promise<Resultado> {
-  const pedido = await prisma.pedido.findUnique({
-    where: { id: pedidoId },
-    select: { id: true, status: true, pipedriveNegocioId: true, motivoCancelamento: true },
-  });
-  if (!pedido) return { ok: false, erro: "Agendamento não encontrado." };
-
-  if (pedido.status === "REALIZADO") {
-    await marcarNegocioGanho(pedido.id);
-  } else if (pedido.status === "CANCELADO") {
-    await marcarNegocioPerdido(pedido.id, pedido.motivoCancelamento);
-  } else if (pedido.pipedriveNegocioId) {
-    // O negócio já existe (criado por outra tentativa): criarNegocio sairia
-    // calado e a pendência antiga ficaria na lista para sempre. Registra o
-    // que já é fato.
-    await prisma.sincronizacaoExterna.create({
-      data: {
-        sistema: "PIPEDRIVE",
-        entidade: "Pedido",
-        entidadeId: pedido.id,
-        acao: "criar-negocio",
-        sucesso: true,
-        referencia: pedido.pipedriveNegocioId,
-      },
-    });
-  } else {
-    await criarNegocio(pedido.id);
-  }
-
-  // Confere se a última tentativa passou a ser sucesso — o reprocessamento
-  // grava uma nova linha em SincronizacaoExterna, e é ela que diz se resolveu.
-  const ultima = await prisma.sincronizacaoExterna.findFirst({
-    where: { sistema: "PIPEDRIVE", entidade: "Pedido", entidadeId: pedido.id },
-    orderBy: { criadaEm: "desc" },
-    select: { sucesso: true, erro: true },
-  });
-
-  if (ultima && !ultima.sucesso) {
-    return { ok: false, erro: ultima.erro ?? "O PipeDrive recusou a sincronização de novo." };
-  }
-  return { ok: true };
+  return r.ok ? { ok: true } : { ok: false, erro: r.erro };
 }
 
 /** Confere token e domínio sem escrever nada no PipeDrive. */
@@ -80,44 +31,41 @@ export async function testarConexaoPipedrive(): Promise<Resultado> {
 const LOTE = 20;
 
 /**
- * Reprocessa as pendências em lote (ata de 21/10: 60 agendamentos sem
- * negócio). Antes de qualquer escrita testa a conexão — com domínio ou token
- * errado, as 60 falhariam do mesmo jeito e só encheriam o histórico. Para no
- * primeiro erro, pelo mesmo motivo.
+ * Reprocessa as pendências em lote (ata de 21/10). A mesma rotina roda
+ * sozinha todo dia de manhã (app/api/rotinas/mensagens).
  */
 export async function reprocessarTodasPipedrive(): Promise<Resultado> {
   await exigirResponsavel();
-  if (!pipedriveConfigurado()) return { ok: false, erro: "Integração não configurada." };
-
-  const teste = await testarConexao();
-  if (!teste.ok) return { ok: false, erro: teste.erro };
-
-  const tentativas = await prisma.sincronizacaoExterna.findMany({
-    where: { sistema: "PIPEDRIVE", entidade: "Pedido" },
-    orderBy: { criadaEm: "desc" },
-    take: 500,
-    select: { entidadeId: true, acao: true, sucesso: true, erro: true, criadaEm: true },
-  });
-  const pedidoIds = [...new Set(pendenciasDeSincronizacao(tentativas).map((p) => p.entidadeId))];
-  const existentes = new Set(
-    (await prisma.pedido.findMany({ where: { id: { in: pedidoIds } }, select: { id: true } })).map((p) => p.id)
-  );
-  const fila = pedidoIds.filter((id) => existentes.has(id));
-
-  let feitos = 0;
-  for (const id of fila.slice(0, LOTE)) {
-    const resultado = await reprocessarUm(id);
-    if (!resultado.ok) {
-      revalidatePath("/painel/integracoes");
-      return { ok: false, erro: `${feitos} sincronizado(s); parou no erro: ${resultado.erro}` };
-    }
-    feitos++;
-  }
-
+  const r = await reprocessarPendenciasPipedrive(LOTE);
   revalidatePath("/painel/integracoes");
-  const restam = fila.length - feitos;
+  if (r.erro) return { ok: false, erro: `${r.feitos} sincronizado(s); parou no erro: ${r.erro}` };
   return {
     ok: true,
-    avisos: [`${feitos} sincronizado(s).${restam > 0 ? ` Restam ${restam} — clique de novo.` : ""}`],
+    avisos: [`${r.feitos} sincronizado(s).${r.restam > 0 ? ` Restam ${r.restam} — clique de novo.` : ""}`],
+  };
+}
+
+/**
+ * Devolve à fila as mensagens de WhatsApp que falharam e despacha (revisão de
+ * 25/10). As que perderam o sentido — atendimento que já passou — o próprio
+ * despacho cancela em vez de mandar informação velha.
+ */
+export async function reenviarFalhasWhatsapp(): Promise<Resultado> {
+  await exigirResponsavel();
+  if (!process.env.WHATSAPP_API_URL) return { ok: false, erro: "WHATSAPP_API_URL não configurada." };
+
+  const { count } = await prisma.mensagemWhatsapp.updateMany({
+    where: { status: "FALHA" },
+    data: { status: "PENDENTE", erro: null },
+  });
+  const entrega = await despacharPendentes(LOTE);
+  revalidatePath("/painel/integracoes");
+
+  if (entrega.interrompido) return { ok: false, erro: entrega.interrompido };
+  return {
+    ok: true,
+    avisos: [
+      `${count} devolvida(s) à fila · ${entrega.enviadas} enviada(s) · ${entrega.canceladas} cancelada(s) por já terem passado · ${entrega.falhas} falha(s).`,
+    ],
   };
 }
