@@ -53,12 +53,18 @@ export default async function NovoPedido({ searchParams }: { searchParams: { cli
     if (camposFaltando(c).length > 0) return "cadastro incompleto";
     return "";
   };
-  const lista: ClinicaDaLista[] = todas.map((c) => ({
-    id: c.id,
-    nome: c.nome,
-    local: [c.cidade, c.uf].filter(Boolean).join(" / "),
-    situacao: situacaoDe(c),
-  }));
+  // Título de negócio do PipeDrive ("2021 0334 Dr Fulano") que entrou na
+  // importação do CRM como se fosse clínica: não é cadastro, fica de fora.
+  const tituloDeNegocio = (nome: string) => /^\d{4}\s+\d{3,5}\s/.test(nome);
+  const lista: ClinicaDaLista[] = todas
+    .filter((c) => !(c.preCadastro && tituloDeNegocio(c.nome)))
+    .map((c) => ({
+      id: c.id,
+      nome: c.nome,
+      local: [c.cidade, c.uf].filter(Boolean).join(" / "),
+      situacao: situacaoDe(c),
+      doCrm: c.preCadastro,
+    }));
 
   const escolhidaId = todas.some((c) => c.id === searchParams.clinica) ? searchParams.clinica! : null;
 
