@@ -11,7 +11,8 @@
  */
 
 import { prisma } from "@/lib/prisma";
-import { formatarData, instanteDoAtendimento } from "@/lib/data";
+import { formatarData, formatarDataCurta, instanteDoAtendimento } from "@/lib/data";
+import { mensagemDeAtraso, mensagemDeFeedback } from "@/lib/whatsapp-link";
 import { corpoParaDilonZap, descreverErroDeRede, interpretarResposta, mensagemVencida, urlDoDilonZap } from "@/lib/integracoes/dilon-zap";
 import { codigoDoPedido } from "@/lib/numeracao";
 import { normalizarTelefone } from "@/lib/slug";
@@ -52,13 +53,22 @@ function montarTexto(tipo: TipoMensagem, pedido: DadosPedido): string {
       return `Lembrete: ${pedido.servico.nome} na ${pedido.clinica.nome} amanhã, ${quando}. Agendamento ${codigo}.`;
     case "RESULTADO":
       return `Atendimento ${codigo} (${pedido.servico.nome}, ${quando}) finalizado. Obrigado!`;
+    case "FEEDBACK":
+      return mensagemDeFeedback({ clinica: pedido.clinica.nome, servico: pedido.servico.nome, data: formatarDataCurta(pedido.data) });
+    case "COBRANCA_RELATORIO":
+      return `Olá, ${pedido.profissional?.nome?.split(" ")[0] ?? ""}! O relatório do atendimento de ${pedido.servico.nome} na ${pedido.clinica.nome} (${formatarDataCurta(pedido.data)}) ainda não chegou. Pode enviar pelo app da Hemoderi? O valor é liberado depois da conferência.`;
+    case "ATRASO": {
+      const minutos = Math.max(0, Math.round((Date.now() - instanteDoAtendimento(pedido.data, pedido.horaInicio).getTime()) / 60000));
+      return mensagemDeAtraso({ clinica: pedido.clinica.nome, servico: pedido.servico.nome, hora: pedido.horaInicio, minutos });
+    }
   }
 }
 
 function destinatarioDe(tipo: TipoMensagem, pedido: DadosPedido): string {
   // A clínica recebe no contato que informou para ESTE agendamento ("contato da
   // clínica para confirmação", ata de 13/10); sem ele, no telefone do cadastro.
-  const alvo = tipo === "ALOCACAO" ? pedido.profissional?.telefone : pedido.contatoClinica || pedido.clinica.telefone;
+  const paraProfissional = tipo === "ALOCACAO" || tipo === "COBRANCA_RELATORIO";
+  const alvo = paraProfissional ? pedido.profissional?.telefone : pedido.contatoClinica || pedido.clinica.telefone;
   return normalizarTelefone(alvo);
 }
 
@@ -123,7 +133,7 @@ export async function enfileirarMensagem(
  */
 export async function reenviarMensagem(
   pedidoId: string,
-  tipo: "CONFIRMACAO" | "ALOCACAO"
+  tipo: "CONFIRMACAO" | "ALOCACAO" | "FEEDBACK" | "COBRANCA_RELATORIO" | "ATRASO"
 ): Promise<{ ok: true; destinatario: string } | { ok: false; erro: string }> {
   const pedido = await prisma.pedido.findUnique({
     where: { id: pedidoId },
@@ -139,13 +149,18 @@ export async function reenviarMensagem(
     },
   });
   if (!pedido) return { ok: false, erro: "Agendamento não encontrado." };
-  if (tipo === "ALOCACAO" && !pedido.profissional) return { ok: false, erro: "Ainda sem profissional alocado." };
+  if ((tipo === "ALOCACAO" || tipo === "COBRANCA_RELATORIO") && !pedido.profissional) {
+    return { ok: false, erro: "Ainda sem profissional alocado." };
+  }
 
   const destinatario = destinatarioDe(tipo, pedido);
   if (!destinatario) {
     return {
       ok: false,
-      erro: tipo === "ALOCACAO" ? "O profissional não tem telefone cadastrado." : "A clínica não tem telefone de contato.",
+      erro:
+        tipo === "ALOCACAO" || tipo === "COBRANCA_RELATORIO"
+          ? "O profissional não tem telefone cadastrado."
+          : "A clínica não tem telefone de contato.",
     };
   }
   if (!urlDoDilonZap(process.env.WHATSAPP_API_URL)) return { ok: false, erro: "O envio pelo Dilon Zap não está configurado." };
@@ -160,7 +175,7 @@ export async function reenviarMensagem(
 
   const entrega = await despacharPendentes(1, mensagem.id);
   if (entrega.enviadas === 1) return { ok: true, destinatario };
-  if (entrega.canceladas === 1) return { ok: false, erro: "O atendimento já passou: a mensagem não foi enviada." };
+  if (entrega.canceladas === 1) return { ok: false, erro: "A mensagem perdeu o prazo e não foi enviada." };
   const final = await prisma.mensagemWhatsapp.findUnique({ where: { id: mensagem.id }, select: { erro: true } });
   return { ok: false, erro: entrega.interrompido ?? final?.erro ?? "O Dilon Zap não aceitou a mensagem." };
 }

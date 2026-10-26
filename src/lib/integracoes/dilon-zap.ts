@@ -83,6 +83,9 @@ export function interpretarResposta(status: number, corpo: unknown): Desfecho {
  */
 const VALIDADE_RESULTADO_MS = 2 * 24 * 60 * 60 * 1000;
 
+/** Aviso de atraso só faz sentido no dia: depois de 6 horas do horário, não sai. */
+const VALIDADE_ATRASO_MS = 6 * 60 * 60 * 1000;
+
 export function mensagemVencida(params: {
   tipo: TipoMensagem;
   criadaEm: Date;
@@ -90,7 +93,15 @@ export function mensagemVencida(params: {
   inicioDoAtendimento: Date | null;
   agora: Date;
 }): boolean {
-  if (params.tipo === "RESULTADO") return params.agora.getTime() - params.criadaEm.getTime() > VALIDADE_RESULTADO_MS;
+  // Feedback e cobrança de relatório são DEPOIS do atendimento, por natureza:
+  // valem como o aviso de resultado, por dois dias desde que a equipe mandou.
+  if (params.tipo === "RESULTADO" || params.tipo === "FEEDBACK" || params.tipo === "COBRANCA_RELATORIO") {
+    return params.agora.getTime() - params.criadaEm.getTime() > VALIDADE_RESULTADO_MS;
+  }
+  if (params.tipo === "ATRASO") {
+    if (!params.inicioDoAtendimento) return false;
+    return params.agora.getTime() - params.inicioDoAtendimento.getTime() > VALIDADE_ATRASO_MS;
+  }
   if (!params.inicioDoAtendimento) return false;
   return params.inicioDoAtendimento.getTime() <= params.agora.getTime();
 }

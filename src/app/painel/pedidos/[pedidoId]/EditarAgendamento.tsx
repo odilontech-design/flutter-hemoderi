@@ -33,8 +33,12 @@ export function EditarAgendamento({
   dados,
   grupos,
   locais,
+  aberto = false,
+  rotulo = "Editar agendamento",
 }: {
   dados: DadosEditaveis;
+  aberto?: boolean;
+  rotulo?: string;
   grupos: { familia: string; servicos: { id: string; nome: string }[] }[];
   locais: { id: string; rotulo: string }[];
 }) {
@@ -42,8 +46,8 @@ export function EditarAgendamento({
   const jaConfirmado = dados.status !== "SOLICITADO";
 
   return (
-    <details className="mb-3 bg-white rounded-2xl border border-gray-200 px-5 py-3">
-      <summary className="cursor-pointer select-none text-xs font-semibold text-bordo">Editar agendamento</summary>
+    <details open={aberto} className="mb-3 bg-white rounded-2xl border border-gray-200 px-5 py-3">
+      <summary className="cursor-pointer select-none text-xs font-semibold text-bordo">{rotulo}</summary>
       <div className="mt-3">
         <div className="text-[11px] text-gray-500 mb-3 leading-relaxed">
           Mudar <strong>data, horário, local ou serviço</strong>

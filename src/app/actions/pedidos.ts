@@ -1966,3 +1966,161 @@ export async function marcarAgendaSalva(pedidoId: string): Promise<Resultado> {
   revalidatePath(`/painel/pedidos/${pedido.id}`);
   return { ok: true };
 }
+
+/**
+ * Editar a VISITA inteira (reunião de 27/10: "editar ao passar por cima do
+ * agendamento e não somente do serviço"). Numa visita com vários serviços, o
+ * que é da visita muda em todos de uma vez: data, horário de início (os
+ * serviços seguem em sequência, com os mesmos intervalos), local, doutor,
+ * contato, procedimento, forma de pagamento e observações. O paciente fica por
+ * serviço — cada um pode ser de um paciente diferente.
+ *
+ * Mesma regra da edição de um serviço: mudar data, horário ou local de uma
+ * visita já confirmada devolve tudo para a aprovação e libera profissional e
+ * equipamento.
+ */
+export async function editarVisita(_anterior: Resultado, dados: FormData): Promise<Resultado> {
+  const sessao = await exigirInterno();
+  if (!perfilPermite(sessao.perfil, "COMERCIAL", "ATENDENTE", "POS_VENDA")) {
+    return { ok: false, erro: "Só o comercial edita o agendamento." };
+  }
+
+  const grupoId = String(dados.get("grupoId") ?? "");
+  const membros = grupoId
+    ? await prisma.pedido.findMany({
+        where: { grupoId, status: { in: STATUS_ATIVOS } },
+        orderBy: [{ data: "asc" }, { horaInicio: "asc" }],
+        include: {
+          servico: {
+            select: {
+              id: true,
+              unidadeCobranca: true,
+              permiteQuantidade: true,
+              quantidadeMaxima: true,
+              quantidadeMinima: true,
+              quantidadeIncluida: true,
+              valorAdicionalCentavos: true,
+            },
+          },
+        },
+      })
+    : [];
+  if (membros.length === 0) return { ok: false, erro: "Agendamento não encontrado ou já finalizado." };
+  const primeiro = membros[0];
+
+  const dataISO = String(dados.get("data") ?? "");
+  const horaInicio = String(dados.get("horaInicio") ?? "");
+  if (!dataISO || !horaInicio) return { ok: false, erro: "Data e horário são obrigatórios." };
+
+  const enderecoId = String(dados.get("enderecoId") ?? "") || null;
+  const endereco = enderecoId
+    ? await prisma.enderecoClinica.findFirst({
+        where: { id: enderecoId, clinicaId: primeiro.clinicaId, ativo: true },
+        select: { id: true, uf: true },
+      })
+    : null;
+  if (enderecoId && !endereco) return { ok: false, erro: "Endereço não encontrado para esta clínica." };
+
+  const forma = String(dados.get("formaPagamento") ?? "").trim();
+  if (forma && !formaDePagamentoValida(forma)) return { ok: false, erro: "Forma de pagamento: Pix, dinheiro ou cheque." };
+  const contatoTexto = String(dados.get("contatoClinica") ?? "").trim();
+  const contato = contatoTexto ? lerTelefoneBrasileiro(contatoTexto) : null;
+  if (contatoTexto && !contato) return { ok: false, erro: `Contato da clínica: ${MENSAGEM_TELEFONE_INVALIDO}` };
+
+  const novaData = dataDeISO(dataISO);
+  const mudouData = isoDeData(primeiro.data) !== dataISO || primeiro.horaInicio !== horaInicio;
+  const mudouLocal = (endereco?.id ?? null) !== (primeiro.enderecoId ?? null);
+  const critico = mudouData || mudouLocal;
+  const reaprovar = critico && membros.some((m) => m.status !== "SOLICITADO");
+
+  // Os serviços continuam em sequência, com os mesmos intervalos entre eles.
+  const deslocamento = paraMinutos(horaInicio) - paraMinutos(primeiro.horaInicio);
+  const novos = membros.map((m) => ({ ...m, novaHora: paraMinutos(m.horaInicio) + deslocamento }));
+  const fimDoUltimo = Math.max(...novos.map((m) => m.novaHora + m.duracaoMin));
+  if (novos.some((m) => m.novaHora < 0) || fimDoUltimo > 24 * 60) {
+    return { ok: false, erro: "Com esse horário a visita passaria da meia-noite. Escolha um horário mais cedo." };
+  }
+  const duracaoTotal = fimDoUltimo - paraMinutos(horaInicio);
+
+  const valores = new Map<string, number>();
+  if (mudouLocal) {
+    for (const m of membros) {
+      const unitario = await valorDoServico(m.clinicaId, m.servicoId, endereco?.uf);
+      valores.set(m.id, totalDoItem(unitario, m.quantidade, m.servico));
+    }
+  }
+
+  const resultado = await prisma.$transaction(async (tx) => {
+    if (critico) {
+      await travarRecursos(tx, { clinicaId: primeiro.clinicaId });
+      const impedimentos = await verificarAlocacao(
+        { clinicaId: primeiro.clinicaId, data: novaData, horaInicio, duracaoMin: duracaoTotal, ignorarGrupoId: grupoId },
+        tx
+      );
+      if (temBloqueio(impedimentos)) {
+        return { ok: false as const, erro: impedimentos.filter((i) => i.bloqueante).map((i) => i.mensagem).join(" ") };
+      }
+    }
+    for (const m of novos) {
+      await tx.pedido.update({
+        where: { id: m.id },
+        data: {
+          data: novaData,
+          horaInicio: paraHora(m.novaHora),
+          enderecoId: endereco?.id ?? null,
+          ...(valores.has(m.id) ? { valorServicoCentavos: valores.get(m.id) } : {}),
+          doutorNome: String(dados.get("doutorNome") ?? "").trim() || null,
+          ...(contato ? { contatoClinica: formatarTelefoneBrasileiro(contato) } : {}),
+          procedimentoPaciente: String(dados.get("procedimentoPaciente") ?? "").trim().slice(0, 120) || null,
+          formaPagamento: forma || null,
+          observacoes: String(dados.get("observacoes") ?? "").trim() || null,
+          ...(reaprovar ? { status: "SOLICITADO" as const, profissionalId: null, equipamentoId: null, aceitoEm: null } : {}),
+        },
+      });
+    }
+    return { ok: true as const };
+  });
+  if (!resultado.ok) return resultado;
+
+  if (critico) {
+    await prisma.mensagemWhatsapp.deleteMany({
+      where: {
+        pedidoId: { in: membros.map((m) => m.id) },
+        tipo: { in: ["CONFIRMACAO", "ALOCACAO", "LEMBRETE"] },
+        status: "PENDENTE",
+      },
+    });
+    for (const m of membros) await sincronizarEvento(m.id);
+  }
+  await registrarAuditoria(
+    sessao.usuarioId,
+    "Pedido",
+    primeiro.id,
+    "editar-visita",
+    [mudouData && `data/hora → ${dataISO} ${horaInicio}`, mudouLocal && "local", reaprovar && "voltou para aprovação"]
+      .filter(Boolean)
+      .join(" · ") || "dados da visita"
+  );
+
+  atualizarTelas();
+  for (const m of membros) revalidatePath(`/painel/pedidos/${m.id}`);
+  return { ok: true };
+}
+
+/**
+ * Comunicação da equipe pela central do Dilon Zap (27/10: "toda integração
+ * para enviar qualquer comunicação precisa ser por lá"). Substitui os links
+ * que abriam o WhatsApp do próprio computador: feedback à clínica, cobrança
+ * de relatório ao profissional e aviso de atraso à clínica.
+ */
+export async function enviarPelaCentral(
+  pedidoId: string,
+  tipo: "FEEDBACK" | "COBRANCA_RELATORIO" | "ATRASO"
+): Promise<Resultado> {
+  const sessao = await exigirInterno();
+  const r = await reenviarMensagem(pedidoId, tipo);
+  const rotulo = { FEEDBACK: "pedido de feedback", COBRANCA_RELATORIO: "cobrança de relatório", ATRASO: "aviso de atraso" }[tipo];
+  await registrarAuditoria(sessao.usuarioId, "Pedido", pedidoId, `whatsapp-${tipo.toLowerCase()}`, r.ok ? "enviado" : r.erro);
+  revalidatePath("/painel/integracoes");
+  return r.ok ? { ok: true, avisos: [`${rotulo} enviado pela central`] } : { ok: false, erro: r.erro };
+}

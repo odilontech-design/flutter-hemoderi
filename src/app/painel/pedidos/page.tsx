@@ -13,7 +13,6 @@ import { formatarReais } from "@/lib/dinheiro";
 import { etapaDoPerfil, etapasDoPerfil } from "@/lib/esteira";
 import { formatarAtraso, houveAtraso, minutosDeAtraso } from "@/lib/atraso";
 import { hojeUTC } from "@/lib/data";
-import { linkWhatsapp, mensagemDeFeedback } from "@/lib/whatsapp-link";
 import { profissionaisIndisponiveis } from "@/lib/alocacao";
 
 /** Marca no seletor quem declarou ausência no horário — alocável, com aviso. */
@@ -26,7 +25,7 @@ import { ValorServico } from "./ValorServico";
 import { perfilPermite } from "@/lib/papeis";
 import { AgendaDaEquipe } from "@/components/AgendaDaEquipe";
 import { BotaoAcao } from "@/components/BotaoAcao";
-import { enviarConfirmacoesWhatsapp } from "@/app/actions/pedidos";
+import { enviarConfirmacoesWhatsapp, enviarPelaCentral } from "@/app/actions/pedidos";
 import { eventoParaEquipe } from "@/lib/evento-equipe";
 import { condicaoValida } from "@/lib/pagamento";
 
@@ -34,6 +33,8 @@ export const dynamic = "force-dynamic";
 
 /** Só o que ainda está em andamento se agrupa: relatório e conferência são por serviço. */
 const STATUS_AGRUPAVEIS: StatusPedido[] = ["SOLICITADO", "CONFIRMADO", "ALOCADO"];
+/** O que ainda se edita: o mesmo recorte da página de detalhe (STATUS_ATIVOS). */
+const STATUS_EDITAVEIS: StatusPedido[] = ["SOLICITADO", "CONFIRMADO", "ALOCADO"];
 
 /**
  * A esteira. É a tela de trabalho da equipe, e abre na ETAPA de quem entrou
@@ -54,6 +55,8 @@ export default async function Esteira({
   const sessao = await exigirInterno();
 
   const minhaEtapa = etapaDoPerfil(sessao.perfil);
+  // Quem edita o agendamento: o mesmo perfil da página de detalhe.
+  const podeEditarAgendamento = perfilPermite(sessao.perfil, "COMERCIAL", "ATENDENTE", "POS_VENDA");
   // Cada perfil vê só as etapas do seu setor (ata de 02/10); pedir uma aba que
   // não é sua pela URL cai na própria fila.
   const etapasVisiveis = etapasDoPerfil(sessao.perfil);
@@ -201,6 +204,7 @@ export default async function Esteira({
                   membros={membros}
                   perfil={sessao.perfil}
                   podeEditarValor={perfilPermite(sessao.perfil, "COMERCIAL")}
+                  podeEditarAgendamento={podeEditarAgendamento}
                   profissionais={profissionais
                     .filter(
                       (prof) =>
@@ -241,7 +245,13 @@ export default async function Esteira({
               );
             }
             return (
-            <Cartao key={pedido.id} className="!p-4">
+            <Cartao key={pedido.id} className="!p-4 relative group">
+              {/* Editar o agendamento ao passar o mouse no cartão (27/10). */}
+              {podeEditarAgendamento && STATUS_EDITAVEIS.includes(pedido.status) && (
+                <Link href={`/painel/pedidos/${pedido.id}?editar=1`} className="absolute -top-3 right-4 z-10 text-[11px] font-semibold text-bordo bg-white border border-bordo/30 rounded-lg px-2.5 py-1 shadow-sm sm:opacity-0 sm:group-hover:opacity-100 focus:opacity-100 transition-opacity">
+                  ✏️ Editar agendamento
+                </Link>
+              )}
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div className="min-w-0">
                   <div className="flex items-center gap-2 mb-1">
@@ -432,29 +442,15 @@ export default async function Esteira({
                     </div>
                   )}
                   {/* Passou do dia e o relatório não veio (revisão de 25/10):
-                      quem cobra é a central, pelo WhatsApp do profissional. */}
-                  {pedido.status === "ALOCADO" &&
-                    !pedido.relatorio &&
-                    pedido.data.getTime() < hojeUTC().getTime() &&
-                    (() => {
-                      const link = linkWhatsapp(
-                        pedido.profissional?.telefone,
-                        `Olá, ${pedido.profissional?.nome?.split(" ")[0] ?? ""}! O relatório do atendimento de ${pedido.servico.nome} na ${pedido.clinica.nome} (${formatarDataCurta(pedido.data)}) ainda não chegou. Pode enviar pelo app da Hemoderi? O valor é liberado depois da conferência.`
-                      );
-                      return (
-                        <div className="mt-1 text-[10px] font-semibold text-amber-700">
-                          atendimento passou sem relatório
-                          {link && (
-                            <>
-                              {" · "}
-                              <a href={link} target="_blank" rel="noopener noreferrer" className="text-[#1EA952] hover:underline">
-                                cobrar no WhatsApp →
-                              </a>
-                            </>
-                          )}
-                        </div>
-                      );
-                    })()}
+                      a central cobra o profissional — pelo Dilon Zap (27/10). */}
+                  {pedido.status === "ALOCADO" && !pedido.relatorio && pedido.data.getTime() < hojeUTC().getTime() && (
+                    <div className="mt-1 flex flex-wrap items-center gap-2 text-[10px] font-semibold text-amber-700">
+                      atendimento passou sem relatório
+                      <BotaoAcao acao={enviarPelaCentral.bind(null, pedido.id, "COBRANCA_RELATORIO")}>
+                        Cobrar relatório pelo WhatsApp
+                      </BotaoAcao>
+                    </div>
+                  )}
                   {pedido.relatorio &&
                     !pedido.relatorio.aprovadoEm &&
                     !pedido.relatorio.devolvidoEm &&
@@ -471,31 +467,11 @@ export default async function Esteira({
                       <span className="text-[10px] font-semibold text-green-700">
                         relatório conferido · repasse liberado
                       </span>
-                      {/* Feedback via WhatsApp (ata de 28/09): depois de
-                          aprovar, o pós-venda avisa a clínica que o relatório
-                          está pronto e pede a avaliação. Só aparece com um
-                          número para onde mandar — sem telefone, o link abriria
-                          em branco. */}
-                      {(() => {
-                        const link = linkWhatsapp(
-                          pedido.clinica.telefone,
-                          mensagemDeFeedback({
-                            clinica: pedido.clinica.nome,
-                            servico: pedido.servico.nome,
-                            data: formatarDataCurta(pedido.data),
-                          })
-                        );
-                        return link ? (
-                          <a
-                            href={link}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="inline-flex items-center gap-1 text-[10px] font-semibold text-[#1EA952] hover:underline"
-                          >
-                            pedir feedback no WhatsApp →
-                          </a>
-                        ) : null;
-                      })()}
+                      {/* Feedback (ata de 28/09): depois de aprovar, o pós-venda
+                          pede a avaliação à clínica — pela central do Dilon Zap (27/10). */}
+                      <BotaoAcao acao={enviarPelaCentral.bind(null, pedido.id, "FEEDBACK")}>
+                        Pedir feedback pelo WhatsApp
+                      </BotaoAcao>
                     </div>
                   )}
                   {pedido.relatorio?.latitude != null && pedido.relatorio?.longitude != null && (
@@ -616,12 +592,14 @@ function CartaoDoGrupo({
   membros,
   perfil,
   podeEditarValor,
+  podeEditarAgendamento,
   profissionais,
   profissionaisPorServico,
 }: {
   membros: PedidoDaEsteira[];
   perfil: PerfilInterno;
   podeEditarValor: boolean;
+  podeEditarAgendamento: boolean;
   profissionais: { id: string; nome: string }[];
   profissionaisPorServico: Record<string, { id: string; nome: string }[]>;
 }) {
@@ -630,7 +608,12 @@ function CartaoDoGrupo({
   const contar = (status: StatusPedido) => membros.filter((m) => m.status === status).length;
 
   return (
-    <Cartao className="!p-4 border-bordo/20">
+    <Cartao className="!p-4 border-bordo/20 relative group">
+      {podeEditarAgendamento && membros.some((m) => STATUS_EDITAVEIS.includes(m.status)) && (
+        <Link href={`/painel/pedidos/${primeiro.id}?editar=1`} className="absolute -top-3 right-4 z-10 text-[11px] font-semibold text-bordo bg-white border border-bordo/30 rounded-lg px-2.5 py-1 shadow-sm sm:opacity-0 sm:group-hover:opacity-100 focus:opacity-100 transition-opacity">
+          ✏️ Editar agendamento
+        </Link>
+      )}
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0">
           <div className="text-[10px] uppercase tracking-wide text-bordo font-semibold">

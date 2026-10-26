@@ -11,7 +11,8 @@ import { falhasRecentes } from "@/lib/integracoes/google-agenda";
 import { Aviso } from "@/components/ui";
 import { FiltroProdutividade } from "./FiltroProdutividade";
 import { formatarAtraso, statusDeChegada } from "@/lib/atraso";
-import { linkWhatsapp, mensagemDeAtraso } from "@/lib/whatsapp-link";
+import { BotaoAcao } from "@/components/BotaoAcao";
+import { enviarPelaCentral } from "@/app/actions/pedidos";
 import { formatarDataCurta } from "@/lib/data";
 import { etapaPorChave } from "@/lib/esteira";
 import { resumoDoEndereco, comEnderecoDoPedido } from "@/lib/endereco";
@@ -312,18 +313,6 @@ export default async function Hoje({ searchParams }: { searchParams: { servico?:
                     pedido.profissionalId && (pedido.status === "ALOCADO" || pedido.checkinEm)
                       ? statusDeChegada(pedido.data, pedido.horaInicio, pedido.checkinEm, agora)
                       : null;
-                  const avisar =
-                    chegada?.tipo === "atrasado"
-                      ? linkWhatsapp(
-                          pedido.clinica.telefone,
-                          mensagemDeAtraso({
-                            clinica: pedido.clinica.nome,
-                            servico: pedido.servico.nome,
-                            hora: pedido.horaInicio,
-                            minutos: chegada.minutos,
-                          })
-                        )
-                      : null;
                   return (
                     <tr key={pedido.id} className="border-b border-gray-100 last:border-0 align-top">
                       <td className="py-2 pr-3 font-semibold">
@@ -358,16 +347,10 @@ export default async function Hoje({ searchParams }: { searchParams: { servico?:
                             <span className="text-[11px] font-semibold text-red-600">
                               atrasado há {formatarAtraso(chegada.minutos)}
                             </span>
-                            {avisar && (
-                              <a
-                                href={avisar}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="block text-[10px] font-semibold text-[#1EA952] hover:underline"
-                              >
-                                avisar a clínica →
-                              </a>
-                            )}
+                            {/* Aviso à clínica pela central do Dilon Zap (27/10). */}
+                            <div className="mt-1">
+                              <BotaoAcao acao={enviarPelaCentral.bind(null, pedido.id, "ATRASO")}>Avisar a clínica</BotaoAcao>
+                            </div>
                           </div>
                         ) : (
                           <span className="text-[11px] text-gray-400">aguardando</span>

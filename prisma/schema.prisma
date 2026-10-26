@@ -1674,6 +1674,10 @@ enum TipoMensagem {
   ALOCACAO // profissional avisado de que assumiu o atendimento
   LEMBRETE // véspera do atendimento
   RESULTADO // realizado / faltou
+  /// Enviadas pela equipe sob demanda, pela central do Dilon Zap (27/10):
+  FEEDBACK // pós-venda pede a avaliação à clínica depois do relatório aprovado
+  COBRANCA_RELATORIO // central cobra o relatório do profissional
+  ATRASO // central avisa a clínica que o profissional está atrasado
 }
 
 enum StatusMensagem {

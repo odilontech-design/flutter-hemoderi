@@ -67,3 +67,17 @@ test("erro de rede diz a causa", () => {
   assert.match(descreverErroDeRede(dns), /endereço não encontrado \(zap\.errado\)/);
   assert.equal(descreverErroDeRede(Object.assign(new Error("x"), { name: "TimeoutError" })), "sem resposta a tempo");
 });
+
+test("feedback e cobrança de relatório saem depois do atendimento; aviso de atraso só no dia", () => {
+  const inicio = new Date("2026-10-26T13:00:00Z");
+  const agora = new Date("2026-10-27T10:00:00Z");
+  // Feedback e cobrança: o atendimento já passou e ainda assim valem (2 dias desde a criação).
+  assert.equal(mensagemVencida({ tipo: "FEEDBACK", criadaEm: agora, inicioDoAtendimento: inicio, agora }), false);
+  assert.equal(mensagemVencida({ tipo: "COBRANCA_RELATORIO", criadaEm: agora, inicioDoAtendimento: inicio, agora }), false);
+  // Atraso: vale nas primeiras horas, não no dia seguinte.
+  assert.equal(
+    mensagemVencida({ tipo: "ATRASO", criadaEm: inicio, inicioDoAtendimento: inicio, agora: new Date("2026-10-26T13:40:00Z") }),
+    false
+  );
+  assert.equal(mensagemVencida({ tipo: "ATRASO", criadaEm: agora, inicioDoAtendimento: inicio, agora }), true);
+});

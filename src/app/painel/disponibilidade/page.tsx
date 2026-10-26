@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { exigirInterno } from "@/lib/sessao";
+import { prisma } from "@/lib/prisma";
 import { perfilPermite } from "@/lib/papeis";
 import { Cartao, Tabela, Titulo, Vazio } from "@/components/ui";
 import { hojeUTC, isoDeData, somarDias } from "@/lib/data";
@@ -62,7 +63,30 @@ export default async function DisponibilidadeDaEquipe({
   const semana = Math.min(Math.max(Math.trunc(Number(searchParams.semana)) || 0, 0), 8);
   const primeiro = somarDias(hojeUTC(), semana * DIAS_NA_GRADE);
   const dias = Array.from({ length: DIAS_NA_GRADE }, (_, i) => somarDias(primeiro, i));
-  const todos = await disponibilidadeDaEquipe(dias);
+  const [todos, ausencias] = await Promise.all([
+    disponibilidadeDaEquipe(dias),
+    // O que cada profissional declarou como indisponível (reunião de 27/10):
+    // dia, horário e motivo, para a logística não precisar perguntar.
+    prisma.bloqueio.findMany({
+      where: { data: { gte: dias[0], lte: dias[dias.length - 1] }, profissional: { ativo: true } },
+      orderBy: [{ data: "asc" }, { horaInicio: "asc" }],
+      select: {
+        profissionalId: true,
+        data: true,
+        horaInicio: true,
+        horaFim: true,
+        motivo: true,
+        profissional: { select: { nome: true } },
+      },
+    }),
+  ]);
+  const horarioDaAusencia = (a: { horaInicio: string | null; horaFim: string | null }) =>
+    a.horaInicio && a.horaFim ? `${a.horaInicio}–${a.horaFim}` : "dia inteiro";
+  const ausenciasDoDia = new Map<string, typeof ausencias>();
+  for (const a of ausencias) {
+    const chave = `${a.profissionalId}|${isoDeData(a.data)}`;
+    ausenciasDoDia.set(chave, [...(ausenciasDoDia.get(chave) ?? []), a]);
+  }
   const colunas = dias.map((d) => isoDeData(d));
 
   const busca = (searchParams.q ?? "").trim().toLowerCase();
@@ -205,7 +229,11 @@ export default async function DisponibilidadeDaEquipe({
                     <div className="flex gap-1">
                       {dia.turnos.map((t) => {
                         const inicial = TURNOS_GRADE.find((g) => g.chave === t.turno)?.rotulo.charAt(0) ?? "?";
-                        const titulo = `${ROTULO_ESTADO[t.estado]}${t.atendimentos > 0 ? ` · ${t.atendimentos} atendimento(s)` : ""}`;
+                        const doDia = t.estado === "ausente" ? ausenciasDoDia.get(`${linha.profissionalId}|${dia.iso}`) ?? [] : [];
+                        const detalheAusencia = doDia
+                          .map((a) => `${horarioDaAusencia(a)}${a.motivo ? ` — ${a.motivo}` : ""}`)
+                          .join("; ");
+                        const titulo = `${ROTULO_ESTADO[t.estado]}${t.atendimentos > 0 ? ` · ${t.atendimentos} atendimento(s)` : ""}${detalheAusencia ? ` · ${detalheAusencia}` : ""}`;
                         return (
                           <span
                             key={t.turno}
@@ -222,6 +250,32 @@ export default async function DisponibilidadeDaEquipe({
                 ))}
               </tr>
             ))}
+          </Tabela>
+        )}
+      </Cartao>
+
+      {/* A lista do que foi declarado como indisponível, por extenso. */}
+      <Cartao className="mt-3">
+        <div className="font-display font-bold text-bordo text-sm mb-2">Indisponibilidades declaradas</div>
+        {ausencias.length === 0 ? (
+          <Vazio>Ninguém declarou indisponibilidade nestes dias.</Vazio>
+        ) : (
+          <Tabela cabecalho={["Profissional", "Dia", "Horário", "Motivo"]}>
+            {ausencias
+              .filter((a) => !busca || a.profissional.nome.toLowerCase().includes(busca))
+              .map((a, i) => {
+                const { dia, data } = cabecalhoDoDia(isoDeData(a.data));
+                return (
+                  <tr key={`${a.profissionalId}-${i}`} className="border-b border-gray-100 last:border-0">
+                    <td className="py-2 pr-3 font-semibold text-bordo whitespace-nowrap">{a.profissional.nome}</td>
+                    <td className="py-2 pr-3 whitespace-nowrap">
+                      {dia} {data}
+                    </td>
+                    <td className="py-2 pr-3 whitespace-nowrap">{horarioDaAusencia(a)}</td>
+                    <td className="py-2 pr-3 text-gray-600">{a.motivo || <span className="text-gray-300">não informado</span>}</td>
+                  </tr>
+                );
+              })}
           </Tabela>
         )}
       </Cartao>

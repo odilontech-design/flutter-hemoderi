@@ -12,6 +12,7 @@ import { eventoParaEquipe } from "@/lib/evento-equipe";
 import { agruparPorFamilia } from "@/lib/familia";
 import { isoDeData } from "@/lib/data";
 import { EditarAgendamento } from "./EditarAgendamento";
+import { EditarVisita } from "./EditarVisita";
 import { Cartao, SeloStatus, Titulo, Vazio } from "@/components/ui";
 import { codigoDoPedido } from "@/lib/numeracao";
 import { formatarData, formatarDataHora } from "@/lib/data";
@@ -33,7 +34,13 @@ export const dynamic = "force-dynamic";
  * aprovar) continuam na esteira, onde a equipe já trabalha em fila. Duplicar
  * os mesmos botões aqui criaria dois lugares para o mesmo clique.
  */
-export default async function DetalheDoPedido({ params }: { params: { pedidoId: string } }) {
+export default async function DetalheDoPedido({
+  params,
+  searchParams,
+}: {
+  params: { pedidoId: string };
+  searchParams: { editar?: string };
+}) {
   const sessao = await exigirInterno();
 
   const pedido = await prisma.pedido.findUnique({
@@ -64,6 +71,14 @@ export default async function DetalheDoPedido({ params }: { params: { pedidoId: 
         locaisDaClinica(pedido.clinicaId),
       ])
     : [[], []];
+  // Os outros serviços da mesma visita, para a edição do agendamento inteiro.
+  const visita = pedido.grupoId
+    ? await prisma.pedido.findMany({
+        where: { grupoId: pedido.grupoId, status: { in: STATUS_ATIVOS } },
+        orderBy: [{ data: "asc" }, { horaInicio: "asc" }],
+        select: { data: true, horaInicio: true, status: true, pacienteNome: true, servico: { select: { nome: true } } },
+      })
+    : [];
   const gruposDeServicos = agruparPorFamilia(servicosDoCatalogo, { fundirSolitarias: false, ordemDoCatalogo: true });
 
   return (
@@ -194,8 +209,31 @@ export default async function DetalheDoPedido({ params }: { params: { pedidoId: 
         </div>
       </Cartao>
 
+      {/* A visita inteira, quando tem mais de um serviço (reunião de 27/10). */}
+      {podeEditar && visita.length > 1 && (
+        <EditarVisita
+          aberto={searchParams.editar === "1"}
+          locais={locais.map((l) => ({ id: l.id, rotulo: l.rotulo }))}
+          dados={{
+            grupoId: pedido.grupoId as string,
+            data: isoDeData(visita[0].data),
+            horaInicio: visita[0].horaInicio,
+            enderecoId: pedido.enderecoId ?? "",
+            doutorNome: pedido.doutorNome ?? "",
+            contatoClinica: pedido.contatoClinica ?? "",
+            procedimentoPaciente: pedido.procedimentoPaciente ?? "",
+            formaPagamento: pedido.formaPagamento ?? "",
+            observacoes: pedido.observacoes ?? "",
+            confirmada: visita.some((m) => m.status !== "SOLICITADO"),
+            servicos: visita.map((m) => ({ horaInicio: m.horaInicio, nome: m.servico.nome, paciente: m.pacienteNome })),
+          }}
+        />
+      )}
+
       {podeEditar && (
         <EditarAgendamento
+          aberto={searchParams.editar === "1" && visita.length <= 1}
+          rotulo={visita.length > 1 ? `Editar só este serviço (${pedido.servico.nome})` : "Editar agendamento"}
           dados={{
             id: pedido.id,
             data: isoDeData(pedido.data),
