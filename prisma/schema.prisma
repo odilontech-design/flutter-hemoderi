@@ -1208,6 +1208,7 @@ model RelatorioAtendimento {
   /// combinado para depois, clínica que vai pagar por boleto…
   observacaoRecebimento String?
   comprovante           ComprovanteRecebimento?
+  anexos                RelatorioAnexo[]
 
   /// A chave PIX que o profissional confirma NO relatório, que pode ser
   /// diferente da do cadastro (conta nova, chave trocada). É a que vale para
@@ -1273,6 +1274,25 @@ model ComprovanteRecebimento {
   tamanho  Int
   dados    Bytes
   criadoEm DateTime @default(now())
+}
+
+/// Arquivos anexados ao relatório pelo profissional (reunião de 28/10): fotos
+/// do atendimento, documentos. Diferente do comprovante de recebimento, são
+/// vários por relatório e opcionais. Guardados no banco, como o comprovante:
+/// saem só por rota com sessão conferida, nunca por URL pública.
+model RelatorioAnexo {
+  id String @id @default(cuid())
+
+  relatorioId String
+  relatorio   RelatorioAtendimento @relation(fields: [relatorioId], references: [id], onDelete: Cascade)
+
+  nome     String
+  tipo     String
+  tamanho  Int
+  dados    Bytes
+  criadoEm DateTime @default(now())
+
+  @@index([relatorioId])
 }
 
 /// Um serviço a mais num relatório. Declarado por quem atendeu e conferido

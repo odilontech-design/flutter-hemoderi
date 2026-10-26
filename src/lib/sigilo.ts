@@ -24,5 +24,30 @@ export function localRevelado(
   return inicio.getTime() - agora.getTime() <= horasAntes * 60 * 60 * 1000;
 }
 
+/** Janela em que um pedido feito pela clínica já é "para já" (reunião de 28/10). */
+const HORAS_DO_AGENDAMENTO_URGENTE = 24;
+
+/**
+ * O local fica aberto desde a alocação quando a clínica agendou pelo portal
+ * com até 24h de antecedência (reunião de 28/10): o pedido já nasce dentro da
+ * janela de revelação, e esconder o endereço de quem foi chamado em cima da
+ * hora só atrapalha. O sigilo continua valendo para o resto — ele existe
+ * contra a escolha a dedo, e um pedido urgente não dá tempo de escolher.
+ */
+export function agendadoDeUltimaHora(pedido: { origem: string; criadoEm: Date; data: Date; horaInicio: string }): boolean {
+  if (pedido.origem !== "PORTAL_CLINICA") return false;
+  const antecedencia = instanteDoAtendimento(pedido.data, pedido.horaInicio).getTime() - pedido.criadoEm.getTime();
+  return antecedencia <= HORAS_DO_AGENDAMENTO_URGENTE * 60 * 60 * 1000;
+}
+
+/** A regra completa: a janela de revelação OU o agendamento de última hora. */
+export function localVisivel(
+  pedido: { origem: string; criadoEm: Date; data: Date; horaInicio: string },
+  horasAntes: number,
+  agora: Date = new Date()
+): boolean {
+  return localRevelado(pedido.data, pedido.horaInicio, horasAntes, agora) || agendadoDeUltimaHora(pedido);
+}
+
 /** O que aparece no lugar do nome enquanto o local está fechado. */
 export const LOCAL_FECHADO = "Clínica informada na véspera";

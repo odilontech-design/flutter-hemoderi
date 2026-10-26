@@ -10,6 +10,7 @@ import { obterLocalizacao } from "@/lib/geolocalizacao";
 import { CAMPOS_AGENDAMENTO, CAMPOS_CLINICOS, NAO_SE_APLICA } from "@/lib/relatorio";
 import { FORMAS_RECEBIMENTO, SITUACOES_RECEBIMENTO } from "@/lib/recebimento";
 import { reduzirImagem } from "@/lib/reduzir-imagem";
+import { AnexosDoRelatorio, type AnexoGuardado } from "./AnexosDoRelatorio";
 import { useConfirmarSalvo } from "@/components/ConfirmacaoSalvo";
 
 const INICIAL: Resultado = { ok: false };
@@ -410,6 +411,7 @@ export function FormularioRelatorio({
   precos,
   adicionaisIniciais,
   comprovanteAtual,
+  anexosGuardados,
 }: {
   pedidoId: string;
   horaPrevista: string;
@@ -425,12 +427,15 @@ export function FormularioRelatorio({
   adicionaisIniciais: { servicoId: string; quantidade: number }[];
   /** Nome do comprovante já enviado, quando é uma correção. */
   comprovanteAtual: string | null;
+  /** Anexos já enviados, quando é uma correção. */
+  anexosGuardados: AnexoGuardado[];
 }) {
   const router = useRouter();
+  const [anexosNovos, setAnexosNovos] = useState<File[]>([]);
   const [estado, enviar] = useFormState(enviarRelatorio, INICIAL);
   const avisarSalvo = useConfirmarSalvo();
   useEffect(() => {
-    if (estado.ok) avisarSalvo();
+    if (estado.ok) avisarSalvo("Enviado", { tela: true, titulo: "Relatório enviado", detalhes: ["A central já recebeu o relatório deste atendimento."] });
     // eslint-disable-next-line react-hooks/exhaustive-deps -- avisa uma vez por resposta do servidor, não quando a sessão recarrega.
   }, [estado]);
   const [compareceu, setCompareceu] = useState(valores.compareceu || "sim");
@@ -461,6 +466,8 @@ export function FormularioRelatorio({
     // sintético assim que o handler original termina) — por isso o form vem
     // do ref, que continua válido.
     const dados = new FormData(formRef.current!);
+    // Os anexos novos moram no estado (a lista é editável), não no <input>.
+    for (const arquivo of anexosNovos) dados.append("anexo", arquivo);
     if (posicao) {
       dados.set("latitude", String(posicao.latitude));
       dados.set("longitude", String(posicao.longitude));
@@ -566,6 +573,8 @@ export function FormularioRelatorio({
         <Rotulo>Observações</Rotulo>
         <Area name="observacoes" rows={3} defaultValue={valores.observacoes} />
       </div>
+
+      <AnexosDoRelatorio guardados={anexosGuardados} novos={anexosNovos} aoMudar={setAnexosNovos} />
 
       {estado.erro && <Aviso tom="erro">{estado.erro}</Aviso>}
 

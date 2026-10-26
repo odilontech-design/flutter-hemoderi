@@ -60,7 +60,7 @@ export function FormularioReagendamento({
   const [estado, enviar] = useFormState(reagendarPedido, INICIAL);
   const avisarSalvo = useConfirmarSalvo();
   useEffect(() => {
-    if (estado.ok) avisarSalvo();
+    if (estado.ok) avisarSalvo("Enviado", { tela: true, titulo: "Reagendamento enviado", detalhes: ["A central confirma o novo horário e avisa pelo WhatsApp."] });
     // eslint-disable-next-line react-hooks/exhaustive-deps -- avisa uma vez por resposta do servidor, não quando a sessão recarrega.
   }, [estado]);
 

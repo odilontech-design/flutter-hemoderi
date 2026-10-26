@@ -433,7 +433,7 @@ export default async function Esteira({
                   {/* Confirmação sob demanda pelo Dilon Zap (reunião de 27/10). */}
                   {(pedido.status === "CONFIRMADO" || pedido.status === "ALOCADO") && (
                     <div className="mt-1">
-                      <BotaoAcao
+                      <BotaoAcao tela
                         acao={enviarConfirmacoesWhatsapp.bind(null, pedido.id)}
                         confirmar="Enviar a confirmação deste agendamento pelo WhatsApp para a clínica e o profissional?"
                       >
@@ -446,7 +446,7 @@ export default async function Esteira({
                   {pedido.status === "ALOCADO" && !pedido.relatorio && pedido.data.getTime() < hojeUTC().getTime() && (
                     <div className="mt-1 flex flex-wrap items-center gap-2 text-[10px] font-semibold text-amber-700">
                       atendimento passou sem relatório
-                      <BotaoAcao acao={enviarPelaCentral.bind(null, pedido.id, "COBRANCA_RELATORIO")}>
+                      <BotaoAcao tela acao={enviarPelaCentral.bind(null, pedido.id, "COBRANCA_RELATORIO")}>
                         Cobrar relatório pelo WhatsApp
                       </BotaoAcao>
                     </div>
@@ -469,7 +469,7 @@ export default async function Esteira({
                       </span>
                       {/* Feedback (ata de 28/09): depois de aprovar, o pós-venda
                           pede a avaliação à clínica — pela central do Dilon Zap (27/10). */}
-                      <BotaoAcao acao={enviarPelaCentral.bind(null, pedido.id, "FEEDBACK")}>
+                      <BotaoAcao tela acao={enviarPelaCentral.bind(null, pedido.id, "FEEDBACK")}>
                         Pedir feedback pelo WhatsApp
                       </BotaoAcao>
                     </div>

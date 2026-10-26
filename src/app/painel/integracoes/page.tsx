@@ -135,7 +135,7 @@ export default async function Integracoes() {
             {i.alerta && <div className="text-[11px] text-amber-700 mt-1">{i.alerta}</div>}
             {i.nome.startsWith("WhatsApp") && whatsappLigado && (whatsapp.FALHA ?? 0) > 0 && (
               <div className="mt-2">
-                <BotaoAcao acao={reenviarFalhasWhatsapp}>Reenviar falhas</BotaoAcao>
+                <BotaoAcao tela acao={reenviarFalhasWhatsapp}>Reenviar falhas</BotaoAcao>
               </div>
             )}
           </Cartao>

@@ -37,7 +37,7 @@ export function AcoesClinica({ pedidoId }: { pedidoId: string }) {
           iniciar(async () => {
             const resultado = await cancelarPeloPortal(pedidoId, motivo);
             if (!resultado.ok) setErro(resultado.erro ?? "Não foi possível cancelar.");
-            else avisarSalvo();
+            else avisarSalvo("Cancelado", { tela: true, titulo: "Agendamento cancelado", detalhes: ["A central foi avisada do cancelamento."] });
           });
         }}
       >

@@ -167,7 +167,12 @@ export function FormularioAgendamento({
   const [estado, enviar] = useFormState(equipe ? agendarPelaEquipe : solicitarAgendamento, INICIAL);
   const avisarSalvo = useConfirmarSalvo();
   useEffect(() => {
-    if (estado.ok) avisarSalvo();
+    if (estado.ok)
+      avisarSalvo("Enviado", {
+        tela: true,
+        titulo: equipe ? "Agendamento criado" : "Agendamento enviado",
+        detalhes: estado.avisos,
+      });
     // eslint-disable-next-line react-hooks/exhaustive-deps -- avisa uma vez por resposta do servidor, não quando a sessão recarrega.
   }, [estado]);
   const enderecosHref = equipe?.enderecosHref ?? "/portal/enderecos";

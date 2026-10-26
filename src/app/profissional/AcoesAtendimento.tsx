@@ -29,7 +29,7 @@ export function AceiteAlocacao({ pedidoId }: { pedidoId: string }) {
     iniciar(async () => {
       const resultado = await acao();
       if (!resultado.ok) setErro(resultado.erro ?? "Não foi possível concluir.");
-      else avisarSalvo();
+      else avisarSalvo("Enviado", { tela: true, titulo: "Resposta enviada", detalhes: ["A central já recebeu a sua resposta sobre este atendimento."] });
     });
   }
 
@@ -99,7 +99,7 @@ export function BotaoCheckin({ pedidoId, atrasado }: { pedidoId: string; atrasad
       iniciar(async () => {
         const resultado = await registrarCheckin(pedidoId, posicao, justificativa);
         if (!resultado.ok) setErro(resultado.erro ?? "Não foi possível registrar.");
-        else avisarSalvo();
+        else avisarSalvo("Registrado", { tela: true, titulo: "Chegada registrada", detalhes: ["A central já sabe que você chegou ao local."] });
       });
     })();
   }

@@ -10,7 +10,7 @@ import { comEnderecoDoPedido } from "@/lib/endereco";
 import { precosDosServicos, tabelasDaClinica } from "@/lib/preco";
 import { descricaoDoPreco } from "@/lib/cobranca";
 import { parametros } from "@/lib/alocacao";
-import { localRevelado } from "@/lib/sigilo";
+import { localVisivel } from "@/lib/sigilo";
 import { ResumoDoAtendimento } from "@/components/ResumoDoAtendimento";
 import { INCLUIR_ADICIONAIS, RelatorioPreenchido } from "@/components/RelatorioPreenchido";
 import { BotaoCheckin } from "../../AcoesAtendimento";
@@ -47,6 +47,8 @@ export default async function Relatorio({
           adicionais: { select: { servicoId: true, quantidade: true } },
           // Só o nome: o arquivo em si nunca vem junto da página.
           comprovante: { select: { nome: true } },
+          // Anexos: nome e tamanho; o arquivo sai por /api/anexos, com sessão.
+          anexos: { select: { id: true, nome: true, tamanho: true }, orderBy: { criadoEm: "asc" } },
         },
       },
     },
@@ -54,7 +56,7 @@ export default async function Relatorio({
   if (!pedido) notFound();
 
   const config = await parametros();
-  const revelado = localRevelado(pedido.data, pedido.horaInicio, config.horasRevelarLocal);
+  const revelado = localVisivel(pedido, config.horasRevelarLocal);
   // Relatório aprovado: a página vira a leitura do que foi enviado (ata de
   // 13/10 — "resumo detalhado ao clicar no relatório"), sem formulário. Já
   // enviado (aprovado ou não): também vira o texto para o grupo de WhatsApp.
@@ -245,6 +247,7 @@ export default async function Relatorio({
             precos={precos}
             adicionaisIniciais={r?.adicionais ?? []}
             comprovanteAtual={r?.comprovante?.nome ?? null}
+            anexosGuardados={r?.anexos ?? []}
           />
         )}
       </Cartao>

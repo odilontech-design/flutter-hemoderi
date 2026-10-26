@@ -16,11 +16,14 @@ export function BotaoAcao({
   children,
   variante = "secundario",
   confirmar,
+  tela = false,
 }: {
   acao: () => Promise<Resultado>;
   children: React.ReactNode;
   variante?: "primario" | "secundario" | "perigo";
   confirmar?: string;
+  /** Abre a tela de confirmação do envio, em vez do aviso no rodapé (reunião de 28/10). */
+  tela?: boolean;
 }) {
   const [pendente, iniciar] = useTransition();
   const [erro, setErro] = useState("");
@@ -40,7 +43,7 @@ export function BotaoAcao({
             const resultado = await acao();
             if (!resultado.ok) setErro(resultado.erro ?? "Não foi possível concluir.");
             else {
-              avisarSalvo();
+              avisarSalvo(tela ? "Enviado" : "Salvo", { tela, titulo: "Enviado com sucesso", detalhes: resultado.avisos });
               if (resultado.avisos?.length) setAviso(resultado.avisos.join(" "));
             }
           });

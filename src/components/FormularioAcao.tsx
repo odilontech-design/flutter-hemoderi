@@ -23,6 +23,7 @@ export function FormularioAcao({
   className = "",
   limparAoSalvar = true,
   aoSalvar,
+  tela = true,
 }: {
   acao: (anterior: Resultado, dados: FormData) => Promise<Resultado>;
   botao?: string;
@@ -31,6 +32,8 @@ export function FormularioAcao({
   limparAoSalvar?: boolean;
   /** Chamado quando a ação volta `ok` — usado, por exemplo, para voltar à lista depois de cadastrar. */
   aoSalvar?: (estado: Resultado) => void;
+  /** Abre a tela de confirmação do envio (reunião de 28/10). Padrão: sim. */
+  tela?: boolean;
 }) {
   const [estado, enviar] = useFormState(acao, INICIAL);
   const formulario = useRef<HTMLFormElement>(null);
@@ -40,7 +43,7 @@ export function FormularioAcao({
 
   useEffect(() => {
     if (!estado.ok) return;
-    setSalvo(avisarSalvo());
+    setSalvo(avisarSalvo("Enviado", { tela, titulo: "Enviado com sucesso", detalhes: estado.avisos }));
     if (limparAoSalvar) formulario.current?.reset();
     aoSalvar?.(estado);
     // eslint-disable-next-line react-hooks/exhaustive-deps -- aoSalvar só dispara na mudança de `estado`, não a cada nova identidade de função.

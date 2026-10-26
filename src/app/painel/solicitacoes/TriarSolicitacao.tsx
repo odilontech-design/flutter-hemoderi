@@ -55,7 +55,7 @@ export function TriarSolicitacao({
           iniciar(async () => {
             const r = await vincularSolicitacao(solicitacaoId, clinicaId);
             if (!r.ok) setErro(r.erro ?? "Não deu para vincular.");
-            else avisarSalvo();
+            else avisarSalvo("Enviado", { tela: true, titulo: "Agendamento criado" });
           });
         }}
       >
@@ -72,7 +72,7 @@ export function TriarSolicitacao({
           iniciar(async () => {
             const r = await recusarSolicitacao(solicitacaoId, motivo);
             if (!r.ok) setErro(r.erro ?? "Não deu para recusar.");
-            else avisarSalvo();
+            else avisarSalvo("Enviado", { tela: true, titulo: "Solicitação recusada" });
           });
         }}
       >

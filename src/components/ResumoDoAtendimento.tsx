@@ -4,7 +4,8 @@ export type DadosDoResumo = {
   horaInicio: string;
   quantidade: number;
   doutorNome: string | null;
-  contatoClinica: string | null;
+  /** Não é mais mostrado ao profissional (reunião de 28/10); fica no tipo só porque o pedido inteiro é repassado. */
+  contatoClinica?: string | null;
   procedimentoPaciente: string | null;
   observacoes: string | null;
   clinica: { nome: string };
@@ -36,7 +37,6 @@ export function ResumoDoAtendimento({ dados, aberto = false }: { dados: DadosDoR
     ["Serviço", `${dados.servico.nome}${dados.quantidade > 1 ? ` × ${dados.quantidade}` : ""}`],
     ["Horário", dados.horaInicio],
     ["Doutor(a)", dados.doutorNome],
-    ["Contato da clínica", dados.contatoClinica],
     ["Procedimento", dados.procedimentoPaciente],
     ["Observações", dados.observacoes],
   ];

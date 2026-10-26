@@ -24,7 +24,7 @@ export function ConfirmarSolicitacao({ solicitacaoId, clinicaId }: { solicitacao
           iniciar(async () => {
             const r = await vincularSolicitacao(solicitacaoId, clinicaId);
             if (!r.ok) setErro(r.erro ?? "Não deu para confirmar.");
-            else avisarSalvo();
+            else avisarSalvo("Enviado", { tela: true, titulo: "Solicitação confirmada" });
           });
         }}
       >
@@ -41,7 +41,7 @@ export function ConfirmarSolicitacao({ solicitacaoId, clinicaId }: { solicitacao
           iniciar(async () => {
             const r = await recusarSolicitacao(solicitacaoId, motivo);
             if (!r.ok) setErro(r.erro ?? "Não deu para recusar.");
-            else avisarSalvo();
+            else avisarSalvo("Enviado", { tela: true, titulo: "Solicitação recusada" });
           });
         }}
       >

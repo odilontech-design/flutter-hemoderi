@@ -349,7 +349,7 @@ export default async function Hoje({ searchParams }: { searchParams: { servico?:
                             </span>
                             {/* Aviso à clínica pela central do Dilon Zap (27/10). */}
                             <div className="mt-1">
-                              <BotaoAcao acao={enviarPelaCentral.bind(null, pedido.id, "ATRASO")}>Avisar a clínica</BotaoAcao>
+                              <BotaoAcao tela acao={enviarPelaCentral.bind(null, pedido.id, "ATRASO")}>Avisar a clínica</BotaoAcao>
                             </div>
                           </div>
                         ) : (

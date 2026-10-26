@@ -28,7 +28,7 @@ export function TriagemCadastro({
   const [estado, enviar] = useFormState(revisarCadastro, INICIAL);
   const avisarSalvo = useConfirmarSalvo();
   useEffect(() => {
-    if (estado.ok) avisarSalvo();
+    if (estado.ok) avisarSalvo("Enviado", { tela: true, titulo: "Decisão registrada" });
     // eslint-disable-next-line react-hooks/exhaustive-deps -- avisa uma vez por resposta do servidor, não quando a sessão recarrega.
   }, [estado]);
 

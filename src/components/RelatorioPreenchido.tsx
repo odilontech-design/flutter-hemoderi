@@ -3,12 +3,14 @@ import { CAMPOS_CLINICOS, NAO_SE_APLICA } from "@/lib/relatorio";
 import { formatarDataHora } from "@/lib/data";
 import { formatarReais } from "@/lib/dinheiro";
 import { rotuloDaForma, rotuloDaSituacao } from "@/lib/recebimento";
+import { tamanhoLegivel } from "@/lib/anexos-relatorio";
 
 export const INCLUIR_ADICIONAIS = {
   adicionais: { select: { quantidade: true, servico: { select: { nome: true } } } },
   servicoRealizado: { select: { nome: true } },
   // Só o nome: o arquivo sai pela rota autorizada, nunca junto da página.
   comprovante: { select: { nome: true } },
+  anexos: { select: { id: true, nome: true, tamanho: true }, orderBy: { criadoEm: "asc" as const } },
 } satisfies Prisma.RelatorioAtendimentoInclude;
 
 export type RelatorioCompleto = Prisma.RelatorioAtendimentoGetPayload<{ include: typeof INCLUIR_ADICIONAIS }>;
@@ -162,6 +164,23 @@ export function RelatorioPreenchido({
               Ver comprovante ({relatorio.comprovante.nome})
             </a>
           )}
+        </div>
+      )}
+
+      {/* Só a equipe e o autor: a clínica não vê os anexos (reunião de 28/10). */}
+      {!paraClinica && relatorio.anexos.length > 0 && (
+        <div className="text-xs">
+          <div className="text-gray-400 mb-0.5">Anexos ({relatorio.anexos.length})</div>
+          <ul className="space-y-0.5">
+            {relatorio.anexos.map((a) => (
+              <li key={a.id}>
+                <a href={`/api/anexos/${a.id}`} target="_blank" rel="noopener noreferrer" className="font-semibold text-bordo hover:underline">
+                  📎 {a.nome}
+                </a>{" "}
+                <span className="text-gray-400">{tamanhoLegivel(a.tamanho)}</span>
+              </li>
+            ))}
+          </ul>
         </div>
       )}
 

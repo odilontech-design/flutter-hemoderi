@@ -5,7 +5,7 @@ import { Cartao, SeloStatus, Titulo, Vazio } from "@/components/ui";
 import { formatarDataCurta, formatarDiaEData, hojeUTC, instanteDoAtendimento, isoDeData, proximosDias } from "@/lib/data";
 import { formatarReais } from "@/lib/dinheiro";
 import { parametros } from "@/lib/alocacao";
-import { LOCAL_FECHADO, localRevelado } from "@/lib/sigilo";
+import { LOCAL_FECHADO, localVisivel } from "@/lib/sigilo";
 import { AdicionarAgenda } from "@/components/AdicionarAgenda";
 import { houveAtraso } from "@/lib/atraso";
 import { comEnderecoDoPedido } from "@/lib/endereco";
@@ -155,6 +155,20 @@ export default async function MinhaAgenda() {
     }),
   ]);
 
+  // Cancelados (reunião de 28/10: o profissional também vê o cancelamento, com
+  // o motivo). Os desta semana em diante e os cancelados nos últimos 7 dias —
+  // quem já tinha se organizado para o dia precisa saber que não vai mais.
+  const seteDiasAtras = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+  const cancelados = await prisma.pedido.findMany({
+    where: {
+      profissionalId: sessao.profissionalId,
+      status: "CANCELADO",
+      OR: [{ data: { gte: hoje } }, { canceladoEm: { gte: seteDiasAtras } }],
+    },
+    orderBy: [{ data: "asc" }, { horaInicio: "asc" }],
+    include: dadosDoPedido,
+  });
+
   // Cadastro incompleto (revisão de 25/10): sem telefone a central não fala
   // com a pessoa nem o aviso de alocação chega; sem chave Pix não há repasse.
   const cadastro = await prisma.profissional.findUnique({
@@ -166,6 +180,41 @@ export default async function MinhaAgenda() {
   return (
     <>
       <Titulo>Minha agenda</Titulo>
+
+      {cancelados.length > 0 && (
+        <Cartao className="mb-3 border-red-300 bg-red-50/40">
+          <div className="font-display font-bold text-red-700 text-sm mb-1">
+            {cancelados.length} atendimento(s) cancelado(s)
+          </div>
+          <div className="text-[11px] text-gray-500 mb-3">
+            Estes atendimentos <strong>não acontecem mais</strong>. Tire-os da sua agenda — se a data ainda não passou, o
+            horário está livre de novo.
+          </div>
+          <div className="space-y-2">
+            {cancelados.map((pedido) => (
+              <div key={pedido.id} className="border-b border-red-100 pb-2 last:border-0 last:pb-0 text-xs">
+                <div className="font-semibold text-bordo">
+                  <span className="line-through decoration-red-400">
+                    {formatarDataCurta(pedido.data)} · {pedido.horaInicio} · {pedido.servico.nome}
+                  </span>{" "}
+                  <span className="text-[10px] font-semibold uppercase tracking-wide text-red-700 no-underline">cancelado</span>
+                </div>
+                <div className="text-gray-500">
+                  {localVisivel(pedido, config.horasRevelarLocal) ? (
+                    pedido.clinica.nome
+                  ) : (
+                    <span className="italic text-gray-400">{LOCAL_FECHADO}</span>
+                  )}
+                  {pedido.canceladoEm && <> · cancelado em {formatarDataCurta(pedido.canceladoEm)}</>}
+                </div>
+                <div className="text-red-800 mt-0.5">
+                  <strong>Motivo:</strong> {pedido.motivoCancelamento || "não informado"}
+                </div>
+              </div>
+            ))}
+          </div>
+        </Cartao>
+      )}
 
       {faltando.length > 0 && (
         <Cartao className="mb-3 border-amber-300 bg-amber-50/50">
@@ -194,7 +243,7 @@ export default async function MinhaAgenda() {
                   {formatarDataCurta(pedido.data)} · {pedido.horaInicio} · {pedido.servico.nome}
                 </div>
                 <div className="text-[11px] text-gray-500 mb-1">
-                  {localRevelado(pedido.data, pedido.horaInicio, config.horasRevelarLocal) ? (
+                  {localVisivel(pedido, config.horasRevelarLocal) ? (
                     pedido.clinica.nome
                   ) : (
                     <span className="italic text-gray-400">{LOCAL_FECHADO}</span>
@@ -249,7 +298,7 @@ export default async function MinhaAgenda() {
                 {/* Endereço e resumo à mão o tempo todo (ata de 13/10): é o que
                     o profissional procura na hora de chegar e de registrar a
                     chegada. */}
-                {localRevelado(pedido.data, pedido.horaInicio, config.horasRevelarLocal) ? (
+                {localVisivel(pedido, config.horasRevelarLocal) ? (
                   <div className="mb-2">
                     <ResumoDoAtendimento
                       dados={{
@@ -278,7 +327,7 @@ export default async function MinhaAgenda() {
                       atrasado={houveAtraso(pedido.data, pedido.horaInicio, new Date())}
                     />
                   )}
-                  <AdicionarAgenda variante="link" evento={eventoDoPedido(pedido, localRevelado(pedido.data, pedido.horaInicio, config.horasRevelarLocal))} />
+                  <AdicionarAgenda variante="link" evento={eventoDoPedido(pedido, localVisivel(pedido, config.horasRevelarLocal))} />
                   {pedido.relatorio ? (
                     <Link
                       href={`/profissional/relatorio/${pedido.id}`}
@@ -312,7 +361,7 @@ export default async function MinhaAgenda() {
           </Link>
         </div>
         <div className="text-[11px] text-gray-500 mb-3">
-          A cidade aparece desde a alocação; a clínica e o endereço, {config.horasRevelarLocal}h antes do atendimento.
+          A cidade aparece desde a alocação; a clínica e o endereço, {config.horasRevelarLocal}h antes do atendimento — ou já na alocação, quando a clínica agendou com menos de 24h.
         </div>
         <div className="hidden sm:grid grid-cols-[7rem_minmax(0,1fr)_minmax(0,1.6fr)] gap-3 pb-1 border-b border-gray-100 text-[10px] font-semibold uppercase tracking-wide text-gray-400">
           <div>Dia</div>
@@ -371,8 +420,8 @@ export default async function MinhaAgenda() {
                           {pedido.quantidade > 1 ? ` × ${pedido.quantidade}` : ""}
                         </div>
                         <div className="text-[11px] text-gray-500">
-                          {ondeE(localRevelado(pedido.data, pedido.horaInicio, config.horasRevelarLocal), pedido)}
-                          {localRevelado(pedido.data, pedido.horaInicio, config.horasRevelarLocal) && pedido.doutorNome
+                          {ondeE(localVisivel(pedido, config.horasRevelarLocal), pedido)}
+                          {localVisivel(pedido, config.horasRevelarLocal) && pedido.doutorNome
                             ? ` · ${/^dr/i.test(pedido.doutorNome) ? pedido.doutorNome : `Dr(a). ${pedido.doutorNome}`}`
                             : ""}{" "}
                           · valor do profissional: {formatarReais(pedido.valorRepasseCentavos)}
@@ -454,10 +503,10 @@ export default async function MinhaAgenda() {
                     {formatarDataCurta(pedido.data)} · {pedido.horaInicio}
                   </div>
                   <div className="text-gray-500">
-                    {ondeE(localRevelado(pedido.data, pedido.horaInicio, config.horasRevelarLocal), pedido)} ·{" "}
+                    {ondeE(localVisivel(pedido, config.horasRevelarLocal), pedido)} ·{" "}
                     {pedido.servico.nome}
                   </div>
-                  <AdicionarAgenda variante="link" evento={eventoDoPedido(pedido, localRevelado(pedido.data, pedido.horaInicio, config.horasRevelarLocal))} />
+                  <AdicionarAgenda variante="link" evento={eventoDoPedido(pedido, localVisivel(pedido, config.horasRevelarLocal))} />
                 </div>
                 <div className="text-right">
                   <div className="text-[10px] text-gray-400">valor do profissional</div>

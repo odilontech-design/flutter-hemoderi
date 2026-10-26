@@ -56,7 +56,7 @@ export function AcoesGrupo({
         setMensagem({ texto: resultado.erro ?? "Não foi possível concluir.", erro: true });
         return;
       }
-      avisarSalvo();
+      avisarSalvo("Enviado", { tela: true, titulo: "Ação concluída", detalhes: resultado.avisos });
       if (resultado.avisos?.length) setMensagem({ texto: resultado.avisos.join(" "), erro: false });
     });
   }

@@ -40,6 +40,7 @@ import { formatarReais, lerCentavos } from "@/lib/dinheiro";
 import { precoDoServico, tabelasDaClinica } from "@/lib/preco";
 import { houveAtraso } from "@/lib/atraso";
 import { proximoNumeroDePedido } from "@/lib/numero-pedido";
+import { codigoDoPedido } from "@/lib/numeracao";
 import { duracaoEfetiva, quantidadeValida, totalDoItem } from "@/lib/cobranca";
 import { servicoVisivel } from "@/lib/visibilidade";
 
@@ -420,9 +421,21 @@ export async function solicitarAgendamento(_anterior: Resultado, dados: FormData
   const resultado = await criarAgendamento({ tipo: "clinica", usuarioId: sessao.usuarioId, clinicaId: sessao.clinicaId }, dados);
   if (!resultado.ok) return resultado;
   atualizarTelas();
-  // A tela leva a pessoa ao resumo do agendamento (ata de 05/10), que é a
-  // confirmação final.
-  return { ok: true, id: resultado.id };
+  // A tela leva a pessoa ao resumo do agendamento (ata de 05/10); antes, uma
+  // tela de confirmação com o código (reunião de 28/10), para não ficar na dúvida.
+  const registrados = await prisma.pedido.findMany({
+    where: { id: { in: (resultado.criados ?? []).map((c) => c.id) } },
+    orderBy: { numero: "asc" },
+    select: { numero: true, data: true, clinica: { select: { nome: true } } },
+  });
+  const codigos = registrados.map((p) => codigoDoPedido(p.numero, p.clinica.nome, p.data));
+  const avisos = codigos.length
+    ? [
+        `${codigos.length > 1 ? "Códigos" : "Código"}: ${codigos.join(", ")}`,
+        "A central confirma e avisa pelo WhatsApp.",
+      ]
+    : [];
+  return { ok: true, id: resultado.id, avisos };
 }
 
 /**

@@ -15,6 +15,7 @@ import {
   temNomeESobrenome,
 } from "@/lib/relatorio";
 import { comprovanteAceito, lerRecebimento } from "@/lib/recebimento";
+import { anexosAceitos } from "@/lib/anexos-relatorio";
 import { registrarResultado, type Resultado } from "./pedidos";
 
 /**
@@ -47,7 +48,7 @@ export async function enviarRelatorio(_anterior: Resultado, dados: FormData): Pr
       doutorNome: true,
       clinica: { select: { nome: true, endereco: true, numero: true, bairro: true, cidade: true, uf: true } },
       endereco: { select: { endereco: true, numero: true, bairro: true, cidade: true, uf: true } },
-      relatorio: { select: { aprovadoEm: true, comprovante: { select: { id: true } } } },
+      relatorio: { select: { aprovadoEm: true, comprovante: { select: { id: true } }, anexos: { select: { id: true } } } },
     },
   });
   if (!pedido) return { ok: false, erro: "Atendimento não encontrado na sua agenda." };
@@ -119,6 +120,27 @@ export async function enviarRelatorio(_anterior: Resultado, dados: FormData): Pr
     }
   }
   const guardaComprovante = recebimento?.ok === true && recebimento.dados.exigeComprovante;
+
+  // Anexos do relatório (reunião de 28/10): fotos e documentos, opcionais. Na
+  // correção, os que já estavam guardados ficam, a não ser que a pessoa tenha
+  // tirado algum (`removerAnexo`); os novos entram por cima.
+  const idsGuardados = new Set((pedido.relatorio?.anexos ?? []).map((a) => a.id));
+  const aRemover = dados.getAll("removerAnexo").map(String).filter((id) => idsGuardados.has(id));
+  const novosAnexos = dados.getAll("anexo").filter((a): a is File => a instanceof File && a.size > 0);
+  const problemaDeAnexo = anexosAceitos({
+    jaGuardados: idsGuardados.size - aRemover.length,
+    novos: novosAnexos,
+    bytesDoComprovante: comprovante?.tamanho ?? 0,
+  });
+  if (problemaDeAnexo) return { ok: false, erro: problemaDeAnexo };
+  const anexosParaGravar = await Promise.all(
+    novosAnexos.map(async (arquivo) => ({
+      nome: arquivo.name.slice(0, 120) || "anexo",
+      tipo: arquivo.type,
+      tamanho: arquivo.size,
+      dados: Buffer.from(await arquivo.arrayBuffer()),
+    }))
+  );
 
   const quantidade = Number(dados.get("quantidade") ?? 1);
 
@@ -240,6 +262,13 @@ export async function enviarRelatorio(_anterior: Resultado, dados: FormData): Pr
         update: { ...comprovante, criadoEm: new Date() },
         create: { relatorioId: relatorio.id, ...comprovante },
       });
+    }
+
+    if (aRemover.length > 0) {
+      await tx.relatorioAnexo.deleteMany({ where: { relatorioId: relatorio.id, id: { in: aRemover } } });
+    }
+    if (anexosParaGravar.length > 0) {
+      await tx.relatorioAnexo.createMany({ data: anexosParaGravar.map((a) => ({ relatorioId: relatorio.id, ...a })) });
     }
 
     // A lista inteira é substituída: reenviar o relatório é reenviar o que

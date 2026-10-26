@@ -100,7 +100,7 @@ export default async function DetalheDoPedido({
             <span className="text-[10px] uppercase tracking-wide text-gray-400">veio do portal</span>
           )}
           {(pedido.status === "CONFIRMADO" || pedido.status === "ALOCADO") && (
-            <BotaoAcao
+            <BotaoAcao tela
               acao={enviarConfirmacoesWhatsapp.bind(null, pedido.id)}
               confirmar="Enviar a confirmação deste agendamento pelo WhatsApp para a clínica e o profissional?"
             >
