@@ -2,6 +2,8 @@ import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 import { exigirClinica } from "@/lib/sessao";
 import { Cartao, Kpi, Tabela, Titulo, Vazio } from "@/components/ui";
+import { ResumoRealizado } from "@/components/ResumoRealizado";
+import { comEnderecoDoPedido, resumoDoEndereco } from "@/lib/endereco";
 import { formatarDataCurta } from "@/lib/data";
 import { formatarMedia, mediaDeNotas } from "@/lib/avaliacao";
 import { situacaoDoPagamento } from "@/lib/pagamento-cliente";
@@ -30,6 +32,8 @@ export default async function HistoricoEAvaliacoes() {
       include: {
         servico: { select: { nome: true } },
         profissional: { select: { nome: true } },
+        clinica: { select: { nome: true, endereco: true, numero: true, complemento: true, bairro: true, cidade: true, uf: true } },
+        endereco: { select: { rotulo: true, endereco: true, numero: true, complemento: true, bairro: true, cidade: true, uf: true } },
         avaliacao: { select: { nota: true } },
         fatura: { select: { status: true } },
         // O que o profissional declarou ter recebido no ato conta como pago.
@@ -124,6 +128,15 @@ export default async function HistoricoEAvaliacoes() {
                         {pedido.quantidade > 1 && <span className="text-gray-400"> × {pedido.quantidade}</span>}
                       </div>
                     ))}
+                    <ResumoRealizado
+                      local={resumoDoEndereco(comEnderecoDoPedido(primeiro.clinica, primeiro.endereco))}
+                      horaInicio={primeiro.horaInicio}
+                      doutorNome={primeiro.doutorNome}
+                      pacienteNome={primeiro.pacienteNome}
+                      procedimentoPaciente={primeiro.procedimentoPaciente}
+                      formaPagamento={primeiro.formaPagamento}
+                      observacoes={primeiro.observacoes}
+                    />
                   </td>
                   <td className="py-2 pr-3 text-gray-600">
                     {Array.from(new Set(itens.map((p) => p.profissional?.nome).filter(Boolean))).join(", ") || "—"}

@@ -119,15 +119,19 @@ export default async function DetalheDoPedido({ params }: { params: { pedidoId: 
             <div className="text-gray-400">Clínica</div>
             <div className="text-gray-700">{pedido.clinica.nome}</div>
           </div>
-          {pedido.endereco && (
-            <div className="sm:col-span-2">
-              <div className="text-gray-400">Local do atendimento</div>
-              <div className="text-gray-700">
-                <strong>{pedido.endereco.rotulo}</strong> — {resumoDoEndereco(pedido.endereco)}
-                {pedido.endereco.observacoes && <span className="text-gray-500"> · Obs.: {pedido.endereco.observacoes}</span>}
-              </div>
+          <div className="sm:col-span-2">
+            <div className="text-gray-400">Local do atendimento</div>
+            <div className="text-gray-700">
+              {pedido.endereco ? (
+                <>
+                  <strong>{pedido.endereco.rotulo}</strong> — {resumoDoEndereco(pedido.endereco)}
+                  {pedido.endereco.observacoes && <span className="text-gray-500"> · Obs.: {pedido.endereco.observacoes}</span>}
+                </>
+              ) : (
+                resumoDoEndereco(pedido.clinica) || "endereço não informado"
+              )}
             </div>
-          )}
+          </div>
           <div>
             <div className="text-gray-400">Profissional</div>
             <div className="text-gray-700">{pedido.profissional?.nome ?? "sem profissional"}</div>

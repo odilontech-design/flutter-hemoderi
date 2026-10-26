@@ -4,6 +4,8 @@ import { exigirProfissional } from "@/lib/sessao";
 import { Cartao, Kpi, Tabela, Titulo, Vazio } from "@/components/ui";
 import { formatarDataCurta, hojeUTC } from "@/lib/data";
 import { codigoDoPedido } from "@/lib/numeracao";
+import { ResumoRealizado } from "@/components/ResumoRealizado";
+import { comEnderecoDoPedido, resumoDoEndereco } from "@/lib/endereco";
 
 export const dynamic = "force-dynamic";
 
@@ -27,7 +29,13 @@ export default async function Relatorios() {
     numero: true,
     data: true,
     horaInicio: true,
-    clinica: { select: { nome: true } },
+    clinica: { select: { nome: true, endereco: true, numero: true, complemento: true, bairro: true, cidade: true, uf: true } },
+    endereco: { select: { rotulo: true, endereco: true, numero: true, complemento: true, bairro: true, cidade: true, uf: true } },
+    doutorNome: true,
+    pacienteNome: true,
+    procedimentoPaciente: true,
+    formaPagamento: true,
+    observacoes: true,
     servico: { select: { nome: true } },
   } as const;
 
@@ -153,7 +161,18 @@ export default async function Relatorios() {
                 <td className="py-2 pr-3 whitespace-nowrap">
                   {formatarDataCurta(r.pedido.data)} {r.pedido.horaInicio}
                 </td>
-                <td className="py-2 pr-3 text-gray-600">{r.pedido.clinica.nome}</td>
+                <td className="py-2 pr-3 text-gray-600">
+                  {r.pedido.clinica.nome}
+                  <ResumoRealizado
+                    local={resumoDoEndereco(comEnderecoDoPedido(r.pedido.clinica, r.pedido.endereco))}
+                    horaInicio={r.pedido.horaInicio}
+                    doutorNome={r.pedido.doutorNome}
+                    pacienteNome={r.pedido.pacienteNome}
+                    procedimentoPaciente={r.pedido.procedimentoPaciente}
+                    formaPagamento={r.pedido.formaPagamento}
+                    observacoes={r.pedido.observacoes}
+                  />
+                </td>
                 <td className="py-2 pr-3 text-gray-500">
                   {r.pedido.servico.nome}
                   {r._count.adicionais > 0 && (

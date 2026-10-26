@@ -252,6 +252,13 @@ export default async function Esteira({
                       {pedido.endereco.observacoes && <span className="text-gray-500"> · Obs.: {pedido.endereco.observacoes}</span>}
                     </div>
                   )}
+                  {/* Realizado no endereço principal: o local também fica no
+                      resumo (pedido de 26/10) — conferir cobrança começa por "onde foi". */}
+                  {!pedido.endereco && (pedido.status === "REALIZADO" || pedido.status === "FALTOU") && (
+                    <div className="text-[11px] text-gray-500 mt-0.5">
+                      Local: {resumoDoEndereco(pedido.clinica) || "endereço não informado"}
+                    </div>
+                  )}
                   <div className="text-[11px] text-gray-500 mt-0.5">
                     {pedido.clinica.nome} ·{" "}
                     {pedido.profissional ? (
