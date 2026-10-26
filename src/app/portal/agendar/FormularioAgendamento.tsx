@@ -6,6 +6,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Area, Aviso, Botao, Campo, Rotulo, Selecao } from "@/components/ui";
 import { CampoTelefone } from "@/components/CampoTelefone";
+import { OutroEndereco } from "@/components/OutroEndereco";
 import { FORMAS_DE_PAGAMENTO } from "@/lib/pagamento";
 import { OUTRO_PROCEDIMENTO, PROCEDIMENTOS_NO_PACIENTE } from "@/lib/procedimentos";
 import { agendarPelaEquipe, solicitarAgendamento, type Resultado } from "@/app/actions/pedidos";
@@ -47,8 +48,18 @@ export type ModoEquipe = {
   profissionais: { id: string; nome: string }[];
   /** Onde a equipe cadastra outro endereço da clínica. */
   enderecosHref: string;
+  /** Endereço já escolhido (o recém-informado, vindo pela URL). */
+  localInicialId?: string;
 };
-type Item = { servicoId: string; quantidade: number };
+/**
+ * Um serviço na visita. `chave` identifica a linha: o mesmo serviço pode
+ * entrar mais de uma vez, uma para cada paciente (reunião de 27/10:
+ * "agendamento de serviço por paciente").
+ */
+type Item = { chave: string; servicoId: string; quantidade: number; paciente: string };
+
+let proximaChave = 0;
+const novaChave = () => `item-${++proximaChave}`;
 
 const HORARIO = new Intl.DateTimeFormat("pt-BR", {
   timeZone: "America/Sao_Paulo",
@@ -161,7 +172,17 @@ export function FormularioAgendamento({
   }, [estado]);
   const enderecosHref = equipe?.enderecosHref ?? "/portal/enderecos";
 
-  const [localId, setLocalId] = useState(locais[0]?.id ?? "");
+  const [localId, setLocalId] = useState(
+    equipe?.localInicialId && locais.some((l) => l.id === equipe.localInicialId) ? equipe.localInicialId : (locais[0]?.id ?? "")
+  );
+  // Endereço informado agora pela equipe: entra na lista quando a página
+  // recarrega os locais, e já fica escolhido. Vai também para a URL, para a
+  // escolha sobreviver se a página remontar o formulário ao recarregar.
+  function escolherLocalNovo(id: string) {
+    setLocalId(id);
+    setPasso(2);
+    if (equipe) router.replace(`/painel/pedidos/novo?clinica=${equipe.clinicaId}&endereco=${id}`, { scroll: false });
+  }
   const local = locais.find((l) => l.id === localId) ?? locais[0];
   const uf = (local?.uf ?? "").toUpperCase();
 
@@ -213,7 +234,7 @@ export function FormularioAgendamento({
   });
   const [itens, setItens] = useState<Item[]>(() => {
     const inicial = grupos.flatMap((g) => g.servicos).find((s) => s.id === servicoInicialId);
-    return inicial ? [{ servicoId: inicial.id, quantidade: quantidadeMinimaDe(inicial) }] : [];
+    return inicial ? [{ chave: novaChave(), servicoId: inicial.id, quantidade: quantidadeMinimaDe(inicial), paciente: "" }] : [];
   });
   const [data, setData] = useState("");
   const [doutorNome, setDoutorNome] = useState("");
@@ -286,19 +307,34 @@ export function FormularioAgendamento({
     setItens((atuais) =>
       atuais.some((i) => i.servicoId === servico.id)
         ? atuais
-        : [...atuais, { servicoId: servico.id, quantidade: quantidadeMinimaDe(servico) }]
+        : [...atuais, { chave: novaChave(), servicoId: servico.id, quantidade: quantidadeMinimaDe(servico), paciente: "" }]
     );
   }
+  /** O mesmo serviço para mais um paciente, logo abaixo da linha de origem. */
+  function outroPaciente(item: Item, servico: ServicoDoCarrinho) {
+    setItens((atuais) => {
+      const posicao = atuais.findIndex((i) => i.chave === item.chave);
+      const novo = { chave: novaChave(), servicoId: servico.id, quantidade: quantidadeMinimaDe(servico), paciente: "" };
+      return [...atuais.slice(0, posicao + 1), novo, ...atuais.slice(posicao + 1)];
+    });
+  }
+  /** Remove todas as linhas do serviço (o botão do catálogo). */
   function remover(servicoId: string) {
     setItens((atuais) => atuais.filter((i) => i.servicoId !== servicoId));
   }
-  function mudarQuantidade(servico: ServicoDoCarrinho, valor: string) {
+  function removerLinha(chave: string) {
+    setItens((atuais) => atuais.filter((i) => i.chave !== chave));
+  }
+  function mudarQuantidade(item: Item, servico: ServicoDoCarrinho, valor: string) {
     const n = Math.trunc(Number(valor));
     const limitado = Math.min(
       Math.max(Number.isFinite(n) ? n : 1, quantidadeMinimaDe(servico)),
       servico.quantidadeMaxima ?? 99_999
     );
-    setItens((atuais) => atuais.map((i) => (i.servicoId === servico.id ? { ...i, quantidade: limitado } : i)));
+    setItens((atuais) => atuais.map((i) => (i.chave === item.chave ? { ...i, quantidade: limitado } : i)));
+  }
+  function mudarPaciente(item: Item, nome: string) {
+    setItens((atuais) => atuais.map((i) => (i.chave === item.chave ? { ...i, paciente: nome } : i)));
   }
 
   const precoUnitario = (servicoId: string) => precosPorUf[uf]?.[servicoId] ?? 0;
@@ -308,6 +344,11 @@ export function FormularioAgendamento({
   const totalDaLinha = (l: { item: Item; servico: ServicoDoCarrinho }) =>
     totalDoItem(precoUnitario(l.servico.id), l.item.quantidade, l.servico);
   const totalCentavos = linhas.reduce((soma, l) => soma + totalDaLinha(l), 0);
+  // Serviço que aparece mais de uma vez precisa do paciente em cada linha: é
+  // ele que diferencia um atendimento do outro (e o servidor confere de novo).
+  const repetidoSemPaciente = linhas.some(
+    (l) => !l.item.paciente.trim() && linhas.filter((o) => o.servico.id === l.servico.id).length > 1
+  );
   const algumSobConsulta = linhas.some((l) => precoUnitario(l.servico.id) === 0);
 
   // A conta é a mesma que o servidor faz ao recusar — feita aqui só para AVISAR
@@ -343,13 +384,23 @@ export function FormularioAgendamento({
       <input type="hidden" name="horaInicio" value={hora} />
       {equipe && <input type="hidden" name="clinicaId" value={equipe.clinicaId} />}
 
+      {equipe && locais.length === 0 && (
+        <div className="text-[11px] text-gray-500 px-1">
+          A clínica não tem endereço cadastrado. <OutroEndereco clinicaId={equipe.clinicaId} aoCriar={escolherLocalNovo} />
+        </div>
+      )}
+
       {!temEtapaDeLocal && local && (
         <div className="text-[11px] text-gray-500 px-1">
           Atendimento em <strong className="text-gray-700">{local.rotulo}</strong>
           {local.resumo ? ` · ${local.resumo}` : ""} ·{" "}
-          <Link href={enderecosHref} className="font-semibold text-bordo hover:underline">
-            cadastrar outro endereço
-          </Link>
+          {equipe ? (
+            <OutroEndereco clinicaId={equipe.clinicaId} aoCriar={escolherLocalNovo} />
+          ) : (
+            <Link href={enderecosHref} className="font-semibold text-bordo hover:underline">
+              cadastrar outro endereço
+            </Link>
+          )}
         </div>
       )}
 
@@ -378,9 +429,15 @@ export function FormularioAgendamento({
               );
             })}
           </div>
-          <Link href={enderecosHref} className="inline-block text-[11px] font-semibold text-bordo hover:underline mt-2">
-            + Cadastrar outro endereço
-          </Link>
+          <div className="mt-2">
+            {equipe ? (
+              <OutroEndereco clinicaId={equipe.clinicaId} aoCriar={escolherLocalNovo} />
+            ) : (
+              <Link href={enderecosHref} className="inline-block text-[11px] font-semibold text-bordo hover:underline">
+                + Cadastrar outro endereço
+              </Link>
+            )}
+          </div>
         </Etapa>
       )}
 
@@ -483,7 +540,7 @@ export function FormularioAgendamento({
               {linhas.map(({ item, servico }) => {
                 const unitario = precoUnitario(servico.id);
                 return (
-                  <li key={servico.id} className="py-2 flex flex-wrap items-center gap-x-4 gap-y-2">
+                  <li key={item.chave} className="py-2 flex flex-wrap items-center gap-x-4 gap-y-2">
                     {imagemDoServico.get(servico.id) && (
                       // eslint-disable-next-line @next/next/no-img-element
                       <img
@@ -495,9 +552,21 @@ export function FormularioAgendamento({
                     )}
                     <div className="min-w-0 flex-1 basis-48">
                       <div className="text-xs font-semibold text-bordo">{servico.nome}</div>
-                      {!servico.permiteQuantidade && (
-                        <div className="text-[10px] text-gray-400 mt-0.5">uma unidade por agendamento</div>
-                      )}
+                      <input
+                        value={item.paciente}
+                        onChange={(e) => mudarPaciente(item, e.target.value)}
+                        maxLength={120}
+                        placeholder={linhas.filter((l) => l.servico.id === servico.id).length > 1 ? "Paciente (obrigatório)" : "Paciente (opcional)"}
+                        aria-label={`Paciente de ${servico.nome}`}
+                        className="mt-1 w-full max-w-xs border border-gray-300 rounded-lg px-2 py-1 text-[11px]"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => outroPaciente(item, servico)}
+                        className="block mt-1 text-[10px] font-semibold text-bordo hover:underline"
+                      >
+                        + o mesmo serviço para outro paciente
+                      </button>
                     </div>
                     {servico.permiteQuantidade && (
                       <label className="flex items-center gap-2 text-[11px] text-gray-600">
@@ -507,7 +576,7 @@ export function FormularioAgendamento({
                           min={quantidadeMinimaDe(servico)}
                           max={servico.quantidadeMaxima ?? undefined}
                           value={item.quantidade}
-                          onChange={(e) => mudarQuantidade(servico, e.target.value)}
+                          onChange={(e) => mudarQuantidade(item, servico, e.target.value)}
                           className="w-20 border border-gray-300 rounded-lg px-2 py-1.5 text-xs"
                         />
                       </label>
@@ -517,8 +586,8 @@ export function FormularioAgendamento({
                     </div>
                     <button
                       type="button"
-                      onClick={() => remover(servico.id)}
-                      aria-label={`Remover ${servico.nome}`}
+                      onClick={() => removerLinha(item.chave)}
+                      aria-label={`Remover ${servico.nome}${item.paciente ? ` de ${item.paciente}` : ""}`}
                       className="text-[11px] font-semibold text-red-600 hover:underline py-2"
                     >
                       remover
@@ -543,14 +612,19 @@ export function FormularioAgendamento({
                 >
                   + Adicionar outro serviço
                 </Botao>
-                <Botao type="button" onClick={() => setPasso(3)}>
+                <Botao type="button" disabled={repetidoSemPaciente} onClick={() => setPasso(3)}>
                   Continuar
                 </Botao>
               </div>
             </div>
             <div className="text-[10px] text-gray-400 mt-2">
-              Os serviços acontecem um depois do outro, na ordem em que foram adicionados. Para repetir um serviço
-              (outro paciente, por exemplo), faça outro agendamento.
+              Os serviços acontecem um depois do outro, na ordem da lista. Para atender mais de um paciente na mesma
+              visita, use &quot;+ o mesmo serviço para outro paciente&quot; e informe o nome de cada um.
+              {repetidoSemPaciente && (
+                <span className="block text-amber-700 font-semibold mt-1">
+                  Informe o paciente em cada linha do serviço repetido para continuar.
+                </span>
+              )}
             </div>
           </div>
         )}
@@ -704,6 +778,7 @@ export function FormularioAgendamento({
             <div>
               <Rotulo>Paciente (opcional)</Rotulo>
               <Campo name="pacienteNome" value={pacienteNome} onChange={(e) => setPacienteNome(e.target.value)} />
+              <div className="text-[10px] text-gray-400 mt-1">Vale para os serviços sem paciente informado na lista.</div>
             </div>
           </div>
 

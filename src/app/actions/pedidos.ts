@@ -26,7 +26,7 @@ import {
   paraHora,
   paraMinutos,
 } from "@/lib/data";
-import { enfileirarMensagem } from "@/lib/integracoes/whatsapp";
+import { enfileirarMensagem, reenviarMensagem } from "@/lib/integracoes/whatsapp";
 import { sincronizarEvento } from "@/lib/integracoes/google-agenda";
 import { criarNegocio, marcarNegocioGanho, marcarNegocioPerdido } from "@/lib/integracoes/pipedrive";
 import { condicaoValida, formaDePagamentoValida } from "@/lib/pagamento";
@@ -197,13 +197,14 @@ async function criarAgendamento(
     };
   }
 
-  let pedidos: { servicoId: string; quantidade: number }[] = [];
+  let pedidos: { servicoId: string; quantidade: number; paciente: string }[] = [];
   try {
     const bruto = JSON.parse(String(dados.get("itens") ?? "[]"));
     if (Array.isArray(bruto)) {
       pedidos = bruto.map((item) => ({
         servicoId: String(item?.servicoId ?? ""),
         quantidade: Number(item?.quantidade ?? 1),
+        paciente: String(item?.paciente ?? "").trim().slice(0, 120),
       }));
     }
   } catch {
@@ -212,11 +213,20 @@ async function criarAgendamento(
   if (pedidos.length === 0 || pedidos.length > 12 || pedidos.some((p) => !p.servicoId)) {
     return { ok: false, erro: "Escolha ao menos um serviço." };
   }
-  // O mesmo serviço duas vezes na visita é o caso do PRF: um por paciente, e
-  // o segundo paciente é outro agendamento. Quantidade existe para quem o
-  // serviço permite — repetir a linha seria burlar essa regra.
-  if (new Set(pedidos.map((p) => p.servicoId)).size !== pedidos.length) {
-    return { ok: false, erro: "Cada serviço entra uma vez por agendamento. Para outro paciente, faça outro agendamento." };
+  // O mesmo serviço mais de uma vez na visita é um por PACIENTE (reunião de
+  // 27/10 — antes, o segundo paciente era outro agendamento). Cada linha
+  // repetida precisa do nome, e dois iguais com o mesmo paciente é engano:
+  // para mais unidades no mesmo paciente existe a quantidade.
+  const porServico = new Map<string, string[]>();
+  for (const p of pedidos) porServico.set(p.servicoId, [...(porServico.get(p.servicoId) ?? []), p.paciente.toLowerCase()]);
+  for (const nomes of porServico.values()) {
+    if (nomes.length < 2) continue;
+    if (nomes.some((n) => !n)) {
+      return { ok: false, erro: "Serviço repetido na visita: informe o paciente em cada linha." };
+    }
+    if (new Set(nomes).size !== nomes.length) {
+      return { ok: false, erro: "O mesmo serviço está duas vezes para o mesmo paciente. Use a quantidade, se for o caso." };
+    }
   }
 
   const dataISO = String(dados.get("data") ?? "");
@@ -259,7 +269,7 @@ async function criarAgendamento(
     prisma.servico.findMany({ where: { id: { in: pedidos.map((p) => p.servicoId) }, ativo: true } }),
     parametros(),
   ]);
-  if (servicos.length !== pedidos.length) return { ok: false, erro: "Algum serviço está indisponível." };
+  if (servicos.length !== new Set(pedidos.map((p) => p.servicoId)).size) return { ok: false, erro: "Algum serviço está indisponível." };
   const porId = new Map(servicos.map((s) => [s.id, s]));
 
   for (const item of pedidos) {
@@ -316,6 +326,7 @@ async function criarAgendamento(
   let cursor = paraMinutos(horaInicio);
   const itens: {
     servico: (typeof servicos)[number];
+    paciente: string;
     quantidade: number;
     duracaoMin: number;
     horaInicio: string;
@@ -327,6 +338,7 @@ async function criarAgendamento(
     const unitario = await valorDoServico(quem.clinicaId, servico.id, uf);
     itens.push({
       servico,
+      paciente: item.paciente,
       quantidade: item.quantidade,
       duracaoMin,
       horaInicio: paraHora(cursor),
@@ -369,7 +381,8 @@ async function criarAgendamento(
             status: pelaEquipe ? "CONFIRMADO" : "SOLICITADO",
             origem: pelaEquipe ? "INTERNO" : "PORTAL_CLINICA",
             valorServicoCentavos: item.valorServicoCentavos,
-            pacienteNome: String(dados.get("pacienteNome") ?? "") || null,
+            // O paciente da linha vence o campo geral do formulário.
+            pacienteNome: item.paciente || String(dados.get("pacienteNome") ?? "").trim() || null,
             pacienteContato: String(dados.get("pacienteContato") ?? "") || null,
             contatoClinica: formatarTelefoneBrasileiro(contatoClinica),
             doutorNome: String(dados.get("doutorNome") ?? "").trim() || null,
@@ -1900,5 +1913,56 @@ export async function registrarCheckin(
   );
 
   atualizarTelas();
+  return { ok: true };
+}
+
+/**
+ * "Enviar confirmação no WhatsApp" (reunião de 27/10): manda pelo Dilon Zap a
+ * confirmação para a clínica e, se já houver profissional, o aviso para ele.
+ * Ação explícita da equipe — pode repetir, por exemplo depois de corrigir um
+ * telefone. Diz o que foi e o que não foi, e por quê.
+ */
+export async function enviarConfirmacoesWhatsapp(pedidoId: string): Promise<Resultado> {
+  const sessao = await exigirInterno();
+  const pedido = await prisma.pedido.findUnique({
+    where: { id: pedidoId },
+    select: { id: true, numero: true, status: true, profissionalId: true },
+  });
+  if (!pedido) return { ok: false, erro: "Agendamento não encontrado." };
+  if (pedido.status !== "CONFIRMADO" && pedido.status !== "ALOCADO") {
+    return { ok: false, erro: "Só se envia confirmação de agendamento confirmado ou alocado." };
+  }
+
+  const clinica = await reenviarMensagem(pedido.id, "CONFIRMACAO");
+  const profissional = pedido.profissionalId ? await reenviarMensagem(pedido.id, "ALOCACAO") : null;
+
+  const partes = [
+    clinica.ok ? "clínica: enviada" : `clínica: ${clinica.erro}`,
+    profissional === null ? "profissional: ainda sem alocação" : profissional.ok ? "profissional: enviada" : `profissional: ${profissional.erro}`,
+  ];
+  await registrarAuditoria(sessao.usuarioId, "Pedido", pedido.id, "enviar-confirmacao-whatsapp", partes.join(" · "));
+  revalidatePath("/painel/integracoes");
+
+  const algumaFoi = clinica.ok || profissional?.ok;
+  return algumaFoi ? { ok: true, avisos: [partes.join(" · ")] } : { ok: false, erro: partes.join(" · ") };
+}
+
+/**
+ * "Salvei no Google Agenda" (reunião de 27/10): a equipe confirma que pôs o
+ * atendimento na agenda, e a tela passa a mostrar quem e quando — para o
+ * resto do time não salvar de novo nem ficar na dúvida.
+ */
+export async function marcarAgendaSalva(pedidoId: string): Promise<Resultado> {
+  const sessao = await exigirInterno();
+  const pedido = await prisma.pedido.findUnique({ where: { id: pedidoId }, select: { id: true, grupoId: true } });
+  if (!pedido) return { ok: false, erro: "Agendamento não encontrado." };
+  // A visita com vários serviços é um compromisso só na agenda.
+  await prisma.pedido.updateMany({
+    where: pedido.grupoId ? { grupoId: pedido.grupoId } : { id: pedido.id },
+    data: { agendaSalvaEm: new Date(), agendaSalvaPor: sessao.nome || "equipe" },
+  });
+  await registrarAuditoria(sessao.usuarioId, "Pedido", pedido.id, "agenda-salva");
+  atualizarTelas();
+  revalidatePath(`/painel/pedidos/${pedido.id}`);
   return { ok: true };
 }

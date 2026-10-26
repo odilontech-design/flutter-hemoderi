@@ -22,6 +22,8 @@ type DadosPedido = {
   numero: number;
   data: Date;
   horaInicio: string;
+  /** O contato informado no agendamento — vence o telefone do cadastro. */
+  contatoClinica?: string | null;
   clinica: { nome: string; telefone: string | null };
   servico: { nome: string };
   profissional: { nome: string; telefone: string | null } | null;
@@ -54,7 +56,9 @@ function montarTexto(tipo: TipoMensagem, pedido: DadosPedido): string {
 }
 
 function destinatarioDe(tipo: TipoMensagem, pedido: DadosPedido): string {
-  const alvo = tipo === "ALOCACAO" ? pedido.profissional?.telefone : pedido.clinica.telefone;
+  // A clínica recebe no contato que informou para ESTE agendamento ("contato da
+  // clínica para confirmação", ata de 13/10); sem ele, no telefone do cadastro.
+  const alvo = tipo === "ALOCACAO" ? pedido.profissional?.telefone : pedido.contatoClinica || pedido.clinica.telefone;
   return normalizarTelefone(alvo);
 }
 
@@ -75,6 +79,7 @@ export async function enfileirarMensagem(
       numero: true,
       data: true,
       horaInicio: true,
+      contatoClinica: true,
       clinica: { select: { nome: true, telefone: true } },
       servico: { select: { nome: true } },
       profissional: { select: { nome: true, telefone: true } },
@@ -108,6 +113,56 @@ export async function enfileirarMensagem(
   if (mensagem.status === "PENDENTE" && vencida && process.env.WHATSAPP_API_URL) {
     await despacharPendentes(1, mensagem.id).catch(() => undefined);
   }
+}
+
+/**
+ * Reenvio sob demanda (reunião de 27/10: "botão para enviar a confirmação do
+ * agendamento tanto para o profissional quanto para o cliente via Dilon
+ * Zap"). Refaz a mensagem com os dados de agora — o profissional pode ter
+ * mudado, o contato pode ter sido corrigido — e manda na hora.
+ */
+export async function reenviarMensagem(
+  pedidoId: string,
+  tipo: "CONFIRMACAO" | "ALOCACAO"
+): Promise<{ ok: true; destinatario: string } | { ok: false; erro: string }> {
+  const pedido = await prisma.pedido.findUnique({
+    where: { id: pedidoId },
+    select: {
+      id: true,
+      numero: true,
+      data: true,
+      horaInicio: true,
+      contatoClinica: true,
+      clinica: { select: { nome: true, telefone: true } },
+      servico: { select: { nome: true } },
+      profissional: { select: { nome: true, telefone: true } },
+    },
+  });
+  if (!pedido) return { ok: false, erro: "Agendamento não encontrado." };
+  if (tipo === "ALOCACAO" && !pedido.profissional) return { ok: false, erro: "Ainda sem profissional alocado." };
+
+  const destinatario = destinatarioDe(tipo, pedido);
+  if (!destinatario) {
+    return {
+      ok: false,
+      erro: tipo === "ALOCACAO" ? "O profissional não tem telefone cadastrado." : "A clínica não tem telefone de contato.",
+    };
+  }
+  if (!urlDoDilonZap(process.env.WHATSAPP_API_URL)) return { ok: false, erro: "O envio pelo Dilon Zap não está configurado." };
+
+  const texto = montarTexto(tipo, pedido);
+  const mensagem = await prisma.mensagemWhatsapp.upsert({
+    where: { pedidoId_tipo: { pedidoId, tipo } },
+    update: { destinatario, texto, status: "PENDENTE", erro: null, enviadaEm: null, agendadaPara: null },
+    create: { pedidoId, tipo, destinatario, texto },
+    select: { id: true },
+  });
+
+  const entrega = await despacharPendentes(1, mensagem.id);
+  if (entrega.enviadas === 1) return { ok: true, destinatario };
+  if (entrega.canceladas === 1) return { ok: false, erro: "O atendimento já passou: a mensagem não foi enviada." };
+  const final = await prisma.mensagemWhatsapp.findUnique({ where: { id: mensagem.id }, select: { erro: true } });
+  return { ok: false, erro: entrega.interrompido ?? final?.erro ?? "O Dilon Zap não aceitou a mensagem." };
 }
 
 /**

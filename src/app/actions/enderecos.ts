@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
-import { exigirClinica } from "@/lib/sessao";
+import { exigirClinica, exigirInterno, registrarAuditoria } from "@/lib/sessao";
 import { cepValido } from "@/lib/documento";
 import { mesmoLocal } from "@/lib/endereco";
 import type { Resultado } from "./pedidos";
@@ -15,7 +15,30 @@ import type { Resultado } from "./pedidos";
 
 export async function adicionarEndereco(_anterior: Resultado, dados: FormData): Promise<Resultado> {
   const sessao = await exigirClinica();
+  return criarEnderecoDaClinica(sessao.clinicaId, dados);
+}
 
+/**
+ * A equipe informa outro endereço na hora de agendar (reunião de 27/10:
+ * "endereço editável no agendamento feito pelo portal Hemoderi"). Vira um
+ * endereço da clínica — a mesma regra de CEP e sem duplicata do portal — e o
+ * formulário já o deixa escolhido.
+ */
+export async function adicionarEnderecoPelaEquipe(_anterior: Resultado, dados: FormData): Promise<Resultado> {
+  const sessao = await exigirInterno();
+  const clinicaId = String(dados.get("clinicaId") ?? "");
+  const existe = await prisma.clinica.findUnique({ where: { id: clinicaId }, select: { id: true } });
+  if (!existe) return { ok: false, erro: "Clínica não encontrada." };
+  const resultado = await criarEnderecoDaClinica(clinicaId, dados);
+  if (resultado.ok && resultado.id) {
+    await registrarAuditoria(sessao.usuarioId, "EnderecoClinica", resultado.id, "criar-pela-equipe");
+    revalidatePath("/painel/pedidos/novo");
+    revalidatePath(`/painel/clinicas/${clinicaId}`);
+  }
+  return resultado;
+}
+
+async function criarEnderecoDaClinica(clinicaId: string, dados: FormData): Promise<Resultado> {
   const rotulo = String(dados.get("rotulo") ?? "").trim();
   if (!rotulo) return { ok: false, erro: "Informe o nome da clínica ou consultório (ex.: Unidade Moema)." };
 
@@ -33,7 +56,7 @@ export async function adicionarEndereco(_anterior: Resultado, dados: FormData): 
   // Sem duplicata (ata de 13/10): o mesmo lugar cadastrado duas vezes vira duas
   // opções iguais na hora de agendar, e a central não sabe qual é a certa.
   const clinica = await prisma.clinica.findUnique({
-    where: { id: sessao.clinicaId },
+    where: { id: clinicaId },
     select: {
       cep: true,
       numero: true,
@@ -48,9 +71,10 @@ export async function adicionarEndereco(_anterior: Resultado, dados: FormData): 
   const repetido = clinica?.enderecos.find((e) => mesmoLocal(novo, e));
   if (repetido) return { ok: false, erro: `Esse endereço já está cadastrado como "${repetido.rotulo}".` };
 
-  await prisma.enderecoClinica.create({
+  const criado = await prisma.enderecoClinica.create({
+    select: { id: true },
     data: {
-      clinicaId: sessao.clinicaId,
+      clinicaId,
       rotulo,
       cep,
       endereco,
@@ -65,7 +89,7 @@ export async function adicionarEndereco(_anterior: Resultado, dados: FormData): 
 
   revalidatePath("/portal/enderecos");
   revalidatePath("/portal/agendar");
-  return { ok: true };
+  return { ok: true, id: criado.id };
 }
 
 /**

@@ -26,7 +26,7 @@ export const dynamic = "force-dynamic";
  * análise ou com o cadastro incompleto) é liberada aqui mesmo; a que não
  * existe se cadastra e volta direto para cá.
  */
-export default async function NovoPedido({ searchParams }: { searchParams: { clinica?: string } }) {
+export default async function NovoPedido({ searchParams }: { searchParams: { clinica?: string; endereco?: string } }) {
   const sessao = await exigirInterno();
 
   const todas = await prisma.clinica.findMany({
@@ -82,6 +82,7 @@ export default async function NovoPedido({ searchParams }: { searchParams: { cli
             clinicaId={escolhidaId}
             podeLiberar={perfilPermite(sessao.perfil, "COMERCIAL", "ATENDENTE", "POS_VENDA")}
             podeAlocar={perfilPermite(sessao.perfil, "LOGISTICA")}
+            localInicialId={searchParams.endereco}
           />
         )}
       </div>
@@ -93,10 +94,12 @@ async function Agendamento({
   clinicaId,
   podeLiberar,
   podeAlocar,
+  localInicialId,
 }: {
   clinicaId: string;
   podeLiberar: boolean;
   podeAlocar: boolean;
+  localInicialId?: string;
 }) {
   const clinica = await prisma.clinica.findUniqueOrThrow({
     where: { id: clinicaId },
@@ -228,7 +231,7 @@ async function Agendamento({
         servicoInicialId={null}
         telefoneClinica={formatarTelefone(clinica.telefone ?? "")}
         doutores={doutores.map((d) => d.pessoa.nome)}
-        equipe={{ clinicaId, profissionais, enderecosHref: `/painel/clinicas/${clinicaId}` }}
+        equipe={{ clinicaId, profissionais, enderecosHref: `/painel/clinicas/${clinicaId}`, localInicialId }}
       />
     </>
   );

@@ -19,6 +19,8 @@ export type ValoresFiltro = {
   status: string;
   /** Mostrar também quem não tem nada no dia. Não é filtro, é exibição. */
   todos?: string;
+  /** "mes" = calendário do mês inteiro (reunião de 27/10). Vazio = por período. */
+  visao?: string;
 };
 
 /** Períodos oferecidos. Mais que quinzena vira relatório, não agenda. */
@@ -51,6 +53,7 @@ export function urlAgenda(valores: ValoresFiltro, troca: Partial<ValoresFiltro> 
   if (final.servico) parametros.set("servico", final.servico);
   if (final.status) parametros.set("status", final.status);
   if (final.todos) parametros.set("todos", final.todos);
+  if (final.visao) parametros.set("visao", final.visao);
   const consulta = parametros.toString();
   return consulta ? `/painel/agenda?${consulta}` : "/painel/agenda";
 }

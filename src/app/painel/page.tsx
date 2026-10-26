@@ -13,6 +13,8 @@ import { FiltroProdutividade } from "./FiltroProdutividade";
 import { formatarAtraso, statusDeChegada } from "@/lib/atraso";
 import { linkWhatsapp, mensagemDeAtraso } from "@/lib/whatsapp-link";
 import { formatarDataCurta } from "@/lib/data";
+import { etapaPorChave } from "@/lib/esteira";
+import { resumoDoEndereco, comEnderecoDoPedido } from "@/lib/endereco";
 
 export const dynamic = "force-dynamic";
 
@@ -45,9 +47,11 @@ export default async function Hoje({ searchParams }: { searchParams: { servico?:
       where: { data: hoje, status: { notIn: ["CANCELADO"] } },
       orderBy: { horaInicio: "asc" },
       include: {
-        clinica: { select: { nome: true, telefone: true } },
+        clinica: { select: { nome: true, telefone: true, endereco: true, numero: true, complemento: true, bairro: true, cidade: true, uf: true } },
+        endereco: { select: { endereco: true, numero: true, complemento: true, bairro: true, cidade: true, uf: true } },
         servico: { select: { nome: true } },
         profissional: { select: { nome: true } },
+        relatorio: { select: { aprovadoEm: true, devolvidoEm: true } },
       },
     }),
     prisma.pedido.count({ where: { status: { in: STATUS_PENDENTES } } }),
@@ -195,6 +199,25 @@ export default async function Hoje({ searchParams }: { searchParams: { servico?:
   ]);
   const agora = new Date();
 
+  // "Precisa de atenção" (reunião de 27/10: melhorar a tela Hoje): as filas
+  // da esteira com o tamanho de cada uma, clicáveis. É a primeira coisa que a
+  // equipe precisa ver de manhã — antes dos números do mês.
+  const filas = [
+    { chave: "triagem", rotulo: "Para confirmar", dono: "comercial" },
+    { chave: "alocar", rotulo: "Para alocar", dono: "logística" },
+    { chave: "conferir", rotulo: "Para conferir", dono: "pós-venda" },
+    { chave: "sem-relatorio", rotulo: "Sem relatório", dono: "cobrar o profissional" },
+  ];
+  const [contagens, aguardandoAceite] = await Promise.all([
+    Promise.all(filas.map((f) => prisma.pedido.count({ where: etapaPorChave(f.chave)!.onde }))),
+    prisma.pedido.count({ where: { status: "ALOCADO", aceitoEm: null, data: { gte: hoje } } }),
+  ]);
+  const atencao = [
+    ...filas.map((f, i) => ({ ...f, total: contagens[i], href: `/painel/pedidos?filtro=${f.chave}` })),
+    { chave: "aceite", rotulo: "Aguardando aceite", dono: "profissional ainda não confirmou", total: aguardandoAceite, href: "/painel/pedidos?filtro=alocados" },
+  ];
+  const concluidosHoje = doDia.filter((p) => p.status === "REALIZADO" || p.status === "FALTOU").length;
+
   // Taxa de comparecimento: dos atendimentos que chegaram ao fim no mês,
   // quantos aconteceram. É o número que diz se o problema de capacidade é de
   // agenda ou de falta — e as duas coisas se resolvem de formas diferentes.
@@ -223,6 +246,22 @@ export default async function Hoje({ searchParams }: { searchParams: { servico?:
           fica aberto o dia inteiro, às vezes com a clínica olhando junto, e
           custo de prestador não é informação de tela compartilhada. Continua
           em Financeiro → A pagar, que é onde ele é trabalhado. */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2 mb-4">
+        {atencao.map((f) => (
+          <Link
+            key={f.chave}
+            href={f.href}
+            className={`rounded-2xl border p-3 transition-colors ${
+              f.total > 0 ? "border-amber-300 bg-amber-50 hover:bg-amber-100" : "border-gray-200 bg-white hover:bg-gray-50"
+            }`}
+          >
+            <div className={`text-2xl font-display font-extrabold ${f.total > 0 ? "text-amber-800" : "text-gray-300"}`}>{f.total}</div>
+            <div className="text-xs font-semibold text-gray-800">{f.rotulo}</div>
+            <div className="text-[10px] text-gray-500">{f.total > 0 ? f.dono : "em dia"}</div>
+          </Link>
+        ))}
+      </div>
+
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
         <Kpi
           rotulo="Atendimentos hoje"
@@ -250,11 +289,21 @@ export default async function Hoje({ searchParams }: { searchParams: { servico?:
         {/* Coluna principal: o que acontece hoje, o que vem, o que já foi. */}
         <div className="lg:col-span-2 space-y-3 min-w-0">
           <Cartao>
-            <div className="font-display font-bold text-bordo text-sm mb-3">Agenda do dia</div>
+            <div className="flex flex-wrap items-baseline justify-between gap-2 mb-3">
+              <div className="font-display font-bold text-bordo text-sm">Agenda do dia</div>
+              {doDia.length > 0 && (
+                <div className="flex items-center gap-2 text-[11px] text-gray-500">
+                  {concluidosHoje} de {doDia.length} concluído{doDia.length === 1 ? "" : "s"}
+                  <span className="inline-block w-24 h-1.5 rounded-full bg-gray-100 overflow-hidden">
+                    <span className="block h-full bg-green-600" style={{ width: `${Math.round((concluidosHoje / doDia.length) * 100)}%` }} />
+                  </span>
+                </div>
+              )}
+            </div>
             {doDia.length === 0 ? (
               <Vazio>Nenhum atendimento marcado para hoje.</Vazio>
             ) : (
-              <Tabela cabecalho={["Hora", "Clínica", "Serviço", "Profissional", "Chegada", "Status"]}>
+              <Tabela cabecalho={["Hora", "Clínica e local", "Serviço", "Profissional", "Chegada", "Relatório", "Status"]}>
                 {doDia.map((pedido) => {
                   // Chegada e atraso só fazem sentido para quem já tem
                   // profissional e ainda não fechou o atendimento — é o que a
@@ -277,11 +326,25 @@ export default async function Hoje({ searchParams }: { searchParams: { servico?:
                       : null;
                   return (
                     <tr key={pedido.id} className="border-b border-gray-100 last:border-0 align-top">
-                      <td className="py-2 pr-3 font-semibold">{pedido.horaInicio}</td>
-                      <td className="py-2 pr-3">{pedido.clinica.nome}</td>
+                      <td className="py-2 pr-3 font-semibold">
+                        <Link href={`/painel/pedidos/${pedido.id}`} className="hover:underline">
+                          {pedido.horaInicio}
+                        </Link>
+                      </td>
+                      <td className="py-2 pr-3">
+                        {pedido.clinica.nome}
+                        <div className="text-[10px] text-gray-400">
+                          {resumoDoEndereco(comEnderecoDoPedido(pedido.clinica, pedido.endereco)) || "sem endereço"}
+                        </div>
+                      </td>
                       <td className="py-2 pr-3 text-gray-500">{pedido.servico.nome}</td>
                       <td className="py-2 pr-3">
                         {pedido.profissional?.nome ?? <span className="text-red-600 font-semibold">a alocar</span>}
+                        {pedido.status === "ALOCADO" && (
+                          <div className={`text-[10px] font-semibold ${pedido.aceitoEm ? "text-green-700" : "text-amber-700"}`}>
+                            {pedido.aceitoEm ? "aceitou" : "aguardando aceite"}
+                          </div>
+                        )}
                       </td>
                       <td className="py-2 pr-3 whitespace-nowrap">
                         {chegada === null ? (
@@ -308,6 +371,17 @@ export default async function Hoje({ searchParams }: { searchParams: { servico?:
                           </div>
                         ) : (
                           <span className="text-[11px] text-gray-400">aguardando</span>
+                        )}
+                      </td>
+                      <td className="py-2 pr-3 whitespace-nowrap text-[11px]">
+                        {pedido.relatorio?.aprovadoEm ? (
+                          <span className="font-semibold text-green-700">aprovado</span>
+                        ) : pedido.relatorio?.devolvidoEm ? (
+                          <span className="font-semibold text-red-600">devolvido</span>
+                        ) : pedido.relatorio ? (
+                          <span className="font-semibold text-amber-700">para conferir</span>
+                        ) : (
+                          <span className="text-gray-300">—</span>
                         )}
                       </td>
                       <td className="py-2 pr-3">

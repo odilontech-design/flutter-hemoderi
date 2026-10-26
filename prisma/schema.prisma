@@ -1022,6 +1022,12 @@ model Pedido {
   googleAgendaId     String?
   pipedriveNegocioId String?
 
+  /// Confirmação de que o agendamento foi posto no Google Agenda da equipe
+  /// (reunião de 27/10): quem marcou e quando. O link do Google não avisa de
+  /// volta se a pessoa salvou — a confirmação é dela, e fica à vista de todos.
+  agendaSalvaEm  DateTime?
+  agendaSalvaPor String?
+
   faturaId String?
   fatura   Fatura? @relation(fields: [faturaId], references: [id])
 

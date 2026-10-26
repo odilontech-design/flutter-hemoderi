@@ -24,7 +24,9 @@ import { ConferenciaRelatorio } from "./ConferenciaRelatorio";
 import { FiltroPagamento } from "./FiltroPagamento";
 import { ValorServico } from "./ValorServico";
 import { perfilPermite } from "@/lib/papeis";
-import { AdicionarAgenda } from "@/components/AdicionarAgenda";
+import { AgendaDaEquipe } from "@/components/AgendaDaEquipe";
+import { BotaoAcao } from "@/components/BotaoAcao";
+import { enviarConfirmacoesWhatsapp } from "@/app/actions/pedidos";
 import { eventoParaEquipe } from "@/lib/evento-equipe";
 import { condicaoValida } from "@/lib/pagamento";
 
@@ -121,12 +123,27 @@ export default async function Esteira({
     <>
       <Titulo
         acao={
-          <Link
-            href="/painel/pedidos/novo"
-            className="bg-bordo text-white text-xs font-semibold px-3 py-2 min-h-[40px] sm:min-h-0 inline-flex items-center rounded-lg hover:bg-bordoEscuro"
-          >
-            + Novo agendamento
-          </Link>
+          <div className="flex flex-wrap items-center gap-2">
+            {/* Os mesmos agendamentos em calendário e em lista por dia (reunião de 27/10). */}
+            <Link
+              href="/painel/agenda?visao=mes"
+              className="border border-gray-300 text-bordo text-xs font-semibold px-3 py-2 min-h-[40px] sm:min-h-0 inline-flex items-center rounded-lg hover:bg-gray-50"
+            >
+              Ver no calendário
+            </Link>
+            <Link
+              href="/painel/agenda?dias=7"
+              className="border border-gray-300 text-bordo text-xs font-semibold px-3 py-2 min-h-[40px] sm:min-h-0 inline-flex items-center rounded-lg hover:bg-gray-50"
+            >
+              Ver em lista
+            </Link>
+            <Link
+              href="/painel/pedidos/novo"
+              className="bg-bordo text-white text-xs font-semibold px-3 py-2 min-h-[40px] sm:min-h-0 inline-flex items-center rounded-lg hover:bg-bordoEscuro"
+            >
+              + Novo agendamento
+            </Link>
+          </div>
         }
       >
         Esteira de agendamentos
@@ -289,7 +306,10 @@ export default async function Esteira({
                       )}
                       {/* Depois de alocado, a equipe põe na própria agenda (pedido
                           do André, 26/10) — com local, profissional e contato. */}
-                      <AdicionarAgenda
+                      <AgendaDaEquipe
+                        pedidoId={pedido.id}
+                        salvaEm={pedido.agendaSalvaEm}
+                        salvaPor={pedido.agendaSalvaPor}
                         variante="link"
                         evento={eventoParaEquipe({
                           id: pedido.id,
@@ -398,6 +418,17 @@ export default async function Esteira({
                       <strong>Devolvido ao profissional em {formatarDataHora(pedido.relatorio.devolvidoEm)}</strong>
                       {pedido.relatorio.motivoDevolucao && <> — {pedido.relatorio.motivoDevolucao}</>}
                       <div className="text-red-700/80 mt-0.5">Volta para a conferência quando ele reenviar.</div>
+                    </div>
+                  )}
+                  {/* Confirmação sob demanda pelo Dilon Zap (reunião de 27/10). */}
+                  {(pedido.status === "CONFIRMADO" || pedido.status === "ALOCADO") && (
+                    <div className="mt-1">
+                      <BotaoAcao
+                        acao={enviarConfirmacoesWhatsapp.bind(null, pedido.id)}
+                        confirmar="Enviar a confirmação deste agendamento pelo WhatsApp para a clínica e o profissional?"
+                      >
+                        Enviar confirmação no WhatsApp
+                      </BotaoAcao>
                     </div>
                   )}
                   {/* Passou do dia e o relatório não veio (revisão de 25/10):
@@ -560,6 +591,8 @@ type PedidoDaEsteira = {
   formaPagamento: string | null;
   procedimentoPaciente: string | null;
   contatoClinica: string | null;
+  agendaSalvaEm: Date | null;
+  agendaSalvaPor: string | null;
   clinica: {
     nome: string;
     endereco: string | null;
@@ -622,7 +655,10 @@ function CartaoDoGrupo({
           {/* A visita inteira alocada vira UM compromisso na agenda da equipe. */}
           {contar("ALOCADO") === membros.length && (
             <div className="mt-1">
-              <AdicionarAgenda
+              <AgendaDaEquipe
+                        pedidoId={primeiro.id}
+                        salvaEm={primeiro.agendaSalvaEm}
+                        salvaPor={primeiro.agendaSalvaPor}
                 variante="link"
                 evento={eventoParaEquipe({
                   id: primeiro.grupoId ?? primeiro.id,

@@ -5,7 +5,9 @@ import { exigirInterno } from "@/lib/sessao";
 import { perfilPermite } from "@/lib/papeis";
 import { STATUS_ATIVOS } from "@/lib/pedido";
 import { comEnderecoDoPedido, locaisDaClinica, resumoDoEndereco } from "@/lib/endereco";
-import { AdicionarAgenda } from "@/components/AdicionarAgenda";
+import { AgendaDaEquipe } from "@/components/AgendaDaEquipe";
+import { BotaoAcao } from "@/components/BotaoAcao";
+import { enviarConfirmacoesWhatsapp } from "@/app/actions/pedidos";
 import { eventoParaEquipe } from "@/lib/evento-equipe";
 import { agruparPorFamilia } from "@/lib/familia";
 import { isoDeData } from "@/lib/data";
@@ -82,10 +84,21 @@ export default async function DetalheDoPedido({ params }: { params: { pedidoId: 
           {pedido.origem === "PORTAL_CLINICA" && (
             <span className="text-[10px] uppercase tracking-wide text-gray-400">veio do portal</span>
           )}
+          {(pedido.status === "CONFIRMADO" || pedido.status === "ALOCADO") && (
+            <BotaoAcao
+              acao={enviarConfirmacoesWhatsapp.bind(null, pedido.id)}
+              confirmar="Enviar a confirmação deste agendamento pelo WhatsApp para a clínica e o profissional?"
+            >
+              Enviar confirmação no WhatsApp
+            </BotaoAcao>
+          )}
           {/* Alocado, vai para a agenda de quem acompanha (pedido do André, 26/10). */}
           {pedido.status === "ALOCADO" && (
             <span className="ml-auto">
-              <AdicionarAgenda
+              <AgendaDaEquipe
+                        pedidoId={pedido.id}
+                        salvaEm={pedido.agendaSalvaEm}
+                        salvaPor={pedido.agendaSalvaPor}
                 evento={eventoParaEquipe({
                   id: pedido.id,
                   data: pedido.data,

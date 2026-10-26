@@ -3,7 +3,7 @@ import type { Prisma, StatusPedido } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { exigirInterno } from "@/lib/sessao";
 import { Cartao, SeloStatus, Titulo, Vazio } from "@/components/ui";
-import { dataDaURL, dataDeISO, formatarData, formatarDataCurta, hojeISO, isoDeData, somarDias } from "@/lib/data";
+import { competenciaDe, competenciaPorExtenso, dataDaURL, dataDeISO, formatarData, formatarDataCurta, gradeDoMes, hojeISO, hojeUTC, isoDeData, somarDias } from "@/lib/data";
 import { paraMinutos } from "@/lib/data";
 import { parametros } from "@/lib/alocacao";
 import { COR_STATUS, ROTULO_STATUS, STATUS_ATIVOS } from "@/lib/pedido";
@@ -57,15 +57,22 @@ export default async function Agenda({
     servico?: string;
     status?: string;
     todos?: string;
+    visao?: string;
   };
 }) {
   await exigirInterno();
 
   const dataISO = dataDaURL(searchParams.data);
-  const inicio = dataDeISO(dataISO);
-  const dias = Math.min(Math.max(Number(searchParams.dias) || 1, 1), 15);
+  // Calendário do mês (reunião de 27/10): o mês inteiro do dia escolhido.
+  const mensal = searchParams.visao === "mes";
+  const diaEscolhido = dataDeISO(dataISO);
+  const competencia = competenciaDe(diaEscolhido);
+  const celulasDoMes = mensal ? gradeDoMes(competencia) : [];
+  const diasDoMes = celulasDoMes.filter((d): d is Date => d !== null);
+  const inicio = mensal ? diasDoMes[0] : diaEscolhido;
+  const dias = mensal ? diasDoMes.length : Math.min(Math.max(Number(searchParams.dias) || 1, 1), 15);
   const fim = somarDias(inicio, dias - 1);
-  const umDiaSo = dias === 1;
+  const umDiaSo = !mensal && dias === 1;
   const mostrarTodos = searchParams.todos === "1";
 
   const valores: ValoresFiltro = {
@@ -76,6 +83,7 @@ export default async function Agenda({
     servico: searchParams.servico ?? "",
     status: searchParams.status ?? "",
     todos: searchParams.todos === "1" ? "1" : "",
+    visao: mensal ? "mes" : "",
   };
   const temFiltroAtivo = Boolean(
     valores.profissional || valores.clinica || valores.servico || valores.status
@@ -123,9 +131,14 @@ export default async function Agenda({
 
   const semProfissional = pedidos.filter((p) => !p.profissionalId);
 
-  const cabecalho = umDiaSo
-    ? `Agenda · ${formatarData(inicio)}`
-    : `Agenda · ${formatarDataCurta(inicio)} a ${formatarDataCurta(fim)}`;
+  const cabecalho = mensal
+    ? `Agenda · ${competenciaPorExtenso(competencia)}`
+    : umDiaSo
+      ? `Agenda · ${formatarData(inicio)}`
+      : `Agenda · ${formatarDataCurta(inicio)} a ${formatarDataCurta(fim)}`;
+  // Navegação: no mês, pula de mês em mês; no período, do tamanho do período.
+  const anterior = mensal ? isoDeData(somarDias(inicio, -1)) : isoDeData(somarDias(inicio, -dias));
+  const seguinte = mensal ? isoDeData(somarDias(fim, 1)) : isoDeData(somarDias(inicio, dias));
 
   return (
     <>
@@ -133,7 +146,7 @@ export default async function Agenda({
         acao={
           <div className="flex items-center gap-1 text-xs">
             <Link
-              href={urlAgenda(valores, { data: isoDeData(somarDias(inicio, -dias)) })}
+              href={urlAgenda(valores, { data: anterior })}
               className="px-3 py-2 min-h-[40px] sm:min-h-0 inline-flex items-center text-gray-500"
             >
               ‹ anterior
@@ -145,7 +158,7 @@ export default async function Agenda({
               hoje
             </Link>
             <Link
-              href={urlAgenda(valores, { data: isoDeData(somarDias(inicio, dias)) })}
+              href={urlAgenda(valores, { data: seguinte })}
               className="px-3 py-2 min-h-[40px] sm:min-h-0 inline-flex items-center text-gray-500"
             >
               seguinte ›
@@ -155,6 +168,26 @@ export default async function Agenda({
       >
         {cabecalho}
       </Titulo>
+
+      {/* Dia · Lista · Calendário (reunião de 27/10): as três formas de olhar
+          os agendamentos, a um clique. */}
+      <div className="flex flex-wrap gap-2 mb-3">
+        {[
+          { rotulo: "Dia", href: urlAgenda(valores, { dias: "1", visao: "" }), ativo: umDiaSo },
+          { rotulo: "Lista (7 dias)", href: urlAgenda(valores, { dias: "7", visao: "" }), ativo: !mensal && !umDiaSo },
+          { rotulo: "Calendário do mês", href: urlAgenda(valores, { visao: "mes" }), ativo: mensal },
+        ].map((v) => (
+          <Link
+            key={v.rotulo}
+            href={v.href}
+            className={`text-xs font-semibold px-3 py-2 rounded-full border ${
+              v.ativo ? "bg-bordo text-white border-bordo" : "border-gray-300 text-gray-600 hover:bg-gray-50"
+            }`}
+          >
+            {v.rotulo}
+          </Link>
+        ))}
+      </div>
 
       <FiltrosAgenda
         valores={valores}
@@ -195,7 +228,9 @@ export default async function Agenda({
         </Cartao>
       )}
 
-      {umDiaSo ? (
+      {mensal ? (
+        <CalendarioDoMes pedidos={pedidos} celulas={celulasDoMes} valores={valores} />
+      ) : umDiaSo ? (
         <PorProfissional
           pedidos={pedidos}
           profissionais={profissionais}
@@ -460,6 +495,77 @@ function GradeCalendario({
             </div>
           ))}
         </div>
+      </div>
+    </Cartao>
+  );
+}
+
+/**
+ * O mês inteiro em calendário (reunião de 27/10: "visibilidade do
+ * calendário"). Cada dia mostra os primeiros atendimentos e quantos mais há;
+ * clicar no dia abre a agenda dele, por profissional.
+ */
+function CalendarioDoMes({
+  pedidos,
+  celulas,
+  valores,
+}: {
+  pedidos: PedidoNaAgenda[];
+  celulas: (Date | null)[];
+  valores: ValoresFiltro;
+}) {
+  const hoje = hojeUTC().getTime();
+  const porDia = new Map<number, PedidoNaAgenda[]>();
+  for (const p of pedidos) porDia.set(p.data.getTime(), [...(porDia.get(p.data.getTime()) ?? []), p]);
+
+  return (
+    <Cartao className="!p-2 sm:!p-3">
+      <div className="grid grid-cols-7 gap-1 text-center text-[10px] font-semibold text-gray-400 mb-1">
+        {["dom", "seg", "ter", "qua", "qui", "sex", "sáb"].map((d) => (
+          <div key={d}>{d}</div>
+        ))}
+      </div>
+      <div className="grid grid-cols-7 gap-1">
+        {celulas.map((dia, i) => {
+          if (!dia) return <div key={`vazio-${i}`} className="min-h-[88px] rounded-lg bg-gray-50/50" />;
+          const doDia = porDia.get(dia.getTime()) ?? [];
+          const ehHoje = dia.getTime() === hoje;
+          const semProfissional = doDia.filter((p) => !p.profissionalId && p.status !== "CANCELADO").length;
+          return (
+            <Link
+              key={dia.toISOString()}
+              href={urlAgenda(valores, { data: isoDeData(dia), dias: "1", visao: "" })}
+              className={`min-h-[88px] rounded-lg border p-1.5 text-left hover:border-bordo/50 ${
+                ehHoje ? "border-bordo bg-bege/60" : "border-gray-200 bg-white"
+              }`}
+            >
+              <div className="flex items-center justify-between">
+                <span className={`text-[11px] font-bold ${ehHoje ? "text-bordo" : "text-gray-600"}`}>{dia.getUTCDate()}</span>
+                {doDia.length > 0 && <span className="text-[9px] font-semibold text-gray-400">{doDia.length}</span>}
+              </div>
+              <div className="mt-1 space-y-0.5">
+                {doDia.slice(0, 3).map((p) => (
+                  <div
+                    key={p.id}
+                    className={`truncate rounded px-1 text-[9px] leading-4 ${COR_STATUS[p.status]}`}
+                    title={`${p.horaInicio} · ${p.clinica.nome} · ${p.servico.nome}${p.profissional ? ` · ${p.profissional.nome}` : ""}`}
+                  >
+                    {p.horaInicio} {p.clinica.nome}
+                  </div>
+                ))}
+                {doDia.length > 3 && <div className="text-[9px] text-gray-400">+{doDia.length - 3} mais</div>}
+                {semProfissional > 0 && <div className="text-[9px] font-semibold text-red-600">{semProfissional} sem profissional</div>}
+              </div>
+            </Link>
+          );
+        })}
+      </div>
+      <div className="flex flex-wrap gap-2 mt-2 text-[10px] text-gray-500">
+        {(["SOLICITADO", "CONFIRMADO", "ALOCADO", "REALIZADO"] as StatusPedido[]).map((st) => (
+          <span key={st} className={`rounded px-1.5 ${COR_STATUS[st]}`}>
+            {ROTULO_STATUS[st]}
+          </span>
+        ))}
       </div>
     </Cartao>
   );
