@@ -8,7 +8,7 @@ import { Area, Aviso, Botao, Campo, Rotulo, Selecao } from "@/components/ui";
 import { CampoTelefone } from "@/components/CampoTelefone";
 import { FORMAS_DE_PAGAMENTO } from "@/lib/pagamento";
 import { OUTRO_PROCEDIMENTO, PROCEDIMENTOS_NO_PACIENTE } from "@/lib/procedimentos";
-import { solicitarAgendamento, type Resultado } from "@/app/actions/pedidos";
+import { agendarPelaEquipe, solicitarAgendamento, type Resultado } from "@/app/actions/pedidos";
 import { linkWhatsapp, mensagemDeUrgencia } from "@/lib/whatsapp-link";
 import { formatarReais } from "@/lib/dinheiro";
 import { descricaoDoPreco, quantidadeMinimaDe, totalDoItem } from "@/lib/cobranca";
@@ -33,6 +33,20 @@ export type ServicoDoCarrinho = {
   ufsIndisponiveis: string[];
 };
 type Grupo = { familia: string; servicos: ServicoDoCarrinho[] };
+
+/**
+ * O mesmo formulário usado pela equipe no painel (ata de 26/10: "todos os
+ * campos iguais ao agendamento feito pelo portal"). Muda o que é da equipe: a
+ * clínica escolhida antes, sem antecedência mínima, e o profissional opcional
+ * para quem aloca.
+ */
+export type ModoEquipe = {
+  clinicaId: string;
+  /** Vazio para quem não aloca: o campo some e o agendamento vai para a fila. */
+  profissionais: { id: string; nome: string }[];
+  /** Onde a equipe cadastra outro endereço da clínica. */
+  enderecosHref: string;
+};
 type Item = { servicoId: string; quantidade: number };
 
 const HORARIO = new Intl.DateTimeFormat("pt-BR", {
@@ -121,6 +135,7 @@ export function FormularioAgendamento({
   servicoInicialId,
   telefoneClinica,
   doutores,
+  equipe,
 }: {
   grupos: Grupo[];
   locais: LocalDeAtendimento[];
@@ -133,9 +148,12 @@ export function FormularioAgendamento({
   telefoneClinica: string;
   /** Doutores cadastrados na clínica (Configurações): sugeridos no campo do doutor. */
   doutores: string[];
+  /** Presente quando quem agenda é a equipe, no painel. */
+  equipe?: ModoEquipe;
 }) {
   const router = useRouter();
-  const [estado, enviar] = useFormState(solicitarAgendamento, INICIAL);
+  const [estado, enviar] = useFormState(equipe ? agendarPelaEquipe : solicitarAgendamento, INICIAL);
+  const enderecosHref = equipe?.enderecosHref ?? "/portal/enderecos";
 
   const [localId, setLocalId] = useState(locais[0]?.id ?? "");
   const local = locais.find((l) => l.id === localId) ?? locais[0];
@@ -225,7 +243,7 @@ export function FormularioAgendamento({
     let cancelado = false;
     setSituacaoHora("verificando");
     const espera = setTimeout(() => {
-      const parametros = new URLSearchParams({ itens: chaveDosItens, data, hora });
+      const parametros = new URLSearchParams({ itens: chaveDosItens, data, hora, ...(equipe ? { clinicaId: equipe.clinicaId } : {}) });
       fetch(`/api/horarios?${parametros}`)
         .then((r) => r.json())
         .then((json) => {
@@ -240,11 +258,17 @@ export function FormularioAgendamento({
       cancelado = true;
       clearTimeout(espera);
     };
-  }, [hora, chaveDosItens, data]);
+  }, [hora, chaveDosItens, data, equipe]);
 
   useEffect(() => {
-    if (estado.ok) router.push(estado.id ? `/portal/resumo/${estado.id}` : "/portal");
-  }, [estado.ok, estado.id, router]);
+    if (!estado.ok) return;
+    if (!equipe) {
+      router.push(estado.id ? `/portal/resumo/${estado.id}` : "/portal");
+      return;
+    }
+    // Com aviso (a alocação não passou, por exemplo), a equipe lê antes de sair.
+    if (!estado.avisos?.length) router.push(estado.id ? `/painel/pedidos/${estado.id}` : "/painel/pedidos");
+  }, [estado, router, equipe]);
 
   function abrirFamilia(familia: string | null) {
     setFamiliaAberta(familia);
@@ -283,7 +307,8 @@ export function FormularioAgendamento({
   // A conta é a mesma que o servidor faz ao recusar — feita aqui só para AVISAR
   // antes, em vez de deixar a pessoa preencher tudo para ouvir não no fim.
   const urgente = (() => {
-    if (!data) return false;
+    // A equipe encaixa urgência: o limite do portal não vale para ela.
+    if (!data || equipe) return false;
     const escolhida = new Date(`${data}T23:59:59-03:00`);
     return escolhida.getTime() - Date.now() < antecedenciaHoras * 60 * 60 * 1000;
   })();
@@ -310,12 +335,13 @@ export function FormularioAgendamento({
       <input type="hidden" name="enderecoId" value={local?.id ?? ""} />
       <input type="hidden" name="data" value={data} />
       <input type="hidden" name="horaInicio" value={hora} />
+      {equipe && <input type="hidden" name="clinicaId" value={equipe.clinicaId} />}
 
       {!temEtapaDeLocal && local && (
         <div className="text-[11px] text-gray-500 px-1">
           Atendimento em <strong className="text-gray-700">{local.rotulo}</strong>
           {local.resumo ? ` · ${local.resumo}` : ""} ·{" "}
-          <Link href="/portal/enderecos" className="font-semibold text-bordo hover:underline">
+          <Link href={enderecosHref} className="font-semibold text-bordo hover:underline">
             cadastrar outro endereço
           </Link>
         </div>
@@ -346,7 +372,7 @@ export function FormularioAgendamento({
               );
             })}
           </div>
-          <Link href="/portal/enderecos" className="inline-block text-[11px] font-semibold text-bordo hover:underline mt-2">
+          <Link href={enderecosHref} className="inline-block text-[11px] font-semibold text-bordo hover:underline mt-2">
             + Cadastrar outro endereço
           </Link>
         </Etapa>
@@ -405,9 +431,11 @@ export function FormularioAgendamento({
                   <div className="min-w-0">
                     <div className="text-xs font-semibold text-bordo">{familiaAberta}</div>
                     <div className="text-[11px] text-gray-500 leading-snug">{d.legenda}</div>
-                    <Link href="/portal/catalogo" target="_blank" className="text-[11px] font-semibold text-bordo hover:underline">
-                      Ver descritivo completo no catálogo ↗
-                    </Link>
+                    {!equipe && (
+                      <Link href="/portal/catalogo" target="_blank" className="text-[11px] font-semibold text-bordo hover:underline">
+                        Ver descritivo completo no catálogo ↗
+                      </Link>
+                    )}
                   </div>
                 </div>
               );
@@ -444,7 +472,7 @@ export function FormularioAgendamento({
 
         {linhas.length > 0 && (
           <div className="mt-4 border border-gray-200 rounded-xl p-3">
-            <div className="text-[11px] font-semibold text-gray-600 mb-1">Seu agendamento</div>
+            <div className="text-[11px] font-semibold text-gray-600 mb-1">{equipe ? "Agendamento" : "Seu agendamento"}</div>
             <ul className="divide-y divide-gray-100">
               {linhas.map(({ item, servico }) => {
                 const unitario = precoUnitario(servico.id);
@@ -528,6 +556,11 @@ export function FormularioAgendamento({
           <div>
             <Rotulo>Data</Rotulo>
             <Campo type="date" value={data} onChange={(e) => setData(e.target.value)} required />
+            {equipe ? (
+              <div className="text-[10px] text-gray-500 mt-1 leading-relaxed">
+                Pela equipe vale qualquer data, inclusive hoje: o limite de {antecedenciaHoras}h é só do portal da clínica.
+              </div>
+            ) : (
             <div className="text-[10px] text-gray-500 mt-1 leading-relaxed">
               O portal agenda com {antecedenciaHoras}h de antecedência
               {primeiroHorario ? (
@@ -537,6 +570,7 @@ export function FormularioAgendamento({
               ) : null}
               . Para horários antes disso, a central resolve direto pelo WhatsApp.
             </div>
+            )}
           </div>
 
           {urgente && (
@@ -576,13 +610,16 @@ export function FormularioAgendamento({
                   {situacaoHora === "indisponivel" && (
                     <span className="font-semibold text-amber-700">
                       Esse horário não está disponível para {linhas.length > 1 ? "esses serviços juntos" : "esse serviço"}{" "}
-                      (já ocupado, com menos de {antecedenciaHoras}h de antecedência ou passando da meia-noite). Tente
-                      outro horário ou fale com a central.
+                      {equipe
+                        ? "(sala da clínica ou equipamento já ocupados, ou passando da meia-noite). Tente outro horário."
+                        : `(já ocupado, com menos de ${antecedenciaHoras}h de antecedência ou passando da meia-noite). Tente outro horário ou fale com a central.`}
                     </span>
                   )}
                   {situacaoHora === null && (
                     <span className="text-gray-400">
-                      Escolha o horário. A central confere a agenda da equipe e confirma pelo WhatsApp.
+                      {equipe
+                        ? "Escolha o horário combinado com a clínica."
+                        : "Escolha o horário. A central confere a agenda da equipe e confirma pelo WhatsApp."}
                     </span>
                   )}
                 </div>
@@ -646,7 +683,11 @@ export function FormularioAgendamento({
               </datalist>
               <div className="text-[10px] text-gray-400 mt-1">
                 É por este nome que a central pergunta.
-                {doutores.length > 0 ? " Escolha da lista ou digite outro." : " Cadastre os doutores em Configurações."}
+                {doutores.length > 0
+                  ? " Escolha da lista ou digite outro."
+                  : equipe
+                    ? " A clínica ainda não tem doutores cadastrados: digite o nome."
+                    : " Cadastre os doutores em Configurações."}
               </div>
             </div>
             <div>
@@ -660,17 +701,49 @@ export function FormularioAgendamento({
             </div>
           </div>
 
+          {equipe && equipe.profissionais.length > 0 && (
+            <div className="max-w-sm">
+              <Rotulo>Profissional (opcional)</Rotulo>
+              <Selecao name="profissionalId" defaultValue="">
+                <option value="">Alocar depois</option>
+                {equipe.profissionais.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.nome}
+                  </option>
+                ))}
+              </Selecao>
+              <div className="text-[10px] text-gray-400 mt-1">
+                Se escolher agora, o agendamento já sai alocado. Sem escolher, vai para a fila &quot;Para alocar&quot;.
+              </div>
+            </div>
+          )}
+
           <div>
             <Rotulo>Observações do procedimento</Rotulo>
             <Area name="observacoes" rows={2} value={observacoes} onChange={(e) => setObservacoes(e.target.value)} />
           </div>
 
           {estado.erro && <Aviso tom="erro">{estado.erro}</Aviso>}
+          {equipe && estado.ok && estado.avisos?.length ? (
+            <Aviso tom="alerta">
+              <div className="font-semibold mb-1">Agendamento criado.</div>
+              {estado.avisos.join(" ")}
+              <div className="mt-2">
+                <Link href={estado.id ? `/painel/pedidos/${estado.id}` : "/painel/pedidos"} className="font-semibold underline">
+                  Ver o agendamento →
+                </Link>
+              </div>
+            </Aviso>
+          ) : null}
 
-          <Botao type="submit" disabled={!horaLivre || linhas.length === 0}>
-            Solicitar agendamento
+          <Botao type="submit" disabled={!horaLivre || linhas.length === 0 || (Boolean(equipe) && estado.ok)}>
+            {equipe ? "Criar agendamento" : "Solicitar agendamento"}
           </Botao>
-          <div className="text-[10px] text-gray-400">A central confirma a solicitação e avisa pelo WhatsApp.</div>
+          <div className="text-[10px] text-gray-400">
+            {equipe
+              ? "Já nasce confirmado: a clínica recebe a confirmação pelo WhatsApp."
+              : "A central confirma a solicitação e avisa pelo WhatsApp."}
+          </div>
         </div>
       </Etapa>
     </form>

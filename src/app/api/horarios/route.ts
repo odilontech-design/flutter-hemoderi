@@ -56,7 +56,7 @@ export async function GET(requisicao: Request) {
       dataISO: data,
       ...(ignorarGrupoId ? { ignorarGrupoId } : {}),
       exigirAntecedencia: sessao.user.papel === "CLINICA",
-      ...(hora ? { horas: [hora], foraDoExpediente: sessao.user.papel === "CLINICA" } : {}),
+      ...(hora ? { horas: [hora], foraDoExpediente: true } : {}),
     });
     return Response.json(resultado);
   }
@@ -90,7 +90,7 @@ export async function GET(requisicao: Request) {
     // No reagendamento o bloco tem a duração do PEDIDO, que pode diferir da do
     // serviço (por hora, com quantidade).
     ...(pedidoAtual ? { duracaoMin: pedidoAtual.duracaoMin } : {}),
-    ...(horaDigitada ? { horas: [horaDigitada], foraDoExpediente: sessao.user.papel === "CLINICA" } : {}),
+    ...(horaDigitada ? { horas: [horaDigitada], foraDoExpediente: true } : {}),
   });
 
   return Response.json({ horarios });

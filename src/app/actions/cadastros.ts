@@ -3,7 +3,9 @@
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { Prisma, type CategoriaServico, type UnidadeCobranca } from "@prisma/client";
-import { exigirInterno } from "@/lib/sessao";
+import { exigirInterno, registrarAuditoria } from "@/lib/sessao";
+import { perfilPermite } from "@/lib/papeis";
+import { formatarTelefoneBrasileiro, lerTelefoneBrasileiro, MENSAGEM_TELEFONE_INVALIDO } from "@/lib/telefone";
 import { camposDoFormulario, lerResponsavelFinanceiro } from "@/lib/responsavel-financeiro";
 import { gerarSlug } from "@/lib/slug";
 import { lerCentavos } from "@/lib/dinheiro";
@@ -76,19 +78,103 @@ export async function salvarClinica(_anterior: Resultado, dados: FormData): Prom
     ...financeiro.dados,
   };
 
+  let salvaId = id;
   if (id) {
     await prisma.clinica.update({ where: { id }, data: comum });
   } else {
     // O cadastro novo feito pela equipe já nasce com o perfil escolhido; na
     // edição os perfis têm tela própria (Perfil e tabelas de preço) e não são
     // tocados aqui — senão salvar o endereço apagaria a classificação.
-    await prisma.clinica.create({
+    const criada = await prisma.clinica.create({
       data: { ...comum, slug: await slugLivre(nome), perfis: lerPerfis(dados.getAll("perfis")) },
+      select: { id: true },
     });
+    salvaId = criada.id;
   }
 
   revalidatePath("/painel/clinicas");
-  return { ok: true };
+  revalidatePath("/painel/pedidos/novo");
+  // O id volta para a tela de agendamento seguir com a clínica recém-cadastrada.
+  return { ok: true, id: salvaId };
+}
+
+const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+/**
+ * Deixa uma clínica já cadastrada pronta para agendar, do próprio formulário
+ * de agendamento (ata de 26/10: "adicionar e/ou ativar as clínicas
+ * cadastradas"). Numa ação só: liga o cadastro (pré-cadastro do CRM ou
+ * clínica desativada), aprova o autocadastro ainda em análise e completa o que
+ * falta para cobrar (CNPJ ou CPF, telefone, e-mail) — o que a equipe faria em
+ * três telas enquanto a clínica espera no telefone.
+ *
+ * Quem pode: quem confirma agendamentos (comercial, atendente, pós-venda) e o
+ * responsável. Aprovar sem perfil não passa: o perfil decide o catálogo que a
+ * clínica vê no portal dela depois.
+ */
+export async function liberarClinicaParaAgendar(_anterior: Resultado, dados: FormData): Promise<Resultado> {
+  const sessao = await exigirInterno();
+  if (!perfilPermite(sessao.perfil, "COMERCIAL", "ATENDENTE", "POS_VENDA")) {
+    return { ok: false, erro: "Quem libera o cadastro de uma clínica é o comercial." };
+  }
+
+  const clinicaId = String(dados.get("clinicaId") ?? "");
+  const clinica = await prisma.clinica.findUnique({
+    where: { id: clinicaId },
+    select: { id: true, cnpj: true, telefone: true, email: true, perfis: true, statusCadastro: true },
+  });
+  if (!clinica) return { ok: false, erro: "Clínica não encontrada." };
+
+  const completar: Prisma.ClinicaUpdateInput = {};
+  if (!clinica.cnpj?.replace(/\D/g, "")) {
+    const cnpj = String(dados.get("cnpj") ?? "").trim();
+    if (!cnpj || (!cnpjValido(cnpj) && !cpfValido(cnpj))) {
+      return { ok: false, erro: "Informe um CNPJ (ou CPF) válido — é com ele que a clínica é cobrada." };
+    }
+    completar.cnpj = cnpj;
+  }
+  if (!clinica.telefone?.replace(/\D/g, "")) {
+    const telefone = lerTelefoneBrasileiro(String(dados.get("telefone") ?? ""));
+    if (!telefone) return { ok: false, erro: `Telefone: ${MENSAGEM_TELEFONE_INVALIDO}` };
+    completar.telefone = formatarTelefoneBrasileiro(telefone);
+  }
+  if (!clinica.email?.trim()) {
+    const email = String(dados.get("email") ?? "").trim().toLowerCase();
+    if (!EMAIL.test(email)) return { ok: false, erro: "Informe um e-mail válido para a clínica." };
+    completar.email = email;
+  }
+
+  const perfisInformados = lerPerfis(dados.getAll("perfis"));
+  const perfis = clinica.perfis.length > 0 ? clinica.perfis : perfisInformados;
+  if (perfis.length === 0) {
+    return { ok: false, erro: "Marque o perfil da clínica (odontologia, medicina, estética…) antes de liberar." };
+  }
+
+  await prisma.clinica.update({
+    where: { id: clinica.id },
+    data: {
+      ...completar,
+      perfis,
+      ativa: true,
+      preCadastro: false,
+      desativadaEm: null,
+      ...(clinica.statusCadastro !== "APROVADO" ? { statusCadastro: "APROVADO", cadastroRevisadoEm: new Date() } : {}),
+    },
+  });
+  await registrarAuditoria(
+    sessao.usuarioId,
+    "Clinica",
+    clinica.id,
+    "liberar-para-agendar",
+    [Object.keys(completar).length ? `completou ${Object.keys(completar).join(", ")}` : null, `perfis: ${perfis.join(", ")}`]
+      .filter(Boolean)
+      .join(" · ")
+  );
+
+  revalidatePath("/painel/clinicas");
+  revalidatePath(`/painel/clinicas/${clinica.id}`);
+  revalidatePath("/painel/pedidos/novo");
+  return { ok: true, id: clinica.id };
 }
 
 export async function alternarClinica(id: string, ativa: boolean): Promise<Resultado> {

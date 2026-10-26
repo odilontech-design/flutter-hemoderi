@@ -29,7 +29,7 @@ export function FormularioAcao({
   className?: string;
   limparAoSalvar?: boolean;
   /** Chamado quando a ação volta `ok` — usado, por exemplo, para voltar à lista depois de cadastrar. */
-  aoSalvar?: () => void;
+  aoSalvar?: (estado: Resultado) => void;
 }) {
   const [estado, enviar] = useFormState(acao, INICIAL);
   const formulario = useRef<HTMLFormElement>(null);
@@ -37,7 +37,7 @@ export function FormularioAcao({
   useEffect(() => {
     if (!estado.ok) return;
     if (limparAoSalvar) formulario.current?.reset();
-    aoSalvar?.();
+    aoSalvar?.(estado);
     // eslint-disable-next-line react-hooks/exhaustive-deps -- aoSalvar só dispara na mudança de `estado`, não a cada nova identidade de função.
   }, [estado, limparAoSalvar]);
 

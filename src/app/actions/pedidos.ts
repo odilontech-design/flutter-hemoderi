@@ -133,151 +133,67 @@ async function repasseDoPedido(
 // ─── Criação ────────────────────────────────────────────────────────────────
 
 /**
- * Pedido aberto pela equipe interna. Pode já nascer alocado quando o
- * atendente sabe quem vai atender — é o caminho mais comum hoje, e obrigar a
- * passar por duas telas só transformaria um telefonema em dois cliques a mais.
+ * Quem está agendando. O portal e a equipe preenchem o MESMO formulário (ata
+ * de 26/10: "todos os campos iguais ao agendamento feito pelo portal"); o que
+ * muda é o que cada um pode:
+ *
+ *   - a clínica agenda só para si, com a antecedência mínima e os serviços do
+ *     perfil dela, e o pedido nasce SOLICITADO — a central ainda confirma;
+ *   - a equipe escolhe a clínica, encaixa urgência (sem antecedência), vê todo
+ *     o catálogo atendido na UF, e o pedido já nasce CONFIRMADO: quem agendou é
+ *     quem confirmaria.
  */
-export async function criarPedido(_anterior: Resultado, dados: FormData): Promise<Resultado> {
-  const sessao = await exigirInterno();
-
-  const clinicaId = String(dados.get("clinicaId") ?? "");
-  const servicoId = String(dados.get("servicoId") ?? "");
-  const profissionalId = String(dados.get("profissionalId") ?? "") || null;
-  const dataISO = String(dados.get("data") ?? "");
-  const horaInicio = String(dados.get("horaInicio") ?? "");
-  if (!clinicaId || !servicoId || !dataISO || !horaInicio) {
-    return { ok: false, erro: "Clínica, serviço, data e hora são obrigatórios." };
-  }
-
-  // Garante a linha única de Parametros antes de numerar o pedido: numerar
-  // é um update, e num banco recém-criado não haveria o que atualizar.
-  await parametros();
-
-  const servico = await prisma.servico.findFirst({ where: { id: servicoId, ativo: true } });
-  if (!servico) return { ok: false, erro: "Serviço indisponível." };
-
-  const data = dataDeISO(dataISO);
-  const valorServicoCentavos = await valorDoServico(clinicaId, servicoId);
-
-  // Checar disponibilidade e só depois gravar, com uma transação comum, deixa
-  // uma corrida aberta: com dezenas de profissionais e a equipe + o portal da
-  // clínica marcando ao mesmo tempo, duas requisições podem ler "livre" antes
-  // de qualquer uma escrever. `travarRecursos` fecha isso — trava primeiro os
-  // recursos em disputa, e só então checa e grava, tudo dentro da mesma
-  // transação.
-  const resultado = await prisma.$transaction(async (tx) => {
-    await travarRecursos(tx, {
-      clinicaId,
-      profissionalId,
-      tipoEquipamento: servico.exigeEquipamento ? servico.tipoEquipamento : null,
-    });
-
-    const impedimentos = await verificarAlocacao(
-      { clinicaId, profissionalId, data, horaInicio, duracaoMin: servico.duracaoMin },
-      tx
-    );
-    if (temBloqueio(impedimentos)) {
-      return {
-        ok: false as const,
-        erro: impedimentos.filter((i) => i.bloqueante).map((i) => i.mensagem).join(" "),
-      };
-    }
-
-    let valorRepasseCentavos = 0;
-    if (profissionalId) {
-      valorRepasseCentavos = (
-        await repasseDoPedido(profissionalId, servicoId, valorServicoCentavos, { clinicaId, enderecoId: null })
-      ).valorCentavos;
-    }
-
-    // Serviço com equipamento ilimitado não reserva unidade: o aparelho
-    // existe de sobra (ou é do próprio profissional) e prender uma unidade
-    // dele tiraria horário de quem realmente disputa o estoque.
-    const reservaEquipamento = servico.exigeEquipamento && !servico.equipamentoIlimitado;
-    const equipamentoId =
-      profissionalId && reservaEquipamento
-        ? await equipamentoLivre(data, horaInicio, servico.duracaoMin, servico.tipoEquipamento, undefined, tx)
-        : null;
-    if (profissionalId && reservaEquipamento && !equipamentoId) {
-      return { ok: false as const, erro: "Nenhum equipamento livre nesse horário." };
-    }
-
-    const numero = await proximoNumeroDePedido(tx);
-    const pedido = await tx.pedido.create({
-      data: {
-        numero,
-        clinicaId,
-        servicoId,
-        profissionalId,
-        equipamentoId,
-        data,
-        horaInicio,
-        duracaoMin: servico.duracaoMin,
-        status: profissionalId ? "ALOCADO" : "CONFIRMADO",
-        origem: "INTERNO",
-        valorServicoCentavos,
-        valorRepasseCentavos,
-        pacienteNome: String(dados.get("pacienteNome") ?? "") || null,
-        pacienteContato: String(dados.get("pacienteContato") ?? "") || null,
-        doutorNome: String(dados.get("doutorNome") ?? "").trim() || null,
-        condicaoPagamento: String(dados.get("condicaoPagamento") ?? "").trim() || null,
-        observacoes: String(dados.get("observacoes") ?? "") || null,
-        criadoPorId: sessao.usuarioId,
-      },
-    });
-
-    return {
-      ok: true as const,
-      pedido,
-      avisos: impedimentos.filter((i) => !i.bloqueante).map((i) => i.mensagem),
-    };
-  });
-
-  if (!resultado.ok) return resultado;
-
-  const { pedido, avisos } = resultado;
-  await registrarAuditoria(sessao.usuarioId, "Pedido", pedido.id, "criar", `nº ${pedido.numero}`);
-  await enfileirarMensagem(pedido.id, "CONFIRMACAO");
-  if (pedido.profissionalId) await enfileirarMensagem(pedido.id, "ALOCACAO");
-  await sincronizarEvento(pedido.id);
-  await criarNegocio(pedido.id);
-
-  atualizarTelas();
-  return { ok: true, avisos };
-}
+type QuemAgenda =
+  | { tipo: "clinica"; usuarioId: string; clinicaId: string }
+  | { tipo: "equipe"; usuarioId: string; clinicaId: string };
 
 /**
- * Solicitação aberta pela própria clínica no portal. Nasce SOLICITADO: é
- * pedido, não compromisso. A equipe confirma — e é essa confirmação que
- * separa o autoatendimento de um canal onde qualquer um marca qualquer coisa.
- *
- * Aceita VÁRIOS serviços numa visita só (ata de 01/10). Cada serviço vira um
- * pedido — é assim que a operação aloca, cobra e repassa —, ligados por
- * `grupoId` e encadeados no tempo: o segundo começa quando o primeiro termina.
- * O bloco inteiro é conferido de uma vez, dentro de uma transação, para a
- * visita nunca ficar pela metade.
+ * Cria o agendamento — um ou VÁRIOS serviços numa visita só (ata de 01/10).
+ * Cada serviço vira um pedido — é assim que a operação aloca, cobra e repassa
+ * —, ligados por `grupoId` e encadeados no tempo: o segundo começa quando o
+ * primeiro termina. O bloco inteiro é conferido de uma vez, dentro de uma
+ * transação, para a visita nunca ficar pela metade.
  */
-export async function solicitarAgendamento(_anterior: Resultado, dados: FormData): Promise<Resultado> {
-  const sessao = await exigirClinica();
-
+async function criarAgendamento(
+  quem: QuemAgenda,
+  dados: FormData
+): Promise<Resultado & { criados?: { id: string; numero: number }[] }> {
+  const pelaEquipe = quem.tipo === "equipe";
   const clinica = await prisma.clinica.findUnique({
-    where: { id: sessao.clinicaId },
-    select: { uf: true, perfis: true, statusCadastro: true, cnpj: true, telefone: true, email: true },
+    where: { id: quem.clinicaId },
+    select: {
+      uf: true,
+      perfis: true,
+      statusCadastro: true,
+      cnpj: true,
+      telefone: true,
+      email: true,
+      ativa: true,
+      preCadastro: true,
+    },
   });
   if (!clinica) return { ok: false, erro: "Clínica não encontrada." };
   // Cadastro incompleto não agenda (ata de 02/10): sem CNPJ, telefone e e-mail
-  // a central não consegue cobrar nem ligar de volta.
+  // a central não consegue cobrar nem ligar de volta. Vale também para a
+  // equipe — a tela dela completa os dados ali mesmo, antes de agendar.
   const faltando = camposFaltando(clinica);
   if (faltando.length > 0) {
     return {
       ok: false,
-      erro: `O cadastro da clínica está incompleto (falta ${faltando.join(", ")}). Fale com a central para completar e liberar o agendamento.`,
+      erro: pelaEquipe
+        ? `O cadastro da clínica está incompleto (falta ${faltando.join(", ")}). Complete antes de agendar.`
+        : `O cadastro da clínica está incompleto (falta ${faltando.join(", ")}). Fale com a central para completar e liberar o agendamento.`,
     };
+  }
+  if (pelaEquipe && (!clinica.ativa || clinica.preCadastro)) {
+    return { ok: false, erro: "A clínica está desativada. Ative o cadastro antes de agendar." };
   }
   if (clinica.statusCadastro !== "APROVADO") {
     return {
       ok: false,
-      erro: "Seu cadastro ainda está em análise pela nossa equipe. Assim que for aprovado, o agendamento é liberado.",
+      erro: pelaEquipe
+        ? "O cadastro da clínica ainda não foi aprovado. Aprove antes de agendar."
+        : "Seu cadastro ainda está em análise pela nossa equipe. Assim que for aprovado, o agendamento é liberado.",
     };
   }
 
@@ -306,8 +222,6 @@ export async function solicitarAgendamento(_anterior: Resultado, dados: FormData
   const dataISO = String(dados.get("data") ?? "");
   const horaInicio = String(dados.get("horaInicio") ?? "");
   if (!dataISO || !horaInicio) return { ok: false, erro: "Data e horário são obrigatórios." };
-  // Para o cliente o doutor é obrigatório (é por ele que a central pergunta);
-  // para a equipe, que agenda por telefone, é opcional — ver criarPedido.
   if (!String(dados.get("doutorNome") ?? "").trim()) {
     return { ok: false, erro: "Informe o(a) doutor(a) responsável." };
   }
@@ -334,7 +248,7 @@ export async function solicitarAgendamento(_anterior: Resultado, dados: FormData
   const enderecoId = String(dados.get("enderecoId") ?? "") || null;
   const endereco = enderecoId
     ? await prisma.enderecoClinica.findFirst({
-        where: { id: enderecoId, clinicaId: sessao.clinicaId, ativo: true },
+        where: { id: enderecoId, clinicaId: quem.clinicaId, ativo: true },
         select: { id: true, uf: true },
       })
     : null;
@@ -350,8 +264,18 @@ export async function solicitarAgendamento(_anterior: Resultado, dados: FormData
 
   for (const item of pedidos) {
     const servico = porId.get(item.servicoId)!;
-    if (!servicoVisivel(servico, { perfis: clinica.perfis, uf })) {
-      return { ok: false, erro: `${servico.nome} não está disponível para o seu cadastro nesse endereço.` };
+    // A equipe vê o catálogo inteiro (o perfil filtra o que a CLÍNICA enxerga
+    // sozinha); a UF continua valendo para os dois — não há quem atenda lá.
+    const visivel = pelaEquipe
+      ? servicoVisivel({ ...servico, perfis: [] }, { perfis: [], uf })
+      : servicoVisivel(servico, { perfis: clinica.perfis, uf });
+    if (!visivel) {
+      return {
+        ok: false,
+        erro: pelaEquipe
+          ? `${servico.nome} não é atendido nesse endereço (UF ${uf ?? "?"}).`
+          : `${servico.nome} não está disponível para o seu cadastro nesse endereço.`,
+      };
     }
     if (!quantidadeValida(servico, item.quantidade)) {
       return { ok: false, erro: `Quantidade inválida para ${servico.nome}.` };
@@ -359,22 +283,25 @@ export async function solicitarAgendamento(_anterior: Resultado, dados: FormData
   }
 
   const data = dataDeISO(dataISO);
-  const limite = new Date(Date.now() + config.antecedenciaMinimaHoras * 60 * 60 * 1000);
-  if (new Date(`${dataISO}T${horaInicio}:00-03:00`) < limite) {
-    return {
-      ok: false,
-      erro: `Agendamentos pelo portal precisam de ${config.antecedenciaMinimaHoras}h de antecedência. Para horários antes disso, fale com a central pelo WhatsApp.`,
-    };
+  if (!pelaEquipe) {
+    const limite = new Date(Date.now() + config.antecedenciaMinimaHoras * 60 * 60 * 1000);
+    if (new Date(`${dataISO}T${horaInicio}:00-03:00`) < limite) {
+      return {
+        ok: false,
+        erro: `Agendamentos pelo portal precisam de ${config.antecedenciaMinimaHoras}h de antecedência. Para horários antes disso, fale com a central pelo WhatsApp.`,
+      };
+    }
   }
 
   // Qualquer horário vale (ata de 02/10: o relógio do formulário), mesmo fora
-  // do expediente, desde que respeite a antecedência e passe pelas travas de
-  // sala da clínica e equipamento. O servidor não confia no que o navegador conferiu.
+  // do expediente, desde que passe pelas travas de sala da clínica e
+  // equipamento. A antecedência só vale para a clínica: a equipe encaixa
+  // urgência. O servidor não confia no que o navegador conferiu.
   const livres = await horariosDisponiveisConjunto({
-    clinicaId: sessao.clinicaId,
+    clinicaId: quem.clinicaId,
     itens: pedidos,
     dataISO,
-    exigirAntecedencia: true,
+    exigirAntecedencia: !pelaEquipe,
     horas: [horaInicio],
     foraDoExpediente: true,
   });
@@ -397,7 +324,7 @@ export async function solicitarAgendamento(_anterior: Resultado, dados: FormData
   for (const item of pedidos) {
     const servico = porId.get(item.servicoId)!;
     const duracaoMin = duracaoEfetiva(servico, item.quantidade);
-    const unitario = await valorDoServico(sessao.clinicaId, servico.id, uf);
+    const unitario = await valorDoServico(quem.clinicaId, servico.id, uf);
     itens.push({
       servico,
       quantidade: item.quantidade,
@@ -413,10 +340,10 @@ export async function solicitarAgendamento(_anterior: Resultado, dados: FormData
   const resultado = await prisma.$transaction(async (tx) => {
     // `travarRecursos` garante que essa checagem e a gravação são atômicas
     // mesmo com duas clínicas pedindo no mesmo instante.
-    await travarRecursos(tx, { clinicaId: sessao.clinicaId });
+    await travarRecursos(tx, { clinicaId: quem.clinicaId });
 
     const impedimentos = await verificarAlocacao(
-      { clinicaId: sessao.clinicaId, data, horaInicio, duracaoMin: duracaoTotalMin },
+      { clinicaId: quem.clinicaId, data, horaInicio, duracaoMin: duracaoTotalMin },
       tx
     );
     if (temBloqueio(impedimentos)) {
@@ -430,7 +357,7 @@ export async function solicitarAgendamento(_anterior: Resultado, dados: FormData
         await tx.pedido.create({
           data: {
             numero,
-            clinicaId: sessao.clinicaId,
+            clinicaId: quem.clinicaId,
             servicoId: item.servico.id,
             enderecoId: endereco?.id ?? null,
             quantidade: item.quantidade,
@@ -439,8 +366,8 @@ export async function solicitarAgendamento(_anterior: Resultado, dados: FormData
             data,
             horaInicio: item.horaInicio,
             duracaoMin: item.duracaoMin,
-            status: "SOLICITADO",
-            origem: "PORTAL_CLINICA",
+            status: pelaEquipe ? "CONFIRMADO" : "SOLICITADO",
+            origem: pelaEquipe ? "INTERNO" : "PORTAL_CLINICA",
             valorServicoCentavos: item.valorServicoCentavos,
             pacienteNome: String(dados.get("pacienteNome") ?? "") || null,
             pacienteContato: String(dados.get("pacienteContato") ?? "") || null,
@@ -448,7 +375,7 @@ export async function solicitarAgendamento(_anterior: Resultado, dados: FormData
             doutorNome: String(dados.get("doutorNome") ?? "").trim() || null,
             procedimentoPaciente,
             formaPagamento,
-            criadoPorId: sessao.usuarioId,
+            criadoPorId: quem.usuarioId,
           },
         })
       );
@@ -459,13 +386,63 @@ export async function solicitarAgendamento(_anterior: Resultado, dados: FormData
   if (!resultado.ok) return resultado;
 
   for (const pedido of resultado.criados) {
-    await registrarAuditoria(sessao.usuarioId, "Pedido", pedido.id, "solicitar", `nº ${pedido.numero}`);
+    await registrarAuditoria(quem.usuarioId, "Pedido", pedido.id, pelaEquipe ? "criar" : "solicitar", `nº ${pedido.numero}`);
+    if (pelaEquipe) {
+      // Já nasce confirmado: o que a confirmação dispararia, dispara aqui.
+      await enfileirarMensagem(pedido.id, "CONFIRMACAO");
+      await sincronizarEvento(pedido.id);
+    }
     await criarNegocio(pedido.id);
   }
+  return { ok: true, id: resultado.criados[0].id, criados: resultado.criados };
+}
+
+/**
+ * Solicitação aberta pela própria clínica no portal. Nasce SOLICITADO: é
+ * pedido, não compromisso. A equipe confirma — e é essa confirmação que
+ * separa o autoatendimento de um canal onde qualquer um marca qualquer coisa.
+ */
+export async function solicitarAgendamento(_anterior: Resultado, dados: FormData): Promise<Resultado> {
+  const sessao = await exigirClinica();
+  const resultado = await criarAgendamento({ tipo: "clinica", usuarioId: sessao.usuarioId, clinicaId: sessao.clinicaId }, dados);
+  if (!resultado.ok) return resultado;
   atualizarTelas();
   // A tela leva a pessoa ao resumo do agendamento (ata de 05/10), que é a
   // confirmação final.
-  return { ok: true, id: resultado.criados[0].id };
+  return { ok: true, id: resultado.id };
+}
+
+/**
+ * Agendamento feito pela equipe, com os mesmos campos do portal (ata de
+ * 26/10). Já nasce confirmado; se a logística escolheu o profissional no
+ * próprio formulário, aloca em seguida — o agendamento inteiro, numa transação
+ * só. Se a alocação não passar (ocupado, sem equipamento), o agendamento fica
+ * confirmado na fila "Para alocar", com o motivo à vista: o telefonema com a
+ * clínica não se perde por causa de quem vai atender.
+ */
+export async function agendarPelaEquipe(_anterior: Resultado, dados: FormData): Promise<Resultado> {
+  const sessao = await exigirInterno();
+  const clinicaId = String(dados.get("clinicaId") ?? "");
+  if (!clinicaId) return { ok: false, erro: "Escolha a clínica." };
+
+  const resultado = await criarAgendamento({ tipo: "equipe", usuarioId: sessao.usuarioId, clinicaId }, dados);
+  if (!resultado.ok || !resultado.criados) return resultado;
+
+  const avisos: string[] = [];
+  const profissionalId = String(dados.get("profissionalId") ?? "");
+  if (profissionalId) {
+    const grupoId = resultado.criados.length > 1
+      ? (await prisma.pedido.findUnique({ where: { id: resultado.criados[0].id }, select: { grupoId: true } }))?.grupoId
+      : null;
+    const alocacao = grupoId
+      ? await alocarGrupo(grupoId, profissionalId)
+      : await alocarPedido(resultado.criados[0].id, profissionalId);
+    if (alocacao.ok) avisos.push(...(alocacao.avisos ?? []));
+    else avisos.push(`Agendamento criado, mas não foi possível alocar: ${alocacao.erro} Ele está na fila "Para alocar".`);
+  }
+
+  atualizarTelas();
+  return { ok: true, id: resultado.id, avisos };
 }
 
 // ─── Esteira ────────────────────────────────────────────────────────────────

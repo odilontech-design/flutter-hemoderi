@@ -10,14 +10,18 @@ import { CamposResponsavelFinanceiro } from "@/components/CamposResponsavelFinan
 import { CONDICOES_PAGAMENTO } from "@/lib/pagamento";
 import { ROTULO_PERFIL_CLIENTE, TODOS_OS_PERFIS } from "@/lib/visibilidade";
 
-export function NovaClinicaForm() {
+export function NovaClinicaForm({ paraAgendar = false }: { paraAgendar?: boolean }) {
   const router = useRouter();
 
   return (
     <FormularioAcao
       acao={salvarClinica}
-      botao="Cadastrar clínica"
-      aoSalvar={() => router.push("/painel/clinicas")}
+      botao={paraAgendar ? "Cadastrar e continuar o agendamento" : "Cadastrar clínica"}
+      // Vindo do agendamento (ata de 26/10), volta para ele com a clínica nova
+      // já escolhida, em vez de largar a pessoa na lista de clínicas.
+      aoSalvar={(estado) =>
+        router.push(paraAgendar && estado.id ? `/painel/pedidos/novo?clinica=${estado.id}` : "/painel/clinicas")
+      }
     >
       <div>
         <Rotulo>Nome</Rotulo>
