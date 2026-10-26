@@ -24,7 +24,7 @@ function Passo({ n, titulo, children }: { n: number; titulo: string; children: R
 /**
  * Guia de instalação do app (ata de 20/10: "enviar até sexta o passo a passo
  * com o link para os profissionais", treinamento de sábado). Pública, sem
- * login: é o link que vai no WhatsApp — hemoderi.dilontech.com.br/instalar.
+ * login: é o link que vai no WhatsApp — app.hemoderi.com.br/instalar.
  * Não é app de loja: o site instalado na tela inicial abre em tela cheia.
  */
 export default function Instalar() {
@@ -45,7 +45,7 @@ export default function Instalar() {
           <h2 className="font-display font-bold text-bordo text-sm mb-3">Android (Chrome)</h2>
           <ol className="space-y-3">
             <Passo n={1} titulo="Abra o link no Chrome">
-              <strong>hemoderi.dilontech.com.br</strong> — se abriu dentro do WhatsApp, toque nos três pontinhos e em{" "}
+              <strong>app.hemoderi.com.br</strong> — se abriu dentro do WhatsApp, toque nos três pontinhos e em{" "}
               <em>Abrir no Chrome</em>.
             </Passo>
             <Passo n={2} titulo="Toque em Instalar">
@@ -60,7 +60,7 @@ export default function Instalar() {
           <h2 className="font-display font-bold text-bordo text-sm mb-3">iPhone (Safari)</h2>
           <ol className="space-y-3">
             <Passo n={1} titulo="Abra o link no Safari">
-              <strong>hemoderi.dilontech.com.br</strong> — no iPhone a instalação só funciona pelo Safari. Se abriu dentro
+              <strong>app.hemoderi.com.br</strong> — no iPhone a instalação só funciona pelo Safari. Se abriu dentro
               do WhatsApp, toque no ícone da bússola ou em <em>Abrir no Safari</em>.
             </Passo>
             <Passo n={2} titulo="Toque em Compartilhar">É o quadrado com a seta para cima, na barra de baixo.</Passo>
