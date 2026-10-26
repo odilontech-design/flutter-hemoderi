@@ -5,6 +5,7 @@ import { Botao } from "@/components/ui";
 import { aprovarRelatorio, devolverRelatorio, validarItemRelatorio } from "@/app/actions/financeiro";
 import { AcaoComMotivo } from "./AcoesPedido";
 import type { ItemValidacao } from "@/lib/relatorio";
+import { useConfirmarSalvo } from "@/components/ConfirmacaoSalvo";
 
 const ITENS: { chave: ItemValidacao; rotulo: string }[] = [
   { chave: "servico", rotulo: "Serviço executado confere" },
@@ -34,6 +35,7 @@ export function ConferenciaRelatorio({
 }) {
   const [pendente, iniciar] = useTransition();
   const [erro, setErro] = useState("");
+  const avisarSalvo = useConfirmarSalvo();
   const [marcados, setMarcados] = useState<Record<ItemValidacao, boolean>>({
     servico: servicoValidado,
     valor: valorValidado,
@@ -64,7 +66,7 @@ export function ConferenciaRelatorio({
                   if (!resultado.ok) {
                     setMarcados((atual) => ({ ...atual, [item.chave]: anterior }));
                     setErro(resultado.erro ?? "Não foi possível marcar.");
-                  }
+                  } else avisarSalvo();
                 });
               }}
               className="accent-bordo w-4 h-4"
@@ -82,6 +84,7 @@ export function ConferenciaRelatorio({
             iniciar(async () => {
               const resultado = await aprovarRelatorio(pedidoId);
               if (!resultado.ok) setErro(resultado.erro ?? "Não foi possível aprovar.");
+              else avisarSalvo();
             });
           }}
         >
@@ -99,6 +102,7 @@ export function ConferenciaRelatorio({
             iniciar(async () => {
               const resultado = await devolverRelatorio(pedidoId, motivo);
               if (!resultado.ok) setErro(resultado.erro ?? "Não foi possível devolver.");
+              else avisarSalvo();
             });
           }}
         />

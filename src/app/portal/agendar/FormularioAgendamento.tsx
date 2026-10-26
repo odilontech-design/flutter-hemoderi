@@ -15,6 +15,7 @@ import { descricaoDoPreco, quantidadeMinimaDe, totalDoItem } from "@/lib/cobranc
 import { descritivoDaFamilia } from "@/lib/catalogo-familias";
 import type { LocalDeAtendimento } from "@/lib/endereco";
 import type { UnidadeCobranca } from "@prisma/client";
+import { useConfirmarSalvo } from "@/components/ConfirmacaoSalvo";
 
 const INICIAL: Resultado = { ok: false };
 
@@ -153,6 +154,11 @@ export function FormularioAgendamento({
 }) {
   const router = useRouter();
   const [estado, enviar] = useFormState(equipe ? agendarPelaEquipe : solicitarAgendamento, INICIAL);
+  const avisarSalvo = useConfirmarSalvo();
+  useEffect(() => {
+    if (estado.ok) avisarSalvo();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- avisa uma vez por resposta do servidor, não quando a sessão recarrega.
+  }, [estado]);
   const enderecosHref = equipe?.enderecosHref ?? "/portal/enderecos";
 
   const [localId, setLocalId] = useState(locais[0]?.id ?? "");

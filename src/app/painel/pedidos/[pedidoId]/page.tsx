@@ -4,7 +4,9 @@ import { prisma } from "@/lib/prisma";
 import { exigirInterno } from "@/lib/sessao";
 import { perfilPermite } from "@/lib/papeis";
 import { STATUS_ATIVOS } from "@/lib/pedido";
-import { locaisDaClinica, resumoDoEndereco } from "@/lib/endereco";
+import { comEnderecoDoPedido, locaisDaClinica, resumoDoEndereco } from "@/lib/endereco";
+import { AdicionarAgenda } from "@/components/AdicionarAgenda";
+import { eventoParaEquipe } from "@/lib/evento-equipe";
 import { agruparPorFamilia } from "@/lib/familia";
 import { isoDeData } from "@/lib/data";
 import { EditarAgendamento } from "./EditarAgendamento";
@@ -35,7 +37,7 @@ export default async function DetalheDoPedido({ params }: { params: { pedidoId: 
   const pedido = await prisma.pedido.findUnique({
     where: { id: params.pedidoId },
     include: {
-      clinica: { select: { nome: true } },
+      clinica: { select: { nome: true, endereco: true, numero: true, complemento: true, bairro: true, cidade: true, uf: true } },
       servico: { select: { nome: true } },
       endereco: { select: { rotulo: true, endereco: true, numero: true, complemento: true, bairro: true, cidade: true, uf: true, observacoes: true } },
       profissional: { select: { nome: true } },
@@ -79,6 +81,27 @@ export default async function DetalheDoPedido({ params }: { params: { pedidoId: 
           <SeloStatus status={pedido.status} />
           {pedido.origem === "PORTAL_CLINICA" && (
             <span className="text-[10px] uppercase tracking-wide text-gray-400">veio do portal</span>
+          )}
+          {/* Alocado, vai para a agenda de quem acompanha (pedido do André, 26/10). */}
+          {pedido.status === "ALOCADO" && (
+            <span className="ml-auto">
+              <AdicionarAgenda
+                evento={eventoParaEquipe({
+                  id: pedido.id,
+                  data: pedido.data,
+                  horaInicio: pedido.horaInicio,
+                  duracaoMin: pedido.duracaoMin,
+                  clinicaNome: pedido.clinica.nome,
+                  servicoNome: pedido.servico.nome,
+                  profissionalNome: pedido.profissional?.nome,
+                  doutorNome: pedido.doutorNome,
+                  contatoClinica: pedido.contatoClinica,
+                  pacienteNome: pedido.pacienteNome,
+                  procedimentoPaciente: pedido.procedimentoPaciente,
+                  local: resumoDoEndereco(comEnderecoDoPedido(pedido.clinica, pedido.endereco)),
+                })}
+              />
+            </span>
           )}
         </div>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-2 text-xs">

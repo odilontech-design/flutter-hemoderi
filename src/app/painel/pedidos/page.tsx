@@ -1,6 +1,6 @@
 import { INCLUIR_ADICIONAIS, RelatorioPreenchido } from "@/components/RelatorioPreenchido";
 import { aptoParaServico } from "@/lib/aptidao";
-import { resumoDoEndereco } from "@/lib/endereco";
+import { comEnderecoDoPedido, resumoDoEndereco } from "@/lib/endereco";
 import { AcoesGrupo } from "./AcoesGrupo";
 import Link from "next/link";
 import type { PerfilInterno, StatusPedido } from "@prisma/client";
@@ -24,6 +24,8 @@ import { ConferenciaRelatorio } from "./ConferenciaRelatorio";
 import { FiltroPagamento } from "./FiltroPagamento";
 import { ValorServico } from "./ValorServico";
 import { perfilPermite } from "@/lib/papeis";
+import { AdicionarAgenda } from "@/components/AdicionarAgenda";
+import { eventoParaEquipe } from "@/lib/evento-equipe";
 import { condicaoValida } from "@/lib/pagamento";
 
 export const dynamic = "force-dynamic";
@@ -64,7 +66,7 @@ export default async function Esteira({
       orderBy: [{ data: "asc" }, { horaInicio: "asc" }],
       take: 200,
       include: {
-        clinica: { select: { nome: true, telefone: true } },
+        clinica: { select: { nome: true, telefone: true, endereco: true, numero: true, complemento: true, bairro: true, cidade: true, uf: true } },
         endereco: { select: { rotulo: true, endereco: true, numero: true, complemento: true, bairro: true, cidade: true, uf: true, observacoes: true } },
         servico: { select: { nome: true } },
         profissional: { select: { nome: true, telefone: true } },
@@ -278,6 +280,25 @@ export default async function Esteira({
                       ) : (
                         <span className="font-semibold text-amber-700">aguardando aceite</span>
                       )}
+                      {/* Depois de alocado, a equipe põe na própria agenda (pedido
+                          do André, 26/10) — com local, profissional e contato. */}
+                      <AdicionarAgenda
+                        variante="link"
+                        evento={eventoParaEquipe({
+                          id: pedido.id,
+                          data: pedido.data,
+                          horaInicio: pedido.horaInicio,
+                          duracaoMin: pedido.duracaoMin,
+                          clinicaNome: pedido.clinica.nome,
+                          servicoNome: pedido.servico.nome,
+                          profissionalNome: pedido.profissional?.nome,
+                          doutorNome: pedido.doutorNome,
+                          contatoClinica: pedido.contatoClinica,
+                          pacienteNome: pedido.pacienteNome,
+                          procedimentoPaciente: pedido.procedimentoPaciente,
+                          local: resumoDoEndereco(comEnderecoDoPedido(pedido.clinica, pedido.endereco)),
+                        })}
+                      />
                       {pedido.checkinEm &&
                         (pedido.checkinLatitude != null && pedido.checkinLongitude != null ? (
                           <a
@@ -531,7 +552,16 @@ type PedidoDaEsteira = {
   ajudaCustoCentavos: number | null;
   formaPagamento: string | null;
   procedimentoPaciente: string | null;
-  clinica: { nome: string };
+  contatoClinica: string | null;
+  clinica: {
+    nome: string;
+    endereco: string | null;
+    numero: string | null;
+    complemento: string | null;
+    bairro: string | null;
+    cidade: string | null;
+    uf: string | null;
+  };
   endereco: { rotulo: string; endereco: string; numero: string | null; complemento: string | null; bairro: string | null; cidade: string | null; uf: string; observacoes: string | null } | null;
   servico: { nome: string };
   profissional: { nome: string } | null;
@@ -582,6 +612,28 @@ function CartaoDoGrupo({
             {primeiro.pacienteNome && <> · paciente {primeiro.pacienteNome}</>}
           </div>
           {primeiro.observacoes && <div className="text-[11px] text-gray-400 mt-1">{primeiro.observacoes}</div>}
+          {/* A visita inteira alocada vira UM compromisso na agenda da equipe. */}
+          {contar("ALOCADO") === membros.length && (
+            <div className="mt-1">
+              <AdicionarAgenda
+                variante="link"
+                evento={eventoParaEquipe({
+                  id: primeiro.grupoId ?? primeiro.id,
+                  data: primeiro.data,
+                  horaInicio: primeiro.horaInicio,
+                  duracaoMin: membros.reduce((soma, m) => soma + m.duracaoMin, 0),
+                  clinicaNome: primeiro.clinica.nome,
+                  servicoNome: membros.map((m) => m.servico.nome).join(" + "),
+                  profissionalNome: [...new Set(membros.map((m) => m.profissional?.nome).filter(Boolean))].join(", "),
+                  doutorNome: primeiro.doutorNome,
+                  contatoClinica: primeiro.contatoClinica,
+                  pacienteNome: primeiro.pacienteNome,
+                  procedimentoPaciente: primeiro.procedimentoPaciente,
+                  local: resumoDoEndereco(comEnderecoDoPedido(primeiro.clinica, primeiro.endereco)),
+                })}
+              />
+            </div>
+          )}
         </div>
         <div className="text-right shrink-0">
           <div className="text-xs font-semibold text-bordo">{formatarReais(total)}</div>

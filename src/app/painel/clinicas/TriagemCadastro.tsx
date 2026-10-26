@@ -6,6 +6,8 @@ import { revisarCadastro } from "@/app/actions/clientes";
 import type { Resultado } from "@/app/actions/pedidos";
 import { ROTULO_PERFIL_CLIENTE, TODOS_OS_PERFIS } from "@/lib/visibilidade";
 import type { TabelaDisponivel } from "./PerfilDoCliente";
+import { useConfirmarSalvo } from "@/components/ConfirmacaoSalvo";
+import { useEffect } from "react";
 
 const INICIAL: Resultado = { ok: false };
 
@@ -24,6 +26,11 @@ export function TriagemCadastro({
   tabelas: TabelaDisponivel[];
 }) {
   const [estado, enviar] = useFormState(revisarCadastro, INICIAL);
+  const avisarSalvo = useConfirmarSalvo();
+  useEffect(() => {
+    if (estado.ok) avisarSalvo();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- avisa uma vez por resposta do servidor, não quando a sessão recarrega.
+  }, [estado]);
 
   return (
     <form action={enviar} className="mt-3 space-y-3">

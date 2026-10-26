@@ -4,6 +4,7 @@ import { useState, useTransition } from "react";
 import { Botao, Campo } from "@/components/ui";
 import { salvarPreco } from "@/app/actions/cadastros";
 import { formatarReais } from "@/lib/dinheiro";
+import { useConfirmarSalvo } from "@/components/ConfirmacaoSalvo";
 
 type LinhaServico = {
   id: string;
@@ -48,6 +49,7 @@ function LinhaPreco({ clinicaId, servico }: { clinicaId: string; servico: LinhaS
   );
   const [pendente, iniciar] = useTransition();
   const [mensagem, setMensagem] = useState("");
+  const avisarSalvo = useConfirmarSalvo();
 
   function salvar() {
     setMensagem("");
@@ -58,6 +60,7 @@ function LinhaPreco({ clinicaId, servico }: { clinicaId: string; servico: LinhaS
       dados.set("valor", valor);
       const resultado = await salvarPreco({ ok: false }, dados);
       setMensagem(resultado.ok ? "salvo ✓" : (resultado.erro ?? "erro"));
+      if (resultado.ok) avisarSalvo();
     });
   }
 

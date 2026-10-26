@@ -4,6 +4,7 @@ import { useState, useTransition } from "react";
 import { Botao } from "@/components/ui";
 import { Credencial } from "@/components/Credencial";
 import type { Credencial as DadosCredencial, ResultadoAcesso } from "@/app/actions/acessos";
+import { useConfirmarSalvo } from "@/components/ConfirmacaoSalvo";
 
 /**
  * Gerar acesso / redefinir senha a partir de uma linha de tabela.
@@ -26,6 +27,7 @@ export function BotaoCredencial({
 }) {
   const [pendente, iniciar] = useTransition();
   const [erro, setErro] = useState("");
+  const avisarSalvo = useConfirmarSalvo();
   const [credencial, setCredencial] = useState<DadosCredencial | null>(null);
 
   return (
@@ -39,7 +41,10 @@ export function BotaoCredencial({
             setErro("");
             iniciar(async () => {
               const resultado = await acao();
-              if (resultado.ok && resultado.credencial) setCredencial(resultado.credencial);
+              if (resultado.ok && resultado.credencial) {
+                avisarSalvo();
+                setCredencial(resultado.credencial);
+              }
               else setErro(resultado.erro ?? "Não foi possível concluir.");
             });
           }}

@@ -5,6 +5,7 @@ import type { PerfilInterno } from "@prisma/client";
 import { alterarPerfilInterno } from "@/app/actions/acessos";
 import { Selecao } from "@/components/ui";
 import { ROTULO_PERFIL_INTERNO } from "@/lib/papeis";
+import { useConfirmarSalvo } from "@/components/ConfirmacaoSalvo";
 
 /**
  * Troca de perfil de um acesso interno, direto na linha da tabela.
@@ -26,6 +27,7 @@ export function SeletorPerfil({
   const [perfil, setPerfil] = useState(perfilAtual);
   const [pendente, iniciar] = useTransition();
   const [erro, setErro] = useState("");
+  const avisarSalvo = useConfirmarSalvo();
 
   return (
     <div>
@@ -43,7 +45,7 @@ export function SeletorPerfil({
             if (!r.ok) {
               setPerfil(anterior);
               setErro(r.erro ?? "Não foi possível alterar.");
-            }
+            } else avisarSalvo();
           });
         }}
         className="!w-auto !text-[11px] !py-1 !pr-7"

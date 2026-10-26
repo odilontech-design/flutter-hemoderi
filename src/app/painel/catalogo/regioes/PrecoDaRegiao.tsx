@@ -3,6 +3,7 @@
 import { useState, useTransition } from "react";
 import { salvarPrecoRegiao } from "@/app/actions/cadastros";
 import { formatarReais } from "@/lib/dinheiro";
+import { useConfirmarSalvo } from "@/components/ConfirmacaoSalvo";
 
 /**
  * O preço de um serviço numa praça, editável na própria linha.
@@ -27,6 +28,7 @@ export function PrecoDaRegiao({
   const [texto, setTexto] = useState(() => (atual === null ? "" : (atual / 100).toFixed(2).replace(".", ",")));
   const [pendente, iniciar] = useTransition();
   const [erro, setErro] = useState("");
+  const avisarSalvo = useConfirmarSalvo();
 
   function salvar() {
     setErro("");
@@ -37,7 +39,10 @@ export function PrecoDaRegiao({
       dados.set("valor", texto);
       const resultado = await salvarPrecoRegiao({ ok: false }, dados);
       if (!resultado.ok) setErro(resultado.erro ?? "Não salvou.");
-      else setEditando(false);
+      else {
+        avisarSalvo();
+        setEditando(false);
+      }
     });
   }
 

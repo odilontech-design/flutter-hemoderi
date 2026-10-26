@@ -11,6 +11,8 @@ import {
   redefinirSenhaDeColega,
   type ResultadoConfiguracao,
 } from "@/app/actions/configuracoes";
+import { useConfirmarSalvo } from "@/components/ConfirmacaoSalvo";
+import { useEffect } from "react";
 
 const INICIAL: ResultadoConfiguracao = { ok: false };
 
@@ -31,6 +33,11 @@ export type PessoaComAcesso = {
  */
 export function AcessosDaClinica({ pessoas, podeGerenciar }: { pessoas: PessoaComAcesso[]; podeGerenciar: boolean }) {
   const [estado, enviar] = useFormState(adicionarPessoaComAcesso, INICIAL);
+  const avisarSalvo = useConfirmarSalvo();
+  useEffect(() => {
+    if (estado.ok) avisarSalvo();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- avisa uma vez por resposta do servidor, não quando a sessão recarrega.
+  }, [estado]);
 
   return (
     <div className="space-y-4">

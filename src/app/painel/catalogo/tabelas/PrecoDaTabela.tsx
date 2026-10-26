@@ -3,6 +3,7 @@
 import { useState, useTransition } from "react";
 import { salvarPrecoTabela } from "@/app/actions/tabelas";
 import { formatarReais } from "@/lib/dinheiro";
+import { useConfirmarSalvo } from "@/components/ConfirmacaoSalvo";
 
 /**
  * O preço de um serviço numa tabela, editável na própria linha (mesma
@@ -23,6 +24,7 @@ export function PrecoDaTabela({
   const [texto, setTexto] = useState("");
   const [pendente, iniciar] = useTransition();
   const [erro, setErro] = useState("");
+  const avisarSalvo = useConfirmarSalvo();
 
   const comoTexto = (centavos: number | null) => (centavos === null ? "" : (centavos / 100).toFixed(2).replace(".", ","));
 
@@ -38,6 +40,7 @@ export function PrecoDaTabela({
         setErro(resultado.erro ?? "Não salvou.");
         return;
       }
+      avisarSalvo();
       const lido = Math.round(Number(texto.replace(/\./g, "").replace(",", ".")) * 100);
       setValor(texto.trim() && Number.isFinite(lido) ? lido : null);
       setEditando(false);

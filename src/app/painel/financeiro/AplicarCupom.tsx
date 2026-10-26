@@ -3,6 +3,7 @@
 import { useState, useTransition } from "react";
 import { aplicarCupomNaFatura } from "@/app/actions/cupons";
 import { Botao, Campo } from "@/components/ui";
+import { useConfirmarSalvo } from "@/components/ConfirmacaoSalvo";
 
 /**
  * Formulário inline para aplicar cupom numa fatura aberta.
@@ -15,6 +16,7 @@ export function AplicarCupom({ faturaId }: { faturaId: string }) {
   const [aberto, setAberto] = useState(false);
   const [codigo, setCodigo] = useState("");
   const [erro, setErro] = useState<string | null>(null);
+  const avisarSalvo = useConfirmarSalvo();
   const [sucesso, setSucesso] = useState(false);
   const [pendente, iniciar] = useTransition();
 
@@ -32,6 +34,7 @@ export function AplicarCupom({ faturaId }: { faturaId: string }) {
     iniciar(async () => {
       const r = await aplicarCupomNaFatura(faturaId, codigo);
       if (r.ok) {
+        avisarSalvo();
         setSucesso(true);
         setCodigo("");
         setTimeout(() => setAberto(false), 1500);

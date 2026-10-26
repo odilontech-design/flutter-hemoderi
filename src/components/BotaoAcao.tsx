@@ -3,6 +3,7 @@
 import { useState, useTransition } from "react";
 import { Botao } from "@/components/ui";
 import type { Resultado } from "@/app/actions/pedidos";
+import { useConfirmarSalvo } from "@/components/ConfirmacaoSalvo";
 
 /**
  * Ação de um clique só (baixar fatura, pagar repasse, desativar cadastro).
@@ -24,6 +25,7 @@ export function BotaoAcao({
   const [pendente, iniciar] = useTransition();
   const [erro, setErro] = useState("");
   const [aviso, setAviso] = useState("");
+  const avisarSalvo = useConfirmarSalvo();
 
   return (
     <span className="inline-flex items-center gap-2">
@@ -37,7 +39,10 @@ export function BotaoAcao({
           iniciar(async () => {
             const resultado = await acao();
             if (!resultado.ok) setErro(resultado.erro ?? "Não foi possível concluir.");
-            else if (resultado.avisos?.length) setAviso(resultado.avisos.join(" "));
+            else {
+              avisarSalvo();
+              if (resultado.avisos?.length) setAviso(resultado.avisos.join(" "));
+            }
           });
         }}
       >

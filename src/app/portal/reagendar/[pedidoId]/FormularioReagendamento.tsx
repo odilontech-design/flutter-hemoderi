@@ -5,6 +5,7 @@ import { useFormState } from "react-dom";
 import { useRouter } from "next/navigation";
 import { Aviso, Botao, Campo, Rotulo } from "@/components/ui";
 import { reagendarPedido, type Resultado } from "@/app/actions/pedidos";
+import { useConfirmarSalvo } from "@/components/ConfirmacaoSalvo";
 
 const INICIAL: Resultado = { ok: false };
 
@@ -57,6 +58,11 @@ export function FormularioReagendamento({
 }) {
   const router = useRouter();
   const [estado, enviar] = useFormState(reagendarPedido, INICIAL);
+  const avisarSalvo = useConfirmarSalvo();
+  useEffect(() => {
+    if (estado.ok) avisarSalvo();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- avisa uma vez por resposta do servidor, não quando a sessão recarrega.
+  }, [estado]);
 
   const [data, setData] = useState("");
   const [enderecoId, setEnderecoId] = useState(enderecoAtualId);

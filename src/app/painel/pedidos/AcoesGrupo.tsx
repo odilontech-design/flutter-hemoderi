@@ -6,6 +6,7 @@ import { Botao, Selecao } from "@/components/ui";
 import { perfilPermite } from "@/lib/papeis";
 import { alocarGrupo, alocarServicos, cancelarGrupo, confirmarGrupo, desalocarGrupo } from "@/app/actions/pedidos";
 import { AcaoComMotivo, CampoAjudaDeCusto } from "./AcoesPedido";
+import { useConfirmarSalvo } from "@/components/ConfirmacaoSalvo";
 
 /**
  * As ações de um agendamento com VÁRIOS serviços (mesmo grupo), no lugar de
@@ -44,14 +45,19 @@ export function AcoesGrupo({
     .filter((s) => escolha(s.pedidoId).profissionalId)
     .map((s) => ({ pedidoId: s.pedidoId, ...escolha(s.pedidoId) }));
   const [mensagem, setMensagem] = useState<{ texto: string; erro: boolean } | null>(null);
+  const avisarSalvo = useConfirmarSalvo();
   const [profissionalId, setProfissionalId] = useState("");
 
   function executar(acao: () => Promise<{ ok: boolean; erro?: string; avisos?: string[] }>) {
     setMensagem(null);
     iniciar(async () => {
       const resultado = await acao();
-      if (!resultado.ok) setMensagem({ texto: resultado.erro ?? "Não foi possível concluir.", erro: true });
-      else if (resultado.avisos?.length) setMensagem({ texto: resultado.avisos.join(" "), erro: false });
+      if (!resultado.ok) {
+        setMensagem({ texto: resultado.erro ?? "Não foi possível concluir.", erro: true });
+        return;
+      }
+      avisarSalvo();
+      if (resultado.avisos?.length) setMensagem({ texto: resultado.avisos.join(" "), erro: false });
     });
   }
 

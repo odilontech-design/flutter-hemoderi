@@ -3,6 +3,7 @@
 import { useState, useTransition } from "react";
 import { definirCondicaoPagamento } from "@/app/actions/pedidos";
 import { CONDICOES_PAGAMENTO } from "@/lib/pagamento";
+import { useConfirmarSalvo } from "@/components/ConfirmacaoSalvo";
 
 /**
  * A condição de pagamento, editável direto na linha da esteira.
@@ -15,6 +16,7 @@ export function CondicaoPagamento({ pedidoId, atual }: { pedidoId: string; atual
   const [valor, setValor] = useState(atual ?? "");
   const [pendente, iniciar] = useTransition();
   const [erro, setErro] = useState("");
+  const avisarSalvo = useConfirmarSalvo();
 
   return (
     <span className="inline-flex items-center gap-1.5">
@@ -29,6 +31,7 @@ export function CondicaoPagamento({ pedidoId, atual }: { pedidoId: string; atual
           iniciar(async () => {
             const resultado = await definirCondicaoPagamento(pedidoId, escolhido);
             if (!resultado.ok) setErro(resultado.erro ?? "Não salvou.");
+            else avisarSalvo();
           });
         }}
         className={`text-[10px] rounded-md border px-1.5 py-1 outline-none focus:border-bordo

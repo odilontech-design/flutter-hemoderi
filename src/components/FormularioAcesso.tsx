@@ -5,6 +5,7 @@ import { useFormState } from "react-dom";
 import { Aviso, Botao } from "@/components/ui";
 import { Credencial } from "@/components/Credencial";
 import type { ResultadoAcesso } from "@/app/actions/acessos";
+import { useConfirmarSalvo } from "@/components/ConfirmacaoSalvo";
 
 const INICIAL: ResultadoAcesso = { ok: false };
 
@@ -25,6 +26,11 @@ export function FormularioAcesso({
   children: React.ReactNode;
 }) {
   const [estado, enviar] = useFormState(acao, INICIAL);
+  const avisarSalvo = useConfirmarSalvo();
+  useEffect(() => {
+    if (estado.ok) avisarSalvo();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- avisa uma vez por resposta do servidor, não quando a sessão recarrega.
+  }, [estado]);
   const formulario = useRef<HTMLFormElement>(null);
 
   useEffect(() => {

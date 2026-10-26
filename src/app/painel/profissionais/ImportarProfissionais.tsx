@@ -1,9 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useFormState } from "react-dom";
 import { importarProfissionais, type ResultadoImportacao } from "@/app/actions/acessos";
 import { Area, Aviso, Botao, Rotulo } from "@/components/ui";
+import { useConfirmarSalvo } from "@/components/ConfirmacaoSalvo";
 
 const INICIAL: ResultadoImportacao = { ok: false };
 
@@ -28,6 +29,11 @@ const INICIAL: ResultadoImportacao = { ok: false };
  */
 export function ImportarProfissionais() {
   const [estado, enviar] = useFormState(importarProfissionais, INICIAL);
+  const avisarSalvo = useConfirmarSalvo();
+  useEffect(() => {
+    if (estado.ok) avisarSalvo();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- avisa uma vez por resposta do servidor, não quando a sessão recarrega.
+  }, [estado]);
   const [aberto, setAberto] = useState(false);
   const [copiado, setCopiado] = useState(false);
   const [criarAcesso, setCriarAcesso] = useState(true);

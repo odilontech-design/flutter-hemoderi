@@ -10,6 +10,7 @@ import { obterLocalizacao } from "@/lib/geolocalizacao";
 import { CAMPOS_AGENDAMENTO, CAMPOS_CLINICOS, NAO_SE_APLICA } from "@/lib/relatorio";
 import { FORMAS_RECEBIMENTO, SITUACOES_RECEBIMENTO } from "@/lib/recebimento";
 import { reduzirImagem } from "@/lib/reduzir-imagem";
+import { useConfirmarSalvo } from "@/components/ConfirmacaoSalvo";
 
 const INICIAL: Resultado = { ok: false };
 
@@ -427,6 +428,11 @@ export function FormularioRelatorio({
 }) {
   const router = useRouter();
   const [estado, enviar] = useFormState(enviarRelatorio, INICIAL);
+  const avisarSalvo = useConfirmarSalvo();
+  useEffect(() => {
+    if (estado.ok) avisarSalvo();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- avisa uma vez por resposta do servidor, não quando a sessão recarrega.
+  }, [estado]);
   const [compareceu, setCompareceu] = useState(valores.compareceu || "sim");
   const formRef = useRef<HTMLFormElement>(null);
   const [buscandoLocal, setBuscandoLocal] = useState(false);

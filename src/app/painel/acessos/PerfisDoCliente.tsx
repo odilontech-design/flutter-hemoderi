@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState, useTransition } from "react";
 import { alternarPerfilDaClinica } from "@/app/actions/clientes";
 import { ROTULO_PERFIL_CLIENTE, TODOS_OS_PERFIS } from "@/lib/visibilidade";
+import { useConfirmarSalvo } from "@/components/ConfirmacaoSalvo";
 
 /**
  * Os perfis do cliente — Odontologia, Medicina, Estética, Curso, Mandic e
@@ -28,6 +29,7 @@ export function PerfisDoCliente({
   const [perfis, setPerfis] = useState<string[]>(perfisAtuais);
   const [pendente, iniciar] = useTransition();
   const [erro, setErro] = useState("");
+  const avisarSalvo = useConfirmarSalvo();
   const [posicao, setPosicao] = useState<{ top: number; left: number } | null>(null);
   const botao = useRef<HTMLButtonElement>(null);
   const janela = useRef<HTMLDivElement>(null);
@@ -108,7 +110,7 @@ export function PerfisDoCliente({
                       if (!r.ok) {
                         setPerfis(anteriores);
                         setErro(r.erro ?? "Não foi possível alterar.");
-                      }
+                      } else avisarSalvo();
                     });
                   }}
                   className={`text-[11px] font-semibold px-2.5 py-1.5 rounded-full border transition-colors disabled:opacity-60 ${

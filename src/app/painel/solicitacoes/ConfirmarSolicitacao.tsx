@@ -3,6 +3,7 @@
 import { useState, useTransition } from "react";
 import { recusarSolicitacao, vincularSolicitacao } from "@/app/actions/publico";
 import { Botao } from "@/components/ui";
+import { useConfirmarSalvo } from "@/components/ConfirmacaoSalvo";
 
 /**
  * A solicitação já chegou com a clínica resolvida (login ou cadastro novo,
@@ -12,6 +13,7 @@ import { Botao } from "@/components/ui";
 export function ConfirmarSolicitacao({ solicitacaoId, clinicaId }: { solicitacaoId: string; clinicaId: string }) {
   const [pendente, iniciar] = useTransition();
   const [erro, setErro] = useState("");
+  const avisarSalvo = useConfirmarSalvo();
 
   return (
     <div className="flex flex-wrap items-center gap-2">
@@ -22,6 +24,7 @@ export function ConfirmarSolicitacao({ solicitacaoId, clinicaId }: { solicitacao
           iniciar(async () => {
             const r = await vincularSolicitacao(solicitacaoId, clinicaId);
             if (!r.ok) setErro(r.erro ?? "Não deu para confirmar.");
+            else avisarSalvo();
           });
         }}
       >
@@ -38,6 +41,7 @@ export function ConfirmarSolicitacao({ solicitacaoId, clinicaId }: { solicitacao
           iniciar(async () => {
             const r = await recusarSolicitacao(solicitacaoId, motivo);
             if (!r.ok) setErro(r.erro ?? "Não deu para recusar.");
+            else avisarSalvo();
           });
         }}
       >

@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { buscarClinicasParaVinculo, desvincularPessoa, moverPessoa, separarEmClinicaPropria } from "@/app/actions/vinculos";
+import { useConfirmarSalvo } from "@/components/ConfirmacaoSalvo";
 
 /** As correções de vínculo de uma pessoa nesta clínica (ver actions/vinculos.ts). */
 export function VinculoPessoa({ clinicaId, pessoaId, nome }: { clinicaId: string; pessoaId: string; nome: string }) {
@@ -10,12 +11,14 @@ export function VinculoPessoa({ clinicaId, pessoaId, nome }: { clinicaId: string
   const [termo, setTermo] = useState("");
   const [opcoes, setOpcoes] = useState<{ id: string; nome: string; cidade: string | null }[]>([]);
   const [erro, setErro] = useState("");
+  const avisarSalvo = useConfirmarSalvo();
 
   function executar(acao: () => Promise<{ ok: boolean; erro?: string }>) {
     setErro("");
     iniciar(async () => {
       const r = await acao();
       if (!r.ok) setErro(r.erro ?? "Não foi possível.");
+      else avisarSalvo();
     });
   }
 

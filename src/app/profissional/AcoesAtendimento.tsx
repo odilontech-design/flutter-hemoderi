@@ -4,6 +4,7 @@ import { useState, useTransition } from "react";
 import { Area, Botao } from "@/components/ui";
 import { aceitarAlocacao, recusarAlocacao, registrarCheckin } from "@/app/actions/pedidos";
 import { obterLocalizacao } from "@/lib/geolocalizacao";
+import { useConfirmarSalvo } from "@/components/ConfirmacaoSalvo";
 
 /**
  * Aceitar ou recusar um atendimento que a logística indicou.
@@ -21,12 +22,14 @@ export function AceiteAlocacao({ pedidoId }: { pedidoId: string }) {
   const [recusando, setRecusando] = useState(false);
   const [motivo, setMotivo] = useState("");
   const [erro, setErro] = useState("");
+  const avisarSalvo = useConfirmarSalvo();
 
   function executar(acao: () => Promise<{ ok: boolean; erro?: string }>) {
     setErro("");
     iniciar(async () => {
       const resultado = await acao();
       if (!resultado.ok) setErro(resultado.erro ?? "Não foi possível concluir.");
+      else avisarSalvo();
     });
   }
 
@@ -85,6 +88,7 @@ export function BotaoCheckin({ pedidoId, atrasado }: { pedidoId: string; atrasad
   const [justificando, setJustificando] = useState(false);
   const [justificativa, setJustificativa] = useState("");
   const [erro, setErro] = useState("");
+  const avisarSalvo = useConfirmarSalvo();
 
   function registrar() {
     setErro("");
@@ -95,6 +99,7 @@ export function BotaoCheckin({ pedidoId, atrasado }: { pedidoId: string; atrasad
       iniciar(async () => {
         const resultado = await registrarCheckin(pedidoId, posicao, justificativa);
         if (!resultado.ok) setErro(resultado.erro ?? "Não foi possível registrar.");
+        else avisarSalvo();
       });
     })();
   }

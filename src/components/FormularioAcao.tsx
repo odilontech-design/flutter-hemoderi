@@ -1,9 +1,10 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useFormState } from "react-dom";
 import { Aviso, Botao } from "@/components/ui";
 import type { Resultado } from "@/app/actions/pedidos";
+import { useConfirmarSalvo } from "@/components/ConfirmacaoSalvo";
 
 const INICIAL: Resultado = { ok: false };
 
@@ -33,20 +34,27 @@ export function FormularioAcao({
 }) {
   const [estado, enviar] = useFormState(acao, INICIAL);
   const formulario = useRef<HTMLFormElement>(null);
+  const avisarSalvo = useConfirmarSalvo();
+  // Fica ao lado do botão até o próximo envio: o aviso do rodapé some, este não.
+  const [salvo, setSalvo] = useState("");
 
   useEffect(() => {
     if (!estado.ok) return;
+    setSalvo(avisarSalvo());
     if (limparAoSalvar) formulario.current?.reset();
     aoSalvar?.(estado);
     // eslint-disable-next-line react-hooks/exhaustive-deps -- aoSalvar só dispara na mudança de `estado`, não a cada nova identidade de função.
   }, [estado, limparAoSalvar]);
 
   return (
-    <form ref={formulario} action={enviar} className={`space-y-3 ${className}`}>
+    <form ref={formulario} action={enviar} onSubmit={() => setSalvo("")} className={`space-y-3 ${className}`}>
       {children}
       {estado.erro && <Aviso tom="erro">{estado.erro}</Aviso>}
       {estado.avisos?.length ? <Aviso tom="alerta">{estado.avisos.join(" ")}</Aviso> : null}
-      <Botao type="submit">{botao}</Botao>
+      <div className="flex flex-wrap items-center gap-3">
+        <Botao type="submit">{botao}</Botao>
+        {salvo && <span className="text-[11px] font-semibold text-green-700">✓ {salvo}</span>}
+      </div>
     </form>
   );
 }

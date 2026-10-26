@@ -3,12 +3,19 @@
 import { useFormState } from "react-dom";
 import { Aviso, Botao } from "@/components/ui";
 import { importarRepassesPraca, type ResultadoImportacao } from "@/app/actions/repasses-praca";
+import { useConfirmarSalvo } from "@/components/ConfirmacaoSalvo";
+import { useEffect } from "react";
 
 const INICIAL: ResultadoImportacao = { ok: false };
 
 /** Envia a planilha preenchida: primeiro confere, depois aplica. */
 export function ImportarPlanilha() {
   const [estado, enviar] = useFormState(importarRepassesPraca, INICIAL);
+  const avisarSalvo = useConfirmarSalvo();
+  useEffect(() => {
+    if (estado.ok && estado.aplicada) avisarSalvo();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- avisa uma vez por resposta do servidor, não quando a sessão recarrega.
+  }, [estado]);
 
   return (
     <form action={enviar} className="space-y-3">

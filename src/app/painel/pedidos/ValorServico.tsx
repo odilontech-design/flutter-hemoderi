@@ -3,6 +3,7 @@
 import { useState, useTransition } from "react";
 import { definirValorServico } from "@/app/actions/pedidos";
 import { formatarReais } from "@/lib/dinheiro";
+import { useConfirmarSalvo } from "@/components/ConfirmacaoSalvo";
 
 /**
  * O valor do serviço, editável direto na linha da esteira.
@@ -18,13 +19,17 @@ export function ValorServico({ pedidoId, valorCentavos }: { pedidoId: string; va
   const [texto, setTexto] = useState(() => (valorCentavos / 100).toFixed(2).replace(".", ","));
   const [pendente, iniciar] = useTransition();
   const [erro, setErro] = useState("");
+  const avisarSalvo = useConfirmarSalvo();
 
   function salvar() {
     setErro("");
     iniciar(async () => {
       const resultado = await definirValorServico(pedidoId, texto);
       if (!resultado.ok) setErro(resultado.erro ?? "Não salvou.");
-      else setEditando(false);
+      else {
+        avisarSalvo();
+        setEditando(false);
+      }
     });
   }
 

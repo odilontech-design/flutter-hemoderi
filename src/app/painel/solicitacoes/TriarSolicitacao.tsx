@@ -3,6 +3,7 @@
 import { useState, useTransition } from "react";
 import { recusarSolicitacao, vincularSolicitacao } from "@/app/actions/publico";
 import { Botao, Selecao } from "@/components/ui";
+import { useConfirmarSalvo } from "@/components/ConfirmacaoSalvo";
 
 /**
  * A decisão da equipe sobre um pedido que chegou de fora.
@@ -23,6 +24,7 @@ export function TriarSolicitacao({
   const [clinicaId, setClinicaId] = useState(sugeridaId ?? "");
   const [pendente, iniciar] = useTransition();
   const [erro, setErro] = useState("");
+  const avisarSalvo = useConfirmarSalvo();
 
   const ordenadas = sugeridaId
     ? [...clinicas].sort((a, b) => (a.id === sugeridaId ? -1 : b.id === sugeridaId ? 1 : 0))
@@ -53,6 +55,7 @@ export function TriarSolicitacao({
           iniciar(async () => {
             const r = await vincularSolicitacao(solicitacaoId, clinicaId);
             if (!r.ok) setErro(r.erro ?? "Não deu para vincular.");
+            else avisarSalvo();
           });
         }}
       >
@@ -69,6 +72,7 @@ export function TriarSolicitacao({
           iniciar(async () => {
             const r = await recusarSolicitacao(solicitacaoId, motivo);
             if (!r.ok) setErro(r.erro ?? "Não deu para recusar.");
+            else avisarSalvo();
           });
         }}
       >

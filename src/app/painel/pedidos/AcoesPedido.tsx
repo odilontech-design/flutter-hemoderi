@@ -13,6 +13,7 @@ import {
   marcarResultadoInterno,
   reagendarPedidoInterno,
 } from "@/app/actions/pedidos";
+import { useConfirmarSalvo } from "@/components/ConfirmacaoSalvo";
 
 /** Motivos padronizados de realocação (ata de 21/09) — "Outro" libera o texto. */
 const MOTIVOS_DESALOCACAO = [
@@ -137,6 +138,7 @@ export function EditarAjudaDeCusto({ pedidoId, inicial }: { pedidoId: string; in
   const [valor, setValor] = useState(inicial != null ? (inicial / 100).toFixed(2).replace(".", ",") : "");
   const [pendente, iniciar] = useTransition();
   const [erro, setErro] = useState<string | null>(null);
+  const avisarSalvo = useConfirmarSalvo();
   return (
     <div className="flex flex-wrap items-center gap-1.5">
       <CampoAjudaDeCusto valor={valor} onChange={setValor} />
@@ -148,6 +150,7 @@ export function EditarAjudaDeCusto({ pedidoId, inicial }: { pedidoId: string; in
           iniciar(async () => {
             const resultado = await definirAjudaDeCusto(pedidoId, valor);
             if (!resultado.ok) setErro(resultado.erro ?? "Não foi possível salvar.");
+            else avisarSalvo();
           });
         }}
       >
@@ -244,6 +247,7 @@ export function AcoesPedido({
 }) {
   const [pendente, iniciar] = useTransition();
   const [mensagem, setMensagem] = useState<{ texto: string; erro: boolean } | null>(null);
+  const avisarSalvo = useConfirmarSalvo();
   // Já vem preenchido com quem a clínica pediu: confirmar o que foi pedido é
   // o caso comum, e obrigar a reencontrar o nome na lista é atrito à toa.
   const [profissionalId, setProfissionalId] = useState(profissionalSolicitadoId ?? "");
@@ -255,9 +259,10 @@ export function AcoesPedido({
       const resultado = await acao();
       if (!resultado.ok) {
         setMensagem({ texto: resultado.erro ?? "Não foi possível concluir.", erro: true });
-      } else if (resultado.avisos?.length) {
-        setMensagem({ texto: resultado.avisos.join(" "), erro: false });
+        return;
       }
+      avisarSalvo();
+      if (resultado.avisos?.length) setMensagem({ texto: resultado.avisos.join(" "), erro: false });
     });
   }
 

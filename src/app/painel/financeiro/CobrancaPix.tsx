@@ -3,6 +3,7 @@
 import { useState, useTransition } from "react";
 import { Botao } from "@/components/ui";
 import { gerarCobrancaPixFatura, consultarCobrancaPix, cancelarCobrancaPix } from "@/app/actions/cobrancas";
+import { useConfirmarSalvo } from "@/components/ConfirmacaoSalvo";
 
 type Cobranca = {
   id: string;
@@ -16,6 +17,7 @@ type Cobranca = {
 
 export function GerarPix({ faturaId }: { faturaId: string }) {
   const [erro, setErro] = useState("");
+  const avisarSalvo = useConfirmarSalvo();
   const [pendente, iniciar] = useTransition();
 
   return (
@@ -28,6 +30,7 @@ export function GerarPix({ faturaId }: { faturaId: string }) {
           iniciar(async () => {
             const r = await gerarCobrancaPixFatura(faturaId);
             if (!r.ok) setErro(r.erro ?? "Erro ao gerar Pix.");
+            else avisarSalvo();
           });
         }}
       >
@@ -41,6 +44,7 @@ export function GerarPix({ faturaId }: { faturaId: string }) {
 export function DetalhePix({ cobranca }: { cobranca: Cobranca }) {
   const [copiado, setCopiado] = useState(false);
   const [erro, setErro] = useState("");
+  const avisarSalvo = useConfirmarSalvo();
   const [pendente, iniciar] = useTransition();
 
   async function copiarCodigo() {
@@ -87,6 +91,7 @@ export function DetalhePix({ cobranca }: { cobranca: Cobranca }) {
             iniciar(async () => {
               const r = await consultarCobrancaPix(cobranca.id);
               if (!r.ok) setErro(r.erro ?? "Erro ao consultar.");
+              else avisarSalvo();
             });
           }}
         >
@@ -101,6 +106,7 @@ export function DetalhePix({ cobranca }: { cobranca: Cobranca }) {
             iniciar(async () => {
               const r = await cancelarCobrancaPix(cobranca.id);
               if (!r.ok) setErro(r.erro ?? "Erro ao cancelar.");
+              else avisarSalvo();
             });
           }}
         >

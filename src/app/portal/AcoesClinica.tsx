@@ -4,6 +4,7 @@ import { useState, useTransition } from "react";
 import Link from "next/link";
 import { Botao } from "@/components/ui";
 import { cancelarPeloPortal } from "@/app/actions/pedidos";
+import { useConfirmarSalvo } from "@/components/ConfirmacaoSalvo";
 
 /**
  * O que a clínica pode fazer sozinha com o próprio pedido.
@@ -16,6 +17,7 @@ import { cancelarPeloPortal } from "@/app/actions/pedidos";
 export function AcoesClinica({ pedidoId }: { pedidoId: string }) {
   const [pendente, iniciar] = useTransition();
   const [erro, setErro] = useState("");
+  const avisarSalvo = useConfirmarSalvo();
 
   return (
     <div className="flex flex-wrap items-center gap-2">
@@ -35,6 +37,7 @@ export function AcoesClinica({ pedidoId }: { pedidoId: string }) {
           iniciar(async () => {
             const resultado = await cancelarPeloPortal(pedidoId, motivo);
             if (!resultado.ok) setErro(resultado.erro ?? "Não foi possível cancelar.");
+            else avisarSalvo();
           });
         }}
       >
