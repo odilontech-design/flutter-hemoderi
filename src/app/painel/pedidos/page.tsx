@@ -25,7 +25,7 @@ import { ValorServico } from "./ValorServico";
 import { perfilPermite } from "@/lib/papeis";
 import { AgendaDaEquipe } from "@/components/AgendaDaEquipe";
 import { BotaoAcao } from "@/components/BotaoAcao";
-import { enviarConfirmacoesWhatsapp, enviarPelaCentral, enviarResumoWhatsapp } from "@/app/actions/pedidos";
+import { enviarAvisoAoProfissional, enviarConfirmacoesWhatsapp, enviarPelaCentral, enviarResumoWhatsapp } from "@/app/actions/pedidos";
 import { eventoParaEquipe } from "@/lib/evento-equipe";
 import { condicaoValida } from "@/lib/pagamento";
 
@@ -448,6 +448,14 @@ export default async function Esteira({
                       >
                         Enviar resumo detalhado
                       </BotaoAcao>
+                      {pedido.status === "ALOCADO" && (
+                        <BotaoAcao tela
+                acao={enviarAvisoAoProfissional.bind(null, pedido.id)}
+                confirmar="Enviar o aviso de alocação ao profissional pelo WhatsApp?"
+              >
+                Enviar aviso ao profissional
+              </BotaoAcao>
+                      )}
                     </div>
                   )}
                   {/* Passou do dia e o relatório não veio (revisão de 25/10):

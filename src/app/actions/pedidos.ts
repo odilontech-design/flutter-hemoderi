@@ -2024,6 +2024,22 @@ export async function enviarConfirmacoesWhatsapp(pedidoId: string): Promise<Resu
 }
 
 /**
+ * "Enviar aviso ao profissional" (pedido de 27/10): o aviso de alocação sai
+ * sozinho, mas a equipe da Hemoderi também pode (re)enviá-lo quando quiser —
+ * por exemplo depois de corrigir o telefone ou de mudar o horário.
+ */
+export async function enviarAvisoAoProfissional(pedidoId: string): Promise<Resultado> {
+  const sessao = await exigirInterno();
+  const pedido = await prisma.pedido.findUnique({ where: { id: pedidoId }, select: { id: true, status: true } });
+  if (!pedido) return { ok: false, erro: "Agendamento não encontrado." };
+  if (pedido.status !== "ALOCADO") return { ok: false, erro: "Só se avisa o profissional de um agendamento alocado." };
+  const r = await reenviarMensagem(pedido.id, "ALOCACAO");
+  await registrarAuditoria(sessao.usuarioId, "Pedido", pedido.id, "whatsapp-aviso-profissional", r.ok ? "enviado" : r.erro);
+  revalidatePath("/painel/integracoes");
+  return r.ok ? { ok: true, avisos: ["Aviso enviado ao profissional pela central."] } : { ok: false, erro: r.erro };
+}
+
+/**
  * "Enviar resumo detalhado" (ata de 27/10): a segunda etapa da comunicação com
  * a clínica. O texto curto sai na criação; o resumo — data, horário, endereço
  * completo, clínica, doutor e profissional — só quando a equipe valida a

@@ -7,7 +7,7 @@ import { STATUS_ATIVOS } from "@/lib/pedido";
 import { comEnderecoDoPedido, locaisDaClinica, resumoDoEndereco } from "@/lib/endereco";
 import { AgendaDaEquipe } from "@/components/AgendaDaEquipe";
 import { BotaoAcao } from "@/components/BotaoAcao";
-import { enviarConfirmacoesWhatsapp, enviarResumoWhatsapp } from "@/app/actions/pedidos";
+import { enviarAvisoAoProfissional, enviarConfirmacoesWhatsapp, enviarResumoWhatsapp } from "@/app/actions/pedidos";
 import { eventoParaEquipe } from "@/lib/evento-equipe";
 import { agruparPorFamilia } from "@/lib/familia";
 import { isoDeData } from "@/lib/data";
@@ -119,6 +119,14 @@ export default async function DetalheDoPedido({
               >
                 Enviar resumo detalhado
               </BotaoAcao>
+              {pedido.status === "ALOCADO" && (
+                <BotaoAcao tela
+                acao={enviarAvisoAoProfissional.bind(null, pedido.id)}
+                confirmar="Enviar o aviso de alocação ao profissional pelo WhatsApp?"
+              >
+                Enviar aviso ao profissional
+              </BotaoAcao>
+              )}
             </>
           )}
           {/* Alocado, vai para a agenda de quem acompanha (pedido do André, 26/10). */}
