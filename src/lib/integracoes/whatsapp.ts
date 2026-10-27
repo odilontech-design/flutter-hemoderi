@@ -52,14 +52,18 @@ const SELECAO_DO_PEDIDO = {
 } as const;
 
 /**
- * O envio automático (confirmação na criação, alocação, lembrete, resultado)
- * está suspenso até os testes terminarem (ata de 27/10: "suspender o envio de
- * mensagens automáticas para clientes"). Liga-se com
- * WHATSAPP_ENVIO_AUTOMATICO=true. Os botões da equipe continuam enviando.
+ * O envio automático PARA O CLIENTE (confirmação na criação, lembrete,
+ * resultado) está suspenso até os testes terminarem (ata de 27/10; o André
+ * restringiu: só o cliente). Liga-se com WHATSAPP_ENVIO_AUTOMATICO=true. O
+ * aviso de alocação ao PROFISSIONAL segue automático, e os botões da equipe
+ * enviam sempre.
  */
 export function envioAutomaticoLigado(): boolean {
   return process.env.WHATSAPP_ENVIO_AUTOMATICO?.trim().toLowerCase() === "true";
 }
+
+/** Os tipos que vão para o profissional — não passam pela suspensão. */
+export const TIPOS_PARA_O_PROFISSIONAL: TipoMensagem[] = ["ALOCACAO", "COBRANCA_RELATORIO"];
 
 /**
  * Os textos. Ficam no código, e não no banco, enquanto forem poucos e
@@ -141,9 +145,9 @@ export async function enfileirarMensagem(
     select: SELECAO_DO_PEDIDO,
   });
   if (!pedido) return;
-  // Envio automático suspenso: nem entra na fila, para não despejar um
-  // acúmulo de mensagens de teste nos clientes quando for religado.
-  if (!envioAutomaticoLigado()) return;
+  // Envio automático ao cliente suspenso: nem entra na fila, para não despejar
+  // um acúmulo de mensagens de teste nos clientes quando for religado.
+  if (!envioAutomaticoLigado() && !TIPOS_PARA_O_PROFISSIONAL.includes(tipo)) return;
 
   const destinatario = destinatarioDe(tipo, pedido);
   // Sem telefone não há o que enfileirar. Não é erro: cadastro incompleto é
@@ -233,7 +237,9 @@ export async function reenviarMensagem(
 export async function despacharPendentes(
   limite = 50,
   /** Só esta mensagem — o envio imediato logo depois de enfileirar. */
-  somenteId?: string
+  somenteId?: string,
+  /** Só estes tipos — com o envio ao cliente suspenso, a rotina entrega só o do profissional. */
+  somenteTipos?: TipoMensagem[]
 ): Promise<{ enviadas: number; falhas: number; canceladas: number; interrompido?: string }> {
   const url = urlDoDilonZap(process.env.WHATSAPP_API_URL);
   const token = process.env.WHATSAPP_API_TOKEN?.trim();
@@ -245,6 +251,7 @@ export async function despacharPendentes(
       status: "PENDENTE",
       OR: [{ agendadaPara: null }, { agendadaPara: { lte: agora } }],
       ...(somenteId ? { id: somenteId } : {}),
+      ...(somenteTipos ? { tipo: { in: somenteTipos } } : {}),
     },
     take: limite,
     orderBy: { criadaEm: "asc" },

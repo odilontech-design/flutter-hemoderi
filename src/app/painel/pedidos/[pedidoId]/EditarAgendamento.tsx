@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { Area, Campo, Rotulo, Selecao } from "@/components/ui";
 import { FormularioAcao } from "@/components/FormularioAcao";
+import { CampoHora } from "@/components/CampoHora";
 import { editarAgendamento } from "@/app/actions/pedidos";
 import { FORMAS_DE_PAGAMENTO } from "@/lib/pagamento";
 import { PROCEDIMENTOS_NO_PACIENTE } from "@/lib/procedimentos";
@@ -63,7 +64,7 @@ export function EditarAgendamento({
             </div>
             <div>
               <Rotulo>Horário agendado com o paciente</Rotulo>
-              <Campo name="horaInicio" type="time" required step={60} defaultValue={dados.horaInicio} />
+              <CampoHora name="horaInicio" required defaultValue={dados.horaInicio} />
             </div>
             <div>
               <Rotulo>Serviço</Rotulo>

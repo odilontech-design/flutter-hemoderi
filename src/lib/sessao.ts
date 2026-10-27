@@ -4,6 +4,7 @@ import { authOptions } from "./auth";
 import { prisma } from "./prisma";
 import type { PerfilInterno } from "@prisma/client";
 import { inicioDe, perfilEfetivo } from "./papeis";
+import { VERSAO_DO_TERMO } from "./termo-aceite";
 
 export type SessaoInterno = {
   usuarioId: string;
@@ -47,6 +48,7 @@ async function usuarioDaSessao() {
  * lê a sessão direto, e é a única página assim no sistema.
  */
 export const ROTA_TROCAR_SENHA = "/trocar-senha";
+export const ROTA_TERMO_DE_ACEITE = "/termo-de-aceite";
 
 export async function exigirInterno(): Promise<SessaoInterno> {
   const u = await usuarioDaSessao();
@@ -93,11 +95,14 @@ export async function exigirClinica(): Promise<SessaoClinica> {
     select: {
       desativadoEm: true,
       senhaProvisoria: true,
+      termoVersao: true,
       clinica: { select: { ativa: true, nome: true } },
     },
   });
   if (!usuario || usuario.desativadoEm || !usuario.clinica?.ativa) redirect("/login");
   if (usuario.senhaProvisoria) redirect(ROTA_TROCAR_SENHA);
+  // O termo de aceite vem depois da senha: primeiro a pessoa fica dona do acesso.
+  if (usuario.termoVersao !== VERSAO_DO_TERMO) redirect(ROTA_TERMO_DE_ACEITE);
 
   return {
     usuarioId: u.id,

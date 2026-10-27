@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { Area, Campo, Rotulo, Selecao } from "@/components/ui";
 import { FormularioAcao } from "@/components/FormularioAcao";
 import { CampoTelefone } from "@/components/CampoTelefone";
+import { CampoHora } from "@/components/CampoHora";
 import { editarVisita } from "@/app/actions/pedidos";
 import { FORMAS_DE_PAGAMENTO } from "@/lib/pagamento";
 import { PROCEDIMENTOS_NO_PACIENTE } from "@/lib/procedimentos";
@@ -69,7 +70,7 @@ export function EditarVisita({
             </div>
             <div>
               <Rotulo>Horário de início</Rotulo>
-              <Campo name="horaInicio" type="time" required step={60} defaultValue={dados.horaInicio} />
+              <CampoHora name="horaInicio" required defaultValue={dados.horaInicio} />
             </div>
             <div className="sm:col-span-2">
               <Rotulo>Local do atendimento</Rotulo>

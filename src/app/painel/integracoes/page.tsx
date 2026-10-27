@@ -97,7 +97,7 @@ export default async function Integracoes() {
       nome: "WhatsApp (Dilon Zap)",
       ligado: whatsappLigado,
       linhas: [
-        envioAutomaticoLigado() ? "envio automático: ligado" : "envio automático: SUSPENSO (só os botões da equipe enviam)",
+        envioAutomaticoLigado() ? "envio automático: ligado" : "envio automático ao cliente: SUSPENSO (profissional segue automático; botões da equipe enviam)",
         `${whatsapp.ENVIADA ?? 0} enviada(s) · ${whatsapp.PENDENTE ?? 0} na fila · ${whatsapp.FALHA ?? 0} falha(s)`,
         ultimaEnviada?.enviadaEm ? `último envio: ${formatarDataHora(ultimaEnviada.enviadaEm)}` : "nenhuma mensagem entregue ainda",
       ],

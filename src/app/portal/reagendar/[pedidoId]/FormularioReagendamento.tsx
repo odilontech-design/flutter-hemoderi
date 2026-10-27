@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useFormState } from "react-dom";
+import { CampoHora } from "@/components/CampoHora";
 import { useRouter } from "next/navigation";
 import { Aviso, Botao, Campo, Rotulo } from "@/components/ui";
 import { reagendarPedido, type Resultado } from "@/app/actions/pedidos";
@@ -164,14 +165,7 @@ export function FormularioReagendamento({
           <div className="text-xs text-gray-400 py-2">{mudaLocal ? "Mantém o horário atual." : "Escolha a data."}</div>
         ) : (
           <div className="space-y-2">
-            <Campo
-              type="time"
-              name="horaInicio"
-              required
-              value={hora}
-              onChange={(e) => setHora(e.target.value)}
-              className="!w-40"
-            />
+            <CampoHora name="horaInicio" required value={hora} onChange={setHora} />
             <div className="text-[10px] leading-relaxed">
               {situacaoHora === "verificando" && <span className="text-gray-400">Conferindo a agenda…</span>}
               {situacaoHora === "livre" && <span className="font-semibold text-green-700">Horário disponível.</span>}

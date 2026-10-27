@@ -107,6 +107,11 @@ model Usuario {
   /// "faz quanto tempo que essa senha é a mesma".
   senhaTrocadaEm  DateTime?
 
+  /// Termo de aceite (ata de 27/10): o cliente concorda com as regras de
+  /// cobrança no primeiro acesso, e de novo quando o termo muda de versão.
+  termoAceitoEm DateTime?
+  termoVersao   String?
+
   pedidosCriados     Pedido[]            @relation("PedidoCriadoPor")
   avaliacoesCriadas  Avaliacao[]         @relation("AvaliacaoCriadaPor")
   registrosAuditoria RegistroAuditoria[]

@@ -6,6 +6,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Area, Aviso, Botao, Campo, Rotulo, Selecao } from "@/components/ui";
 import { CampoTelefone } from "@/components/CampoTelefone";
+import { CampoHora } from "@/components/CampoHora";
 import { OutroEndereco } from "@/components/OutroEndereco";
 import { FORMAS_DE_PAGAMENTO } from "@/lib/pagamento";
 import { OUTRO_PROCEDIMENTO, PROCEDIMENTOS_NO_PACIENTE } from "@/lib/procedimentos";
@@ -736,7 +737,7 @@ function FormularioBase({
               <div className="text-xs text-gray-400 py-2">Escolha a data.</div>
             ) : (
               <div className="space-y-2">
-                <Campo type="time" required value={hora} onChange={(e) => setHora(e.target.value)} className="!w-40" />
+                <CampoHora required value={hora} onChange={setHora} />
                 <div className="text-[10px] leading-relaxed">
                   {situacaoHora === "verificando" && <span className="text-gray-400">Conferindo a agenda…</span>}
                   {situacaoHora === "livre" && <span className="font-semibold text-green-700">Horário disponível para solicitar.</span>}

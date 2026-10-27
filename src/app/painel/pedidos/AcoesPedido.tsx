@@ -4,6 +4,7 @@ import { useState, useTransition } from "react";
 import type { PerfilInterno, StatusPedido } from "@prisma/client";
 import { Botao, Campo, Selecao } from "@/components/ui";
 import { perfilPermite } from "@/lib/papeis";
+import { CampoHora } from "@/components/CampoHora";
 import {
   alocarPedido,
   cancelarPedido,
@@ -190,14 +191,7 @@ function AcaoReagendar({ disabled, onConfirmar }: { disabled?: boolean; onConfir
         onChange={(e) => setData(e.target.value)}
         className="!w-auto !py-1.5"
       />
-      <Campo
-        aria-label="Novo horário"
-        type="time"
-        step={60}
-        value={hora}
-        onChange={(e) => setHora(e.target.value)}
-        className="!w-auto !py-1.5"
-      />
+      <CampoHora rotulo="Novo horário" value={hora} onChange={setHora} />
       <Campo
         aria-label="Motivo do reagendamento"
         placeholder="Motivo do reagendamento"
