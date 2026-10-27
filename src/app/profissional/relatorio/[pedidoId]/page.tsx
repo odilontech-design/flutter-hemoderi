@@ -116,7 +116,7 @@ export default async function Relatorio({
     clinicaId: pedido.clinicaId,
     uf: ufDoAtendimento,
     servicos: catalogo,
-    tabelaIds: await tabelasDaClinica(prisma, pedido.clinicaId),
+    tabelaIds: await tabelasDaClinica(prisma, pedido.clinicaId, pedido.modalidade),
   });
   const precos: Record<string, string> = {};
   for (const servico of catalogo) {

@@ -266,6 +266,9 @@ export default async function Esteira({
                     {pedido.origem === "PORTAL_CLINICA" && (
                       <span className="text-[9px] uppercase tracking-wide text-gray-400">portal</span>
                     )}
+                    {pedido.modalidade === "CURSO" && (
+                      <span className="text-[9px] font-semibold uppercase tracking-wide text-bordo bg-bordo/10 rounded-full px-1.5 py-0.5">curso</span>
+                    )}
                   </div>
                   <div className="text-xs text-gray-700">
                     {formatarDataCurta(pedido.data)} às {pedido.horaInicio} · {pedido.servico.nome}

@@ -250,7 +250,10 @@ test("tabelasDaClinica: o perfil traz a tabela dele, além das liberadas à mão
   assert.deepEqual(ids, ["t1"]);
   assert.deepEqual(filtro, {
     ativa: true,
-    OR: [{ clinicas: { some: { id: "c1" } } }, { perfil: { in: ["ODONTOLOGIA", "CURSO"] } }],
+    AND: [
+      { OR: [{ clinicas: { some: { id: "c1" } } }, { perfil: { in: ["ODONTOLOGIA", "CURSO"] } }] },
+      { OR: [{ perfil: null }, { perfil: { not: "CURSO" } }] },
+    ],
   });
 });
 
@@ -267,5 +270,25 @@ test("tabelasDaClinica: sem perfil, só valem as tabelas liberadas à mão", asy
   };
   // eslint-disable-next-line @typescript-eslint/no-explicit-any -- dublê mínimo
   await tabelasDaClinica(banco as any, "c1");
-  assert.deepEqual(filtro, { ativa: true, OR: [{ clinicas: { some: { id: "c1" } } }] });
+  assert.deepEqual(filtro, { ativa: true, AND: [{ OR: [{ clinicas: { some: { id: "c1" } } }] }, { OR: [{ perfil: null }, { perfil: { not: "CURSO" } }] }] });
+});
+
+test("tabelasDaClinica: no curso valem só as tabelas de perfil CURSO", async () => {
+  let filtro: unknown;
+  const banco = {
+    clinica: { findUnique: async () => ({ perfis: ["CURSO"] }) },
+    tabelaPreco: {
+      findMany: async (args: { where: unknown }) => {
+        filtro = args.where;
+        return [{ id: "curso1" }];
+      },
+    },
+  };
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- dublê mínimo
+  const ids = await tabelasDaClinica(banco as any, "c1", "CURSO");
+  assert.deepEqual(ids, ["curso1"]);
+  assert.deepEqual(filtro, {
+    ativa: true,
+    AND: [{ OR: [{ clinicas: { some: { id: "c1" } } }, { perfil: { in: ["CURSO"] } }] }, { perfil: "CURSO" }],
+  });
 });

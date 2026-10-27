@@ -193,7 +193,12 @@ export async function precosDosServicos(
  */
 export async function tabelasDaClinica(
   prisma: Pick<PrismaClient, "tabelaPreco" | "clinica">,
-  clinicaId: string
+  clinicaId: string,
+  /**
+   * Curso (ata de 27/10) tem tabela própria — as de perfil CURSO — e o
+   * particular não a enxerga: o preço do curso só vale no agendamento de curso.
+   */
+  modalidade: "PARTICULAR" | "CURSO" = "PARTICULAR"
 ): Promise<string[]> {
   const clinica = await prisma.clinica.findUnique({ where: { id: clinicaId }, select: { perfis: true } });
   const perfis = clinica?.perfis ?? [];
@@ -201,7 +206,10 @@ export async function tabelasDaClinica(
   const tabelas = await prisma.tabelaPreco.findMany({
     where: {
       ativa: true,
-      OR: [{ clinicas: { some: { id: clinicaId } } }, ...(perfis.length > 0 ? [{ perfil: { in: perfis } }] : [])],
+      AND: [
+        { OR: [{ clinicas: { some: { id: clinicaId } } }, ...(perfis.length > 0 ? [{ perfil: { in: perfis } }] : [])] },
+        modalidade === "CURSO" ? { perfil: "CURSO" } : { OR: [{ perfil: null }, { perfil: { not: "CURSO" } }] },
+      ],
     },
     select: { id: true },
   });

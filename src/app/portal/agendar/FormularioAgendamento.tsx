@@ -137,7 +137,8 @@ function Etapa({
  * curto"), sem sugestão de horário livre (quem fecha a agenda é a central) e
  * sem previsão de término.
  */
-export function FormularioAgendamento({
+function FormularioBase({
+  modalidade,
   grupos,
   locais,
   precosPorUf,
@@ -149,6 +150,7 @@ export function FormularioAgendamento({
   doutores,
   equipe,
 }: {
+  modalidade: Modalidade;
   grupos: Grupo[];
   locais: LocalDeAtendimento[];
   precosPorUf: Record<string, Record<string, number>>;
@@ -354,6 +356,14 @@ export function FormularioAgendamento({
   const repetidoSemPaciente = linhas.some(
     (l) => !l.item.paciente.trim() && linhas.filter((o) => o.servico.id === l.servico.id).length > 1
   );
+  // Paciente (ata de 27/10): obrigatório no curso e quando a visita tem mais de
+  // um serviço — aí a primeira pergunta é se é o mesmo paciente para todos.
+  const [mesmoPaciente, setMesmoPaciente] = useState<boolean | null>(null);
+  const variosServicos = linhas.length > 1;
+  const exigePaciente = modalidade === "CURSO" || variosServicos;
+  const perguntaPendente = variosServicos && mesmoPaciente === null;
+  const faltaPacienteNaLinha = variosServicos && mesmoPaciente === false && linhas.some((l) => !l.item.paciente.trim());
+  const pacienteFaltando = exigePaciente && linhas.some((l) => !(l.item.paciente.trim() || pacienteNome.trim()));
   const algumSobConsulta = linhas.some((l) => precoUnitario(l.servico.id) === 0);
 
   // A conta é a mesma que o servidor faz ao recusar — feita aqui só para AVISAR
@@ -385,6 +395,7 @@ export function FormularioAgendamento({
   return (
     <form action={enviar} className="space-y-3 max-w-4xl">
       <input type="hidden" name="itens" value={JSON.stringify(itens)} />
+      <input type="hidden" name="modalidade" value={modalidade} />
       <input type="hidden" name="enderecoId" value={local?.id ?? ""} />
       <input type="hidden" name="data" value={data} />
       <input type="hidden" name="horaInicio" value={hora} />
@@ -568,7 +579,13 @@ export function FormularioAgendamento({
                         value={item.paciente}
                         onChange={(e) => mudarPaciente(item, e.target.value)}
                         maxLength={120}
-                        placeholder={linhas.filter((l) => l.servico.id === servico.id).length > 1 ? "Paciente (obrigatório)" : "Paciente (opcional)"}
+                        placeholder={
+                          linhas.filter((l) => l.servico.id === servico.id).length > 1 || (variosServicos && mesmoPaciente === false)
+                            ? "Paciente (obrigatório)"
+                            : modalidade === "CURSO"
+                              ? "Paciente (obrigatório)"
+                              : "Paciente (opcional)"
+                        }
                         aria-label={`Paciente de ${servico.nome}`}
                         className="mt-1 w-full max-w-xs border border-gray-300 rounded-lg px-2 py-1 text-[11px]"
                       />
@@ -624,11 +641,35 @@ export function FormularioAgendamento({
                 >
                   + Adicionar outro serviço
                 </Botao>
-                <Botao type="button" disabled={repetidoSemPaciente} onClick={() => setPasso(3)}>
+                <Botao type="button" disabled={repetidoSemPaciente || perguntaPendente || faltaPacienteNaLinha} onClick={() => setPasso(3)}>
                   Continuar
                 </Botao>
               </div>
             </div>
+            {variosServicos && (
+              <fieldset className="mt-3 rounded-xl border border-bordo/30 bg-bege/40 px-3 py-2">
+                <legend className="px-1 text-[11px] font-semibold text-bordo">Os serviços são para o mesmo paciente?</legend>
+                <div className="flex flex-wrap gap-x-5 gap-y-1 text-xs text-gray-700">
+                  <label className="flex items-center gap-1.5">
+                    <input type="radio" name="mesmoPaciente" checked={mesmoPaciente === true} onChange={() => setMesmoPaciente(true)} />
+                    Sim, o mesmo paciente
+                  </label>
+                  <label className="flex items-center gap-1.5">
+                    <input type="radio" name="mesmoPaciente" checked={mesmoPaciente === false} onChange={() => setMesmoPaciente(false)} />
+                    Não, pacientes diferentes (um relatório para cada)
+                  </label>
+                </div>
+                {mesmoPaciente === true && (
+                  <div className="mt-1 text-[10px] text-gray-500">O nome do paciente é informado na última etapa.</div>
+                )}
+                {mesmoPaciente === false && (
+                  <div className="mt-1 text-[10px] text-gray-500">Informe o paciente em cada linha da lista acima.</div>
+                )}
+                {faltaPacienteNaLinha && (
+                  <div className="mt-1 text-[10px] font-semibold text-amber-700">Falta o paciente em alguma linha.</div>
+                )}
+              </fieldset>
+            )}
             <div className="text-[10px] text-gray-400 mt-2">
               Os serviços acontecem um depois do outro, na ordem da lista. Para atender mais de um paciente na mesma
               visita, use &quot;+ o mesmo serviço para outro paciente&quot; e informe o nome de cada um.
@@ -788,8 +829,13 @@ export function FormularioAgendamento({
               <div className="text-[10px] text-gray-400 mt-1">Para onde a central liga ou escreve.</div>
             </div>
             <div>
-              <Rotulo>Paciente (opcional)</Rotulo>
-              <Campo name="pacienteNome" value={pacienteNome} onChange={(e) => setPacienteNome(e.target.value)} />
+              <Rotulo>{exigePaciente ? "Paciente (obrigatório)" : "Paciente (opcional)"}</Rotulo>
+              <Campo
+                name="pacienteNome"
+                value={pacienteNome}
+                onChange={(e) => setPacienteNome(e.target.value)}
+                required={exigePaciente && mesmoPaciente !== false}
+              />
               <div className="text-[10px] text-gray-400 mt-1">Vale para os serviços sem paciente informado na lista.</div>
             </div>
           </div>
@@ -829,7 +875,7 @@ export function FormularioAgendamento({
             </Aviso>
           ) : null}
 
-          <BotaoDeEnvio desabilitado={!horaLivre || linhas.length === 0 || (Boolean(equipe) && estado.ok)}>
+          <BotaoDeEnvio desabilitado={!horaLivre || linhas.length === 0 || pacienteFaltando || (Boolean(equipe) && estado.ok)}>
             {equipe ? "Criar agendamento" : "Solicitar agendamento"}
           </BotaoDeEnvio>
           <div className="text-[10px] text-gray-400">
@@ -850,5 +896,63 @@ function BotaoDeEnvio({ desabilitado, children }: { desabilitado: boolean; child
     <Botao type="submit" disabled={desabilitado || pending}>
       {pending ? "Enviando…" : children}
     </Botao>
+  );
+}
+
+type Modalidade = "PARTICULAR" | "CURSO";
+
+type PropsDoFormulario = Parameters<typeof FormularioBase>[0];
+
+/**
+ * O agendamento, com a escolha entre particular e curso ANTES do serviço (ata
+ * de 27/10). A opção só aparece para a clínica liberada para curso (que tem
+ * tabela de curso); trocar de modalidade recomeça o formulário, porque o
+ * catálogo e os preços são outros.
+ */
+export function FormularioAgendamento({
+  curso,
+  ...resto
+}: Omit<PropsDoFormulario, "modalidade"> & {
+  curso?: { grupos: Grupo[]; precosPorUf: Record<string, Record<string, number>> } | null;
+}) {
+  const [modalidade, setModalidade] = useState<Modalidade>("PARTICULAR");
+  const emCurso = modalidade === "CURSO" && Boolean(curso);
+
+  return (
+    <div className="space-y-3">
+      {curso && (
+        <section className="max-w-4xl rounded-2xl border border-bordo/30 bg-white px-4 py-3">
+          <h2 className="font-display font-bold text-sm text-bordo mb-2">Tipo de atendimento</h2>
+          <div className="flex flex-wrap gap-2" role="radiogroup" aria-label="Tipo de atendimento">
+            {(["PARTICULAR", "CURSO"] as const).map((opcao) => (
+              <button
+                key={opcao}
+                type="button"
+                role="radio"
+                aria-checked={modalidade === opcao}
+                onClick={() => setModalidade(opcao)}
+                className={`rounded-xl border px-4 py-2 text-xs font-semibold transition-colors ${
+                  modalidade === opcao ? "border-bordo bg-bordo text-white" : "border-gray-200 bg-white text-gray-700 hover:border-bordo/40"
+                }`}
+              >
+                {opcao === "PARTICULAR" ? "Atendimento particular" : "Curso"}
+              </button>
+            ))}
+          </div>
+          {emCurso && (
+            <p className="mt-2 text-[10px] text-gray-500">
+              Curso usa a tabela de preços e o catálogo próprios, e o nome do paciente é obrigatório.
+            </p>
+          )}
+        </section>
+      )}
+      <FormularioBase
+        key={emCurso ? "curso" : "particular"}
+        modalidade={emCurso ? "CURSO" : "PARTICULAR"}
+        {...resto}
+        grupos={emCurso && curso ? curso.grupos : resto.grupos}
+        precosPorUf={emCurso && curso ? curso.precosPorUf : resto.precosPorUf}
+      />
+    </div>
   );
 }

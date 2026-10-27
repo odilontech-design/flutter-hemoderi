@@ -5,6 +5,7 @@ import { parametros } from "@/lib/alocacao";
 import { agruparPorFamilia } from "@/lib/familia";
 import { locaisDaClinica } from "@/lib/endereco";
 import { precosDosServicos, tabelasDaClinica } from "@/lib/preco";
+import { precosDeCurso } from "@/lib/curso-catalogo";
 import { camposFaltando } from "@/lib/cadastro-completo";
 import { perfilPermite } from "@/lib/papeis";
 import { formatarTelefone } from "@/lib/whatsapp-link";
@@ -191,6 +192,17 @@ async function Agendamento({
     servicos: g.servicos.map(paraOCarrinho),
   }));
 
+  const dadosDeCurso = await precosDeCurso(prisma, clinicaId, ufs);
+  const curso = dadosDeCurso
+    ? {
+        precosPorUf: dadosDeCurso.precosPorUf,
+        grupos: agruparPorFamilia(
+          servicos.filter((s) => dadosDeCurso.precos.has(s.id)),
+          { fundirSolitarias: false, ordemDoCatalogo: true }
+        ).map((g) => ({ familia: g.familia, servicos: g.servicos.map(paraOCarrinho) })),
+      }
+    : null;
+
   return (
     <>
       {lembretes.length > 0 && (
@@ -211,6 +223,7 @@ async function Agendamento({
         </Aviso>
       )}
       <FormularioAgendamento
+        curso={curso}
         // Trocar de clínica remonta o formulário: o carrinho de uma não vale para a outra.
         key={clinicaId}
         grupos={grupos}

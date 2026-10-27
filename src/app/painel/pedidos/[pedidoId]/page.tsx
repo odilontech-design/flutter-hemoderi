@@ -99,6 +99,9 @@ export default async function DetalheDoPedido({
       <Cartao className="mb-3">
         <div className="flex flex-wrap items-center gap-2 mb-3">
           <SeloStatus status={pedido.status} />
+          {pedido.modalidade === "CURSO" && (
+            <span className="text-[10px] font-semibold uppercase tracking-wide text-bordo bg-bordo/10 rounded-full px-2 py-0.5">Curso</span>
+          )}
           {pedido.origem === "PORTAL_CLINICA" && (
             <span className="text-[10px] uppercase tracking-wide text-gray-400">veio do portal</span>
           )}

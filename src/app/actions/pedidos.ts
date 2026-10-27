@@ -66,14 +66,20 @@ function atualizarTelas() {
  * ou tabela padrão (lib/preco.ts). `uf` é a do ENDEREÇO do atendimento quando
  * a clínica atende em mais de um lugar; sem ela vale a do cadastro.
  */
-async function valorDoServico(clinicaId: string, servicoId: string, uf?: string | null): Promise<number> {
+async function valorDoServico(
+  clinicaId: string,
+  servicoId: string,
+  uf?: string | null,
+  modalidade: "PARTICULAR" | "CURSO" = "PARTICULAR"
+): Promise<number> {
   const [clinica, servico, tabelaIds] = await Promise.all([
     prisma.clinica.findUnique({ where: { id: clinicaId }, select: { uf: true } }),
     prisma.servico.findUnique({ where: { id: servicoId }, select: { valorPadraoCentavos: true } }),
-    tabelasDaClinica(prisma, clinicaId),
+    tabelasDaClinica(prisma, clinicaId, modalidade),
   ]);
   const { valorCentavos } = await precoDoServico(prisma, {
-    clinicaId,
+    // Curso tem tabela própria: o preço negociado do particular não vale nele.
+    clinicaId: modalidade === "CURSO" ? null : clinicaId,
     servicoId,
     uf: uf ?? clinica?.uf,
     valorPadraoCentavos: servico?.valorPadraoCentavos ?? 0,
@@ -210,6 +216,28 @@ async function criarAgendamento(
   if (pedidos.length === 0 || pedidos.length > 12 || pedidos.some((p) => !p.servicoId)) {
     return { ok: false, erro: "Escolha ao menos um serviço." };
   }
+  // Curso (ata de 27/10): só para quem tem tabela de curso liberada, só com os
+  // serviços dessa tabela, e sempre com o paciente identificado. Com mais de um
+  // serviço na visita o paciente também é obrigatório — é ele que separa os
+  // relatórios de cada atendimento.
+  const modalidade: "PARTICULAR" | "CURSO" = String(dados.get("modalidade") ?? "") === "CURSO" ? "CURSO" : "PARTICULAR";
+  const pacienteGeral = String(dados.get("pacienteNome") ?? "").trim();
+  if (modalidade === "CURSO") {
+    const tabelasDeCurso = await tabelasDaClinica(prisma, quem.clinicaId, "CURSO");
+    if (tabelasDeCurso.length === 0) return { ok: false, erro: "Esta clínica não está liberada para agendar curso." };
+    const precificados = await prisma.precoTabela.findMany({
+      where: { tabelaId: { in: tabelasDeCurso }, servicoId: { in: pedidos.map((p) => p.servicoId) } },
+      select: { servicoId: true },
+    });
+    const liberados = new Set(precificados.map((p) => p.servicoId));
+    if (pedidos.some((p) => !liberados.has(p.servicoId))) {
+      return { ok: false, erro: "Algum serviço escolhido não faz parte da tabela de cursos." };
+    }
+  }
+  if ((modalidade === "CURSO" || pedidos.length > 1) && pedidos.some((p) => !(p.paciente || pacienteGeral))) {
+    return { ok: false, erro: "Informe o nome do paciente." };
+  }
+
   // O mesmo serviço mais de uma vez na visita é um por PACIENTE (reunião de
   // 27/10 — antes, o segundo paciente era outro agendamento). Cada linha
   // repetida precisa do nome, e dois iguais com o mesmo paciente é engano:
@@ -357,7 +385,7 @@ async function criarAgendamento(
   for (const item of pedidos) {
     const servico = porId.get(item.servicoId)!;
     const duracaoMin = duracaoEfetiva(servico, item.quantidade);
-    const unitario = await valorDoServico(quem.clinicaId, servico.id, uf);
+    const unitario = await valorDoServico(quem.clinicaId, servico.id, uf, modalidade);
     itens.push({
       servico,
       paciente: item.paciente,
@@ -394,6 +422,7 @@ async function criarAgendamento(
             numero,
             clinicaId: quem.clinicaId,
             servicoId: item.servico.id,
+            modalidade,
             enderecoId: endereco?.id ?? null,
             quantidade: item.quantidade,
             grupoId: itens.length > 1 ? grupoId : null,
@@ -1556,7 +1585,7 @@ export async function editarAgendamento(_anterior: Resultado, dados: FormData): 
   const duracaoMin = mudouServico || mudouQuantidade ? duracaoEfetiva(servico, quantidade) : pedido.duracaoMin;
   let valorServicoCentavos = pedido.valorServicoCentavos;
   if (mudouServico || mudouQuantidade || mudouLocal) {
-    const unitario = await valorDoServico(pedido.clinicaId, servicoId, endereco?.uf);
+    const unitario = await valorDoServico(pedido.clinicaId, servicoId, endereco?.uf, pedido.modalidade);
     valorServicoCentavos = totalDoItem(unitario, quantidade, servico);
   }
 
@@ -2111,7 +2140,7 @@ export async function editarVisita(_anterior: Resultado, dados: FormData): Promi
   const valores = new Map<string, number>();
   if (mudouLocal) {
     for (const m of membros) {
-      const unitario = await valorDoServico(m.clinicaId, m.servicoId, endereco?.uf);
+      const unitario = await valorDoServico(m.clinicaId, m.servicoId, endereco?.uf, m.modalidade);
       valores.set(m.id, totalDoItem(unitario, m.quantidade, m.servico));
     }
   }
@@ -2216,7 +2245,7 @@ export async function alterarLocalDoAgendamento(_anterior: Resultado, dados: For
   if (membros.length === 0) return { ok: false, erro: "Agendamento já finalizado." };
 
   for (const m of membros) {
-    const unitario = await valorDoServico(m.clinicaId, m.servicoId, endereco?.uf);
+    const unitario = await valorDoServico(m.clinicaId, m.servicoId, endereco?.uf, m.modalidade);
     await prisma.pedido.update({
       where: { id: m.id },
       data: { enderecoId: endereco?.id ?? null, valorServicoCentavos: totalDoItem(unitario, m.quantidade, m.servico) },

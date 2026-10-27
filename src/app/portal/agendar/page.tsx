@@ -5,6 +5,7 @@ import { parametros } from "@/lib/alocacao";
 import { agruparPorFamilia } from "@/lib/familia";
 import { locaisDaClinica } from "@/lib/endereco";
 import { precosDosServicos, tabelasDaClinica } from "@/lib/preco";
+import { precosDeCurso } from "@/lib/curso-catalogo";
 import { servicoVisivel } from "@/lib/visibilidade";
 import { Aviso, Titulo } from "@/components/ui";
 import { camposFaltando } from "@/lib/cadastro-completo";
@@ -131,10 +132,23 @@ export default async function Agendar({ searchParams }: { searchParams: { servic
     servicos: g.servicos.map(paraOCarrinho),
   }));
 
+  // Curso (ata de 27/10): catálogo e tabela próprios, só para quem foi liberado.
+  const dadosDeCurso = await precosDeCurso(prisma, sessao.clinicaId, ufs);
+  const curso = dadosDeCurso
+    ? {
+        precosPorUf: dadosDeCurso.precosPorUf,
+        grupos: agruparPorFamilia(
+          todos.filter((s) => dadosDeCurso.precos.has(s.id)),
+          { fundirSolitarias: false, ordemDoCatalogo: true }
+        ).map((g) => ({ familia: g.familia, servicos: g.servicos.map(paraOCarrinho) })),
+      }
+    : null;
+
   return (
     <>
       <Titulo>Agendar atendimento</Titulo>
       <FormularioAgendamento
+        curso={curso}
         grupos={grupos}
         locais={locais}
         precosPorUf={precosPorUf}

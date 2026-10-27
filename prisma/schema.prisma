@@ -485,6 +485,11 @@ model Servico {
   @@index([categoria])
 }
 
+enum ModalidadeAtendimento {
+  PARTICULAR
+  CURSO
+}
+
 enum UnidadeCobranca {
   PACIENTE
   PERIODO
@@ -924,6 +929,10 @@ model Pedido {
 
   servicoId String
   servico   Servico @relation(fields: [servicoId], references: [id])
+
+  /// Particular ou curso (ata de 27/10): o curso tem tabela de preços própria
+  /// (perfil CURSO) e exige o nome do paciente.
+  modalidade ModalidadeAtendimento @default(PARTICULAR)
 
   /// Quem vai atender. Em SOLICITADO é o profissional que a clínica pediu no
   /// portal — reserva provisória, que já segura o horário dele; em ALOCADO é
