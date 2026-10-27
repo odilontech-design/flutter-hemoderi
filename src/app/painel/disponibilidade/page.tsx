@@ -54,7 +54,7 @@ function cabecalhoDoDia(iso: string): { dia: string; data: string } {
 export default async function DisponibilidadeDaEquipe({
   searchParams,
 }: {
-  searchParams: { semana?: string; q?: string; filtro?: string };
+  searchParams: { semana?: string; q?: string; filtro?: string; servico?: string };
 }) {
   const sessao = await exigirInterno();
   if (!perfilPermite(sessao.perfil, "LOGISTICA")) redirect("/painel");
@@ -63,6 +63,22 @@ export default async function DisponibilidadeDaEquipe({
   const semana = Math.min(Math.max(Math.trunc(Number(searchParams.semana)) || 0, 0), 8);
   const primeiro = somarDias(hojeUTC(), semana * DIAS_NA_GRADE);
   const dias = Array.from({ length: DIAS_NA_GRADE }, (_, i) => somarDias(primeiro, i));
+  // Cruzamento com o serviço (ata de 27/10): escolhido um serviço, só aparece
+  // quem está habilitado para ele, com quantas vezes já o realizou.
+  const servicos = await prisma.servico.findMany({ where: { ativo: true }, orderBy: { nome: "asc" }, select: { id: true, nome: true } });
+  const servicoId = servicos.some((sv) => sv.id === searchParams.servico) ? (searchParams.servico as string) : "";
+  const [aptos, realizados] = servicoId
+    ? await Promise.all([
+        prisma.profissional.findMany({ where: { ativo: true, servicosAptos: { some: { id: servicoId } } }, select: { id: true } }),
+        prisma.pedido.groupBy({
+          by: ["profissionalId"],
+          where: { servicoId, status: "REALIZADO", profissionalId: { not: null } },
+          _count: true,
+        }),
+      ])
+    : [[], []];
+  const idsAptos = new Set(aptos.map((a) => a.id));
+  const jaRealizou = new Map(realizados.map((g) => [g.profissionalId as string, g._count]));
   const [todos, ausencias] = await Promise.all([
     disponibilidadeDaEquipe(dias),
     // O que cada profissional declarou como indisponível (reunião de 27/10):
@@ -95,6 +111,7 @@ export default async function DisponibilidadeDaEquipe({
   const declarou = (l: (typeof todos)[number]) => l.dias.some((d) => d.turnos.some((t) => t.estado !== "sem-declaracao"));
   const equipe = todos
     .filter((l) => !busca || l.nome.toLowerCase().includes(busca))
+    .filter((l) => !servicoId || idsAptos.has(l.profissionalId))
     .filter((l) =>
       filtro === "livres" ? temLivre(l) : filtro === "declarados" ? declarou(l) : filtro === "sem-declaracao" ? !declarou(l) : true
     )
@@ -106,17 +123,18 @@ export default async function DisponibilidadeDaEquipe({
   const livresPorDia = colunas.map((iso) =>
     TURNOS_GRADE.map((t) => ({
       turno: t.rotulo,
-      livres: todos.filter((l) => l.dias.find((d) => d.iso === iso)?.turnos.find((x) => x.turno === t.chave)?.estado === "livre")
+      livres: todos.filter((l) => (!servicoId || idsAptos.has(l.profissionalId)) && l.dias.find((d) => d.iso === iso)?.turnos.find((x) => x.turno === t.chave)?.estado === "livre")
         .length,
     }))
   );
   const nuncaDeclararam = todos.filter((l) => !declarou(l)).length;
   const url = (troca: Record<string, string | number>) => {
     const p = new URLSearchParams();
-    const final = { semana, q: searchParams.q ?? "", filtro, ...troca };
+    const final = { semana, q: searchParams.q ?? "", filtro, servico: servicoId, ...troca };
     if (Number(final.semana)) p.set("semana", String(final.semana));
     if (final.q) p.set("q", String(final.q));
     if (final.filtro) p.set("filtro", String(final.filtro));
+    if (final.servico) p.set("servico", String(final.servico));
     const consulta = p.toString();
     return consulta ? `/painel/disponibilidade?${consulta}` : "/painel/disponibilidade";
   };
@@ -170,6 +188,22 @@ export default async function DisponibilidadeDaEquipe({
       <form className="flex flex-wrap items-center gap-2 mb-3" action="/painel/disponibilidade">
         {semana > 0 && <input type="hidden" name="semana" value={semana} />}
         {filtro && <input type="hidden" name="filtro" value={filtro} />}
+        <select
+          name="servico"
+          defaultValue={servicoId}
+          aria-label="Serviço"
+          className="border border-gray-300 rounded-lg px-3 py-2 text-xs max-w-[220px]"
+        >
+          <option value="">Qualquer serviço</option>
+          {servicos.map((sv) => (
+            <option key={sv.id} value={sv.id}>
+              {sv.nome}
+            </option>
+          ))}
+        </select>
+        <button type="submit" className="bg-bordo text-white text-xs font-semibold px-3 py-2 rounded-lg">
+          Filtrar
+        </button>
         <input
           name="q"
           defaultValue={searchParams.q ?? ""}
@@ -210,11 +244,18 @@ export default async function DisponibilidadeDaEquipe({
 
       <Cartao>
         {equipe.length === 0 ? (
-          <Vazio>{todos.length === 0 ? "Nenhum profissional ativo cadastrado." : "Ninguém com esse filtro."}</Vazio>
+          <Vazio>
+            {todos.length === 0
+              ? "Nenhum profissional ativo cadastrado."
+              : servicoId
+                ? "Nenhum profissional habilitado para este serviço com esse filtro. Cadastre as aptidões em Profissionais."
+                : "Ninguém com esse filtro."}
+          </Vazio>
         ) : (
           <Tabela
             cabecalho={[
               "Profissional",
+              ...(servicoId ? ["Já realizou"] : []),
               ...colunas.map((iso) => {
                 const { dia, data } = cabecalhoDoDia(iso);
                 return `${dia} ${data}`;
@@ -224,6 +265,11 @@ export default async function DisponibilidadeDaEquipe({
             {equipe.map((linha) => (
               <tr key={linha.profissionalId} className="border-b border-gray-100 last:border-0">
                 <td className="py-2 pr-3 font-semibold text-bordo whitespace-nowrap">{linha.nome}</td>
+                {servicoId && (
+                  <td className="py-2 pr-3 text-gray-600 whitespace-nowrap">
+                    {jaRealizou.get(linha.profissionalId) ? `${jaRealizou.get(linha.profissionalId)}×` : "nunca"}
+                  </td>
+                )}
                 {linha.dias.map((dia) => (
                   <td key={dia.iso} className="py-2 pr-3">
                     <div className="flex gap-1">

@@ -5,6 +5,7 @@ import { Cartao, Tabela, Titulo, Vazio } from "@/components/ui";
 import { ImportarProfissionais } from "./ImportarProfissionais";
 import { EditarProfissional } from "./EditarProfissional";
 import { agruparPorFamilia } from "@/lib/familia";
+import { situacaoDoAcesso } from "@/lib/profissionais-acesso";
 
 export const dynamic = "force-dynamic";
 
@@ -55,6 +56,13 @@ export default async function Profissionais() {
             >
               Atrasos de chegada
             </Link>
+            {/* O download tem que ser navegação, não link do Next: é um arquivo. */}
+            <a
+              href="/painel/profissionais/inativos"
+              className="border border-gray-300 text-bordo text-xs font-semibold px-3 py-2 min-h-[40px] sm:min-h-0 inline-flex items-center rounded-lg hover:bg-gray-50"
+            >
+              Baixar inativos (Excel)
+            </a>
             <ImportarProfissionais />
             <Link
               href="/painel/profissionais/novo"
@@ -67,6 +75,30 @@ export default async function Profissionais() {
       >
         Profissionais
       </Titulo>
+
+      {(() => {
+        // Os números grandes (ata de 27/10): quantos profissionais, quantos já
+        // entraram e quantos estão habilitados para algum serviço.
+        const ativos = profissionais.filter((p) => p.ativo);
+        const situacoes = ativos.map((p) => situacaoDoAcesso(p.usuarios));
+        const indicadores: [string, number][] = [
+          ["Cadastrados", ativos.length],
+          ["Acesso ativado", situacoes.filter((x) => x === "ativo").length],
+          ["Ainda não entraram", situacoes.filter((x) => x === "nunca-entrou").length],
+          ["Sem acesso criado", situacoes.filter((x) => x === "sem-acesso" || x === "desativado").length],
+          ["Habilitados (com serviços)", ativos.filter((p) => p.servicosAptos.length > 0).length],
+        ];
+        return (
+          <div className="mb-3 grid grid-cols-2 sm:grid-cols-5 gap-2">
+            {indicadores.map(([rotulo, valor]) => (
+              <div key={rotulo} className="rounded-xl border border-gray-200 bg-white px-3 py-2">
+                <div className="font-display text-xl font-bold text-bordo">{valor}</div>
+                <div className="text-[10px] text-gray-500">{rotulo}</div>
+              </div>
+            ))}
+          </div>
+        );
+      })()}
 
       {(() => {
         // Prontidão para o lançamento (revisão de 25/10): sem telefone o aviso
