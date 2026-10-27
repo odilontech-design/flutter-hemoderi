@@ -174,28 +174,24 @@ async function criarAgendamento(
     },
   });
   if (!clinica) return { ok: false, erro: "Clínica não encontrada." };
-  // Cadastro incompleto não agenda (ata de 02/10): sem CNPJ, telefone e e-mail
-  // a central não consegue cobrar nem ligar de volta. Vale também para a
-  // equipe — a tela dela completa os dados ali mesmo, antes de agendar.
-  const faltando = camposFaltando(clinica);
-  if (faltando.length > 0) {
-    return {
-      ok: false,
-      erro: pelaEquipe
-        ? `O cadastro da clínica está incompleto (falta ${faltando.join(", ")}). Complete antes de agendar.`
-        : `O cadastro da clínica está incompleto (falta ${faltando.join(", ")}). Fale com a central para completar e liberar o agendamento.`,
-    };
-  }
-  if (pelaEquipe && (!clinica.ativa || clinica.preCadastro)) {
-    return { ok: false, erro: "A clínica está desativada. Ative o cadastro antes de agendar." };
-  }
-  if (clinica.statusCadastro !== "APROVADO") {
-    return {
-      ok: false,
-      erro: pelaEquipe
-        ? "O cadastro da clínica ainda não foi aprovado. Aprove antes de agendar."
-        : "Seu cadastro ainda está em análise pela nossa equipe. Assim que for aprovado, o agendamento é liberado.",
-    };
+  // Cadastro incompleto não agenda pelo portal (ata de 02/10): sem CNPJ,
+  // telefone e e-mail a central não consegue cobrar nem ligar de volta.
+  // A EQUIPE agenda mesmo assim (pedido de 27/10, a Joyce ativa as clínicas
+  // pré-cadastradas do CRM com dados faltando): os dados se completam depois,
+  // e o painel mostra o que falta.
+  if (!pelaEquipe) {
+    const faltando = camposFaltando(clinica);
+    if (faltando.length > 0) {
+      return {
+        ok: false,
+        erro: `O cadastro da clínica está incompleto (falta ${faltando.join(", ")}). Fale com a central para completar e liberar o agendamento.`,
+      };
+    }
+    if (clinica.statusCadastro !== "APROVADO") {
+      return { ok: false, erro: "Seu cadastro ainda está em análise pela nossa equipe. Assim que for aprovado, o agendamento é liberado." };
+    }
+  } else if (clinica.statusCadastro === "RECUSADO") {
+    return { ok: false, erro: "O cadastro desta clínica foi recusado. Reveja o cadastro antes de agendar." };
   }
 
   let pedidos: { servicoId: string; quantidade: number; paciente: string }[] = [];
@@ -453,6 +449,14 @@ export async function agendarPelaEquipe(_anterior: Resultado, dados: FormData): 
 
   const resultado = await criarAgendamento({ tipo: "equipe", usuarioId: sessao.usuarioId, clinicaId }, dados);
   if (!resultado.ok || !resultado.criados) return resultado;
+
+  // Agendar pela equipe ativa a clínica do CRM: ela passa a aparecer nas
+  // listas como cliente, mesmo com dados a completar depois.
+  const ativada = await prisma.clinica.updateMany({
+    where: { id: clinicaId, OR: [{ preCadastro: true }, { ativa: false }] },
+    data: { preCadastro: false, ativa: true, desativadaEm: null },
+  });
+  if (ativada.count > 0) await registrarAuditoria(sessao.usuarioId, "Clinica", clinicaId, "ativar-ao-agendar", "ativada ao agendar pela equipe");
 
   const avisos: string[] = [];
   const profissionalId = String(dados.get("profissionalId") ?? "");

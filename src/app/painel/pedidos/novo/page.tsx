@@ -10,7 +10,6 @@ import { perfilPermite } from "@/lib/papeis";
 import { formatarTelefone } from "@/lib/whatsapp-link";
 import { FormularioAgendamento, type ServicoDoCarrinho } from "@/app/portal/agendar/FormularioAgendamento";
 import { EscolherClinica, type ClinicaDaLista } from "./EscolherClinica";
-import { LiberarClinica } from "./LiberarClinica";
 
 export const dynamic = "force-dynamic";
 
@@ -80,7 +79,6 @@ export default async function NovoPedido({ searchParams }: { searchParams: { cli
         {escolhidaId && (
           <Agendamento
             clinicaId={escolhidaId}
-            podeLiberar={perfilPermite(sessao.perfil, "COMERCIAL", "ATENDENTE", "POS_VENDA")}
             podeAlocar={perfilPermite(sessao.perfil, "LOGISTICA")}
             localInicialId={searchParams.endereco}
           />
@@ -92,12 +90,10 @@ export default async function NovoPedido({ searchParams }: { searchParams: { cli
 
 async function Agendamento({
   clinicaId,
-  podeLiberar,
   podeAlocar,
   localInicialId,
 }: {
   clinicaId: string;
-  podeLiberar: boolean;
   podeAlocar: boolean;
   localInicialId?: string;
 }) {
@@ -115,33 +111,20 @@ async function Agendamento({
     },
   });
 
+  // Não bloqueia (pedido de 27/10): a Joyce ativa e agenda as clínicas do CRM
+  // mesmo com dados faltando. A tela só lembra do que completar depois.
   const faltando = camposFaltando(clinica);
-  const pendencias = [
-    clinica.preCadastro ? "é um pré-cadastro do CRM: precisa ser ativada" : null,
-    !clinica.preCadastro && !clinica.ativa ? "está desativada: precisa ser ativada" : null,
-    clinica.statusCadastro === "PENDENTE" ? "o autocadastro ainda está em análise: precisa ser aprovado" : null,
-    clinica.statusCadastro === "RECUSADO" ? "o cadastro foi recusado: liberar aprova o cadastro" : null,
+  const lembretes = [
+    clinica.preCadastro ? "é um pré-cadastro do CRM (será ativada ao agendar)" : null,
+    !clinica.preCadastro && !clinica.ativa ? "está desativada (será ativada ao agendar)" : null,
+    clinica.statusCadastro === "PENDENTE" ? "o autocadastro ainda está em análise" : null,
     faltando.length > 0 ? `faltam dados para cobrar: ${faltando.join(", ")}` : null,
   ].filter((p): p is string => Boolean(p));
 
-  if (pendencias.length > 0) {
+  if (clinica.statusCadastro === "RECUSADO") {
     return (
       <Cartao>
-        {podeLiberar ? (
-          <LiberarClinica
-            clinicaId={clinicaId}
-            pendencias={pendencias}
-            faltaCnpj={!clinica.cnpj?.replace(/\D/g, "")}
-            faltaTelefone={!clinica.telefone?.replace(/\D/g, "")}
-            faltaEmail={!clinica.email?.trim()}
-            faltaPerfil={clinica.perfis.length === 0}
-          />
-        ) : (
-          <Aviso tom="alerta">
-            <div className="font-semibold mb-1">Esta clínica ainda não pode agendar:</div>
-            {pendencias.join("; ")}. Peça ao comercial para liberar o cadastro.
-          </Aviso>
-        )}
+        <Aviso tom="alerta">O cadastro desta clínica foi recusado. Reveja o cadastro antes de agendar.</Aviso>
       </Cartao>
     );
   }
@@ -210,6 +193,14 @@ async function Agendamento({
 
   return (
     <>
+      {lembretes.length > 0 && (
+        <Aviso tom="info">
+          Pode agendar mesmo assim — {lembretes.join("; ")}.{" "}
+          <a href={`/painel/clinicas/${clinicaId}`} className="font-semibold underline">
+            Completar o cadastro
+          </a>
+        </Aviso>
+      )}
       {locais.length === 0 && (
         <Aviso tom="alerta">
           A clínica não tem endereço cadastrado: os preços aparecem como &quot;sob consulta&quot; e o profissional não
