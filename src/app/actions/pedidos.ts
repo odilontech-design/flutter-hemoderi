@@ -158,7 +158,7 @@ type QuemAgenda =
 async function criarAgendamento(
   quem: QuemAgenda,
   dados: FormData
-): Promise<Resultado & { criados?: { id: string; numero: number }[] }> {
+): Promise<Resultado & { criados?: { id: string; numero: number }[]; conflitos?: string[] }> {
   const pelaEquipe = quem.tipo === "equipe";
   const clinica = await prisma.clinica.findUnique({
     where: { id: quem.clinicaId },
@@ -312,11 +312,17 @@ async function criarAgendamento(
     horas: [horaInicio],
     foraDoExpediente: true,
   });
+  // A equipe não é travada por sobreposição (pedido de 27/10: o estoque de
+  // equipamento é curto, mas a Joyce decide): vira aviso no fim do agendamento.
+  const conflitos: string[] = [];
   if (!livres.horarios.includes(horaInicio)) {
-    return {
-      ok: false,
-      erro: "Esse horário não está disponível (já ocupado para esses serviços). Escolha outro ou fale com a central.",
-    };
+    if (!pelaEquipe) {
+      return {
+        ok: false,
+        erro: "Esse horário não está disponível (já ocupado para esses serviços). Escolha outro ou fale com a central.",
+      };
+    }
+    conflitos.push("O horário já tinha outro agendamento (sala da clínica ou equipamento) para estes serviços.");
   }
 
   // Valor e duração de cada item, e o instante em que ele começa dentro do bloco.
@@ -356,7 +362,8 @@ async function criarAgendamento(
       tx
     );
     if (temBloqueio(impedimentos)) {
-      return { ok: false as const, erro: "Esse horário acabou de ficar indisponível. Escolha outro." };
+      if (!pelaEquipe) return { ok: false as const, erro: "Esse horário acabou de ficar indisponível. Escolha outro." };
+      conflitos.push(...impedimentos.filter((i) => i.bloqueante).map((i) => i.mensagem));
     }
 
     const criados = [];
@@ -404,7 +411,7 @@ async function criarAgendamento(
     }
     await criarNegocio(pedido.id);
   }
-  return { ok: true, id: resultado.criados[0].id, criados: resultado.criados };
+  return { ok: true, id: resultado.criados[0].id, criados: resultado.criados, conflitos: [...new Set(conflitos)] };
 }
 
 /**
@@ -458,7 +465,7 @@ export async function agendarPelaEquipe(_anterior: Resultado, dados: FormData): 
   });
   if (ativada.count > 0) await registrarAuditoria(sessao.usuarioId, "Clinica", clinicaId, "ativar-ao-agendar", "ativada ao agendar pela equipe");
 
-  const avisos: string[] = [];
+  const avisos: string[] = (resultado.conflitos ?? []).map((c) => `Atenção: ${c}`);
   const profissionalId = String(dados.get("profissionalId") ?? "");
   if (profissionalId) {
     const grupoId = resultado.criados.length > 1

@@ -378,7 +378,8 @@ export function FormularioAgendamento({
     })
   );
 
-  const horaLivre = Boolean(hora) && situacaoHora === "livre";
+  // A equipe não é travada por sobreposição: só recebe o aviso (pedido de 27/10).
+  const horaLivre = Boolean(hora) && (situacaoHora === "livre" || (Boolean(equipe) && situacaoHora !== "verificando"));
   const dataLegivel = data ? data.split("-").reverse().join("/") : "";
 
   return (
@@ -696,7 +697,7 @@ export function FormularioAgendamento({
                     <span className="font-semibold text-amber-700">
                       Esse horário não está disponível para {linhas.length > 1 ? "esses serviços juntos" : "esse serviço"}{" "}
                       {equipe
-                        ? "(sala da clínica ou equipamento já ocupados, ou passando da meia-noite). Tente outro horário."
+                        ? "(sala da clínica ou equipamento já ocupados). Atenção: já existe agendamento nesse horário para o mesmo serviço — você pode criar mesmo assim."
                         : `(já ocupado, com menos de ${antecedenciaHoras}h de antecedência ou passando da meia-noite). Tente outro horário ou fale com a central.`}
                     </span>
                   )}
