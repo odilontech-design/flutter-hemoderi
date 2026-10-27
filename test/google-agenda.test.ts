@@ -143,3 +143,14 @@ test("sem endereço o evento não inventa um local vazio", () => {
   const sem = { ...PEDIDO, clinica: { nome: "X", endereco: null, cidade: null } };
   assert.equal(montarEvento(sem).location, undefined);
 });
+
+// ── Lembretes (ata de 27/10) ────────────────────────────────────────────────
+
+test("agenda do profissional recebe lembrete de 2 horas", () => {
+  assert.deepEqual(montarEvento(PEDIDO).reminders, { useDefault: false, overrides: [{ method: "popup", minutes: 120 }] });
+});
+
+test("agenda da operação fica sem notificações", () => {
+  const sem = { ...PEDIDO, profissional: { nome: "Ana", googleAgendaId: null } };
+  assert.deepEqual(montarEvento(sem).reminders, { useDefault: false, overrides: [] });
+});

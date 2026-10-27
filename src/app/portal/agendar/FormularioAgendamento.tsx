@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { useFormState } from "react-dom";
+import { useFormState, useFormStatus } from "react-dom";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Area, Aviso, Botao, Campo, Rotulo, Selecao } from "@/components/ui";
@@ -396,17 +396,23 @@ export function FormularioAgendamento({
         </div>
       )}
 
+      {/* O endereço em destaque (ata de 27/10): em texto pequeno passava
+          despercebido, e o agendamento saía com o local errado. */}
       {!temEtapaDeLocal && local && (
-        <div className="text-[11px] text-gray-500 px-1">
-          Atendimento em <strong className="text-gray-700">{local.rotulo}</strong>
-          {local.resumo ? ` · ${local.resumo}` : ""} ·{" "}
-          {equipe ? (
-            <OutroEndereco clinicaId={equipe.clinicaId} aoCriar={escolherLocalNovo} />
-          ) : (
-            <Link href={enderecosHref} className="font-semibold text-bordo hover:underline">
-              cadastrar outro endereço
-            </Link>
-          )}
+        <div className="rounded-2xl border-2 border-bordo/40 bg-white px-4 py-3">
+          <div className="text-[10px] font-semibold uppercase tracking-wide text-bordo">📍 Local do atendimento</div>
+          <div className="mt-1 text-sm font-semibold text-gray-800">{local.rotulo}</div>
+          {local.resumo && <div className="text-xs text-gray-600">{local.resumo}</div>}
+          <div className="mt-1.5 text-[11px] text-gray-500">
+            Não é este endereço?{" "}
+            {equipe ? (
+              <OutroEndereco clinicaId={equipe.clinicaId} aoCriar={escolherLocalNovo} />
+            ) : (
+              <Link href={enderecosHref} className="font-semibold text-bordo hover:underline">
+                cadastrar outro endereço
+              </Link>
+            )}
+          </div>
         </div>
       )}
 
@@ -823,9 +829,9 @@ export function FormularioAgendamento({
             </Aviso>
           ) : null}
 
-          <Botao type="submit" disabled={!horaLivre || linhas.length === 0 || (Boolean(equipe) && estado.ok)}>
+          <BotaoDeEnvio desabilitado={!horaLivre || linhas.length === 0 || (Boolean(equipe) && estado.ok)}>
             {equipe ? "Criar agendamento" : "Solicitar agendamento"}
-          </Botao>
+          </BotaoDeEnvio>
           <div className="text-[10px] text-gray-400">
             {equipe
               ? "Já nasce confirmado: a clínica recebe a confirmação pelo WhatsApp."
@@ -834,5 +840,15 @@ export function FormularioAgendamento({
         </div>
       </Etapa>
     </form>
+  );
+}
+
+/** O envio não repete enquanto o servidor ainda responde (o duplo clique duplicava o agendamento). */
+function BotaoDeEnvio({ desabilitado, children }: { desabilitado: boolean; children: React.ReactNode }) {
+  const { pending } = useFormStatus();
+  return (
+    <Botao type="submit" disabled={desabilitado || pending}>
+      {pending ? "Enviando…" : children}
+    </Botao>
   );
 }

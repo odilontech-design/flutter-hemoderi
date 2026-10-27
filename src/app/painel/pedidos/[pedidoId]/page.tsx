@@ -7,12 +7,13 @@ import { STATUS_ATIVOS } from "@/lib/pedido";
 import { comEnderecoDoPedido, locaisDaClinica, resumoDoEndereco } from "@/lib/endereco";
 import { AgendaDaEquipe } from "@/components/AgendaDaEquipe";
 import { BotaoAcao } from "@/components/BotaoAcao";
-import { enviarConfirmacoesWhatsapp } from "@/app/actions/pedidos";
+import { enviarConfirmacoesWhatsapp, enviarResumoWhatsapp } from "@/app/actions/pedidos";
 import { eventoParaEquipe } from "@/lib/evento-equipe";
 import { agruparPorFamilia } from "@/lib/familia";
 import { isoDeData } from "@/lib/data";
 import { EditarAgendamento } from "./EditarAgendamento";
 import { EditarVisita } from "./EditarVisita";
+import { AlterarLocal } from "./AlterarLocal";
 import { Cartao, SeloStatus, Titulo, Vazio } from "@/components/ui";
 import { codigoDoPedido } from "@/lib/numeracao";
 import { formatarData, formatarDataHora } from "@/lib/data";
@@ -61,7 +62,9 @@ export default async function DetalheDoPedido({
   // Edição do resumo (ata de 02/10): só para quem atende o telefone e só
   // enquanto o atendimento ainda está de pé.
   const podeEditar = perfilPermite(sessao.perfil, "COMERCIAL", "ATENDENTE", "POS_VENDA") && STATUS_ATIVOS.includes(pedido.status);
-  const [servicosDoCatalogo, locais] = podeEditar
+  // A logística só corrige o local (ata de 27/10); o resto é do comercial.
+  const podeAlterarLocal = !podeEditar && perfilPermite(sessao.perfil, "LOGISTICA") && STATUS_ATIVOS.includes(pedido.status);
+  const [servicosDoCatalogo, locais] = podeEditar || podeAlterarLocal
     ? await Promise.all([
         prisma.servico.findMany({
           where: { ativo: true },
@@ -100,12 +103,20 @@ export default async function DetalheDoPedido({
             <span className="text-[10px] uppercase tracking-wide text-gray-400">veio do portal</span>
           )}
           {(pedido.status === "CONFIRMADO" || pedido.status === "ALOCADO") && (
-            <BotaoAcao tela
-              acao={enviarConfirmacoesWhatsapp.bind(null, pedido.id)}
-              confirmar="Enviar a confirmação deste agendamento pelo WhatsApp para a clínica e o profissional?"
-            >
-              Enviar confirmação no WhatsApp
-            </BotaoAcao>
+            <>
+              <BotaoAcao tela
+                acao={enviarConfirmacoesWhatsapp.bind(null, pedido.id)}
+                confirmar="Enviar o texto curto de confirmação pelo WhatsApp para a clínica (e o aviso ao profissional, se já alocado)?"
+              >
+                Enviar confirmação curta
+              </BotaoAcao>
+              <BotaoAcao tela
+                acao={enviarResumoWhatsapp.bind(null, pedido.id)}
+                confirmar="Enviar o resumo detalhado (data, horário, endereço, clínica, doutor e profissional) para a clínica?"
+              >
+                Enviar resumo detalhado
+              </BotaoAcao>
+            </>
           )}
           {/* Alocado, vai para a agenda de quem acompanha (pedido do André, 26/10). */}
           {pedido.status === "ALOCADO" && (
@@ -208,6 +219,15 @@ export default async function DetalheDoPedido({
           )}
         </div>
       </Cartao>
+
+      {podeAlterarLocal && (
+        <AlterarLocal
+          pedidoId={pedido.id}
+          clinicaId={pedido.clinicaId}
+          enderecoId={pedido.enderecoId ?? ""}
+          locais={locais.map((l) => ({ id: l.id, rotulo: l.rotulo }))}
+        />
+      )}
 
       {/* A visita inteira, quando tem mais de um serviço (reunião de 27/10). */}
       {podeEditar && visita.length > 1 && (

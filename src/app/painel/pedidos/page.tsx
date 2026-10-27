@@ -25,7 +25,7 @@ import { ValorServico } from "./ValorServico";
 import { perfilPermite } from "@/lib/papeis";
 import { AgendaDaEquipe } from "@/components/AgendaDaEquipe";
 import { BotaoAcao } from "@/components/BotaoAcao";
-import { enviarConfirmacoesWhatsapp, enviarPelaCentral } from "@/app/actions/pedidos";
+import { enviarConfirmacoesWhatsapp, enviarPelaCentral, enviarResumoWhatsapp } from "@/app/actions/pedidos";
 import { eventoParaEquipe } from "@/lib/evento-equipe";
 import { condicaoValida } from "@/lib/pagamento";
 
@@ -432,12 +432,18 @@ export default async function Esteira({
                   )}
                   {/* Confirmação sob demanda pelo Dilon Zap (reunião de 27/10). */}
                   {(pedido.status === "CONFIRMADO" || pedido.status === "ALOCADO") && (
-                    <div className="mt-1">
+                    <div className="mt-1 flex flex-wrap gap-2">
                       <BotaoAcao tela
                         acao={enviarConfirmacoesWhatsapp.bind(null, pedido.id)}
-                        confirmar="Enviar a confirmação deste agendamento pelo WhatsApp para a clínica e o profissional?"
+                        confirmar="Enviar o texto curto de confirmação pelo WhatsApp para a clínica (e o aviso ao profissional, se já alocado)?"
                       >
-                        Enviar confirmação no WhatsApp
+                        Enviar confirmação curta
+                      </BotaoAcao>
+                      <BotaoAcao tela
+                        acao={enviarResumoWhatsapp.bind(null, pedido.id)}
+                        confirmar="Enviar o resumo detalhado (data, horário, endereço, clínica, doutor e profissional) para a clínica?"
+                      >
+                        Enviar resumo detalhado
                       </BotaoAcao>
                     </div>
                   )}

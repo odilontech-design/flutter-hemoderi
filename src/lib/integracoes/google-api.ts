@@ -135,6 +135,8 @@ export type EventoGoogle = {
   location?: string;
   start: { dateTime: string; timeZone: string };
   end: { dateTime: string; timeZone: string };
+  /** Lembretes do evento; sem isso o Google usa os padrões da agenda. */
+  reminders?: { useDefault: false; overrides: { method: "popup"; minutes: number }[] };
 };
 
 /**

@@ -15,6 +15,7 @@ import { formatarData, formatarDataCurta, instanteDoAtendimento } from "@/lib/da
 import { mensagemDeAtraso, mensagemDeFeedback } from "@/lib/whatsapp-link";
 import { corpoParaDilonZap, descreverErroDeRede, interpretarResposta, mensagemVencida, urlDoDilonZap } from "@/lib/integracoes/dilon-zap";
 import { codigoDoPedido } from "@/lib/numeracao";
+import { comEnderecoDoPedido, resumoDoEndereco } from "@/lib/endereco";
 import { normalizarTelefone } from "@/lib/slug";
 import type { TipoMensagem } from "@prisma/client";
 
@@ -25,10 +26,40 @@ type DadosPedido = {
   horaInicio: string;
   /** O contato informado no agendamento — vence o telefone do cadastro. */
   contatoClinica?: string | null;
-  clinica: { nome: string; telefone: string | null };
+  doutorNome?: string | null;
+  procedimentoPaciente?: string | null;
+  formaPagamento?: string | null;
+  clinica: { nome: string; telefone: string | null; endereco?: string | null; cidade?: string | null };
+  endereco?: { endereco: string | null; cidade: string | null } | null;
   servico: { nome: string };
   profissional: { nome: string; telefone: string | null } | null;
 };
+
+/** O que se lê do pedido para montar qualquer mensagem. */
+const SELECAO_DO_PEDIDO = {
+  id: true,
+  numero: true,
+  data: true,
+  horaInicio: true,
+  contatoClinica: true,
+  doutorNome: true,
+  procedimentoPaciente: true,
+  formaPagamento: true,
+  clinica: { select: { nome: true, telefone: true, endereco: true, cidade: true } },
+  endereco: { select: { endereco: true, cidade: true } },
+  servico: { select: { nome: true } },
+  profissional: { select: { nome: true, telefone: true } },
+} as const;
+
+/**
+ * O envio automático (confirmação na criação, alocação, lembrete, resultado)
+ * está suspenso até os testes terminarem (ata de 27/10: "suspender o envio de
+ * mensagens automáticas para clientes"). Liga-se com
+ * WHATSAPP_ENVIO_AUTOMATICO=true. Os botões da equipe continuam enviando.
+ */
+export function envioAutomaticoLigado(): boolean {
+  return process.env.WHATSAPP_ENVIO_AUTOMATICO?.trim().toLowerCase() === "true";
+}
 
 /**
  * Os textos. Ficam no código, e não no banco, enquanto forem poucos e
@@ -41,8 +72,31 @@ function montarTexto(tipo: TipoMensagem, pedido: DadosPedido): string {
   const codigo = codigoDoPedido(pedido.numero, pedido.clinica.nome, pedido.data);
 
   switch (tipo) {
-    case "CONFIRMACAO":
-      return `Olá, ${pedido.clinica.nome}! Confirmamos o atendimento de ${pedido.servico.nome} em ${quando}. Agendamento ${codigo}.`;
+    case "CONFIRMACAO": {
+      // Texto curto, no ato da criação (ata de 27/10): sem o nome do negócio
+      // e sem os detalhes — o resumo completo vai depois, a pedido da equipe.
+      const doutor = pedido.doutorNome ? ` com ${pedido.doutorNome}` : "";
+      return `Olá! Recebemos o agendamento de ${pedido.servico.nome}${doutor} para ${quando}. Em breve enviamos o resumo com todos os detalhes. Agendamento ${codigo}.`;
+    }
+    case "RESUMO": {
+      const local = resumoDoEndereco(comEnderecoDoPedido(pedido.clinica, pedido.endereco ?? null));
+      return [
+        `Agendamento ${codigo} confirmado!`,
+        `Data: ${formatarData(pedido.data)}`,
+        `Horário: ${pedido.horaInicio}`,
+        `Local: ${local || "a confirmar"}`,
+        `Clínica: ${pedido.clinica.nome}`,
+        pedido.doutorNome ? `Doutor(a): ${pedido.doutorNome}` : null,
+        `Serviço: ${pedido.servico.nome}`,
+        pedido.procedimentoPaciente ? `Procedimento: ${pedido.procedimentoPaciente}` : null,
+        pedido.profissional ? `Profissional: ${pedido.profissional.nome}` : null,
+        pedido.formaPagamento ? `Pagamento: ${pedido.formaPagamento}` : null,
+        "",
+        "Um dia antes do atendimento entramos em contato para reforçar.",
+      ]
+        .filter((linha) => linha !== null)
+        .join("\n");
+    }
     case "ALOCACAO":
       // A notificação de alocação NÃO diz a clínica (ata de 14/09): sabendo o
       // endereço na hora do convite, atendimento longe é recusado e sobra
@@ -84,18 +138,12 @@ export async function enfileirarMensagem(
 ): Promise<void> {
   const pedido = await prisma.pedido.findUnique({
     where: { id: pedidoId },
-    select: {
-      id: true,
-      numero: true,
-      data: true,
-      horaInicio: true,
-      contatoClinica: true,
-      clinica: { select: { nome: true, telefone: true } },
-      servico: { select: { nome: true } },
-      profissional: { select: { nome: true, telefone: true } },
-    },
+    select: SELECAO_DO_PEDIDO,
   });
   if (!pedido) return;
+  // Envio automático suspenso: nem entra na fila, para não despejar um
+  // acúmulo de mensagens de teste nos clientes quando for religado.
+  if (!envioAutomaticoLigado()) return;
 
   const destinatario = destinatarioDe(tipo, pedido);
   // Sem telefone não há o que enfileirar. Não é erro: cadastro incompleto é
@@ -133,20 +181,11 @@ export async function enfileirarMensagem(
  */
 export async function reenviarMensagem(
   pedidoId: string,
-  tipo: "CONFIRMACAO" | "ALOCACAO" | "FEEDBACK" | "COBRANCA_RELATORIO" | "ATRASO"
+  tipo: "CONFIRMACAO" | "RESUMO" | "ALOCACAO" | "FEEDBACK" | "COBRANCA_RELATORIO" | "ATRASO"
 ): Promise<{ ok: true; destinatario: string } | { ok: false; erro: string }> {
   const pedido = await prisma.pedido.findUnique({
     where: { id: pedidoId },
-    select: {
-      id: true,
-      numero: true,
-      data: true,
-      horaInicio: true,
-      contatoClinica: true,
-      clinica: { select: { nome: true, telefone: true } },
-      servico: { select: { nome: true } },
-      profissional: { select: { nome: true, telefone: true } },
-    },
+    select: SELECAO_DO_PEDIDO,
   });
   if (!pedido) return { ok: false, erro: "Agendamento não encontrado." };
   if ((tipo === "ALOCACAO" || tipo === "COBRANCA_RELATORIO") && !pedido.profissional) {

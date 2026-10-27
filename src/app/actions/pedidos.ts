@@ -300,6 +300,25 @@ async function criarAgendamento(
     }
   }
 
+  // Duplicidade (ata de 27/10: o mesmo agendamento apareceu duas vezes): um
+  // duplo clique, ou o envio repetido ao recarregar, cria o mesmo agendamento
+  // de novo — e a equipe não é mais travada por sobreposição. Idêntico e
+  // criado há instantes, não se repete.
+  const repetido = await prisma.pedido.findFirst({
+    where: {
+      clinicaId: quem.clinicaId,
+      data: dataDeISO(dataISO),
+      horaInicio,
+      servicoId: { in: pedidos.map((p) => p.servicoId) },
+      status: { not: "CANCELADO" },
+      criadoEm: { gte: new Date(Date.now() - 3 * 60 * 1000) },
+    },
+    select: { id: true },
+  });
+  if (repetido) {
+    return { ok: false, erro: "Este agendamento acabou de ser criado — confira a esteira antes de criar de novo." };
+  }
+
   // Qualquer horário vale (ata de 02/10: o relógio do formulário), mesmo fora
   // do expediente, desde que passe pelas travas de sala da clínica e
   // equipamento. A antecedência só vale para a clínica: a equipe encaixa
@@ -1396,12 +1415,15 @@ async function aplicarTrocaDeLocal(
  * portal de propósito: é o caminho que a central usa depois que o prazo do
  * site já fechou, ou quando quem pede é a própria clínica por telefone.
  */
-export async function reagendarPedidoInterno(pedidoId: string, dataISO: string, horaInicio: string): Promise<Resultado> {
+export async function reagendarPedidoInterno(pedidoId: string, dataISO: string, horaInicio: string, motivo = ""): Promise<Resultado> {
   const sessao = await exigirInterno();
   if (!perfilPermite(sessao.perfil, "COMERCIAL", "LOGISTICA")) {
     return { ok: false, erro: "Só o comercial ou a logística reagenda um atendimento." };
   }
   if (!dataISO || !horaInicio) return { ok: false, erro: "Escolha a nova data e o novo horário." };
+  // Justificativa do reagendamento (ata de 27/10): fica no histórico, como o
+  // motivo do cancelamento — o mesmo atendimento muda de dia, não se lança outro.
+  if (!motivo.trim()) return { ok: false, erro: "Informe o motivo do reagendamento." };
 
   const pedido = await prisma.pedido.findUnique({
     where: { id: pedidoId },
@@ -1423,7 +1445,7 @@ export async function reagendarPedidoInterno(pedidoId: string, dataISO: string, 
     "Pedido",
     pedido.id,
     "reagendar-interno",
-    `${dataAnterior} → ${dataISO} ${horaInicio}`
+    `${dataAnterior} → ${dataISO} ${horaInicio} · motivo: ${motivo.trim().slice(0, 300)}`
   );
 
   return { ok: true };
@@ -1973,6 +1995,25 @@ export async function enviarConfirmacoesWhatsapp(pedidoId: string): Promise<Resu
 }
 
 /**
+ * "Enviar resumo detalhado" (ata de 27/10): a segunda etapa da comunicação com
+ * a clínica. O texto curto sai na criação; o resumo — data, horário, endereço
+ * completo, clínica, doutor e profissional — só quando a equipe valida a
+ * confirmação e aciona este botão.
+ */
+export async function enviarResumoWhatsapp(pedidoId: string): Promise<Resultado> {
+  const sessao = await exigirInterno();
+  const pedido = await prisma.pedido.findUnique({ where: { id: pedidoId }, select: { id: true, status: true } });
+  if (!pedido) return { ok: false, erro: "Agendamento não encontrado." };
+  if (pedido.status !== "CONFIRMADO" && pedido.status !== "ALOCADO") {
+    return { ok: false, erro: "Só se envia o resumo de agendamento confirmado ou alocado." };
+  }
+  const r = await reenviarMensagem(pedido.id, "RESUMO");
+  await registrarAuditoria(sessao.usuarioId, "Pedido", pedido.id, "whatsapp-resumo", r.ok ? "enviado" : r.erro);
+  revalidatePath("/painel/integracoes");
+  return r.ok ? { ok: true, avisos: ["Resumo detalhado enviado para a clínica pela central."] } : { ok: false, erro: r.erro };
+}
+
+/**
  * "Salvei no Google Agenda" (reunião de 27/10): a equipe confirma que pôs o
  * atendimento na agenda, e a tela passa a mostrar quem e quando — para o
  * resto do time não salvar de novo nem ficar na dúvida.
@@ -2129,6 +2170,62 @@ export async function editarVisita(_anterior: Resultado, dados: FormData): Promi
 
   atualizarTelas();
   for (const m of membros) revalidatePath(`/painel/pedidos/${m.id}`);
+  return { ok: true };
+}
+
+/**
+ * Só o local do atendimento (ata de 27/10): a logística corrige o endereço
+ * esquecido ou errado sem abrir o resto da edição, que é do comercial. Vale
+ * para a visita inteira quando tem mais de um serviço. Não devolve para a
+ * aprovação: quem alterou o endereço foi quem fecha a agenda.
+ */
+export async function alterarLocalDoAgendamento(_anterior: Resultado, dados: FormData): Promise<Resultado> {
+  const sessao = await exigirInterno();
+  if (!perfilPermite(sessao.perfil, "COMERCIAL", "ATENDENTE", "POS_VENDA", "LOGISTICA")) {
+    return { ok: false, erro: "Sem permissão para alterar o local do agendamento." };
+  }
+  const pedidoId = String(dados.get("pedidoId") ?? "");
+  const pedido = await prisma.pedido.findUnique({ where: { id: pedidoId }, select: { id: true, grupoId: true, clinicaId: true } });
+  if (!pedido) return { ok: false, erro: "Agendamento não encontrado." };
+
+  const enderecoId = String(dados.get("enderecoId") ?? "") || null;
+  const endereco = enderecoId
+    ? await prisma.enderecoClinica.findFirst({
+        where: { id: enderecoId, clinicaId: pedido.clinicaId, ativo: true },
+        select: { id: true, uf: true },
+      })
+    : null;
+  if (enderecoId && !endereco) return { ok: false, erro: "Endereço não encontrado para esta clínica." };
+
+  const membros = await prisma.pedido.findMany({
+    where: pedido.grupoId ? { grupoId: pedido.grupoId, status: { in: STATUS_ATIVOS } } : { id: pedido.id, status: { in: STATUS_ATIVOS } },
+    include: {
+      servico: {
+        select: {
+          id: true,
+          unidadeCobranca: true,
+          permiteQuantidade: true,
+          quantidadeMaxima: true,
+          quantidadeMinima: true,
+          quantidadeIncluida: true,
+          valorAdicionalCentavos: true,
+        },
+      },
+    },
+  });
+  if (membros.length === 0) return { ok: false, erro: "Agendamento já finalizado." };
+
+  for (const m of membros) {
+    const unitario = await valorDoServico(m.clinicaId, m.servicoId, endereco?.uf);
+    await prisma.pedido.update({
+      where: { id: m.id },
+      data: { enderecoId: endereco?.id ?? null, valorServicoCentavos: totalDoItem(unitario, m.quantidade, m.servico) },
+    });
+    await sincronizarEvento(m.id);
+    revalidatePath(`/painel/pedidos/${m.id}`);
+  }
+  await registrarAuditoria(sessao.usuarioId, "Pedido", pedido.id, "alterar-local", `${membros.length} serviço(s)`);
+  atualizarTelas();
   return { ok: true };
 }
 

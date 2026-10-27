@@ -124,5 +124,12 @@ export function montarEvento(pedido: PedidoParaAgenda): EventoGoogle {
     location: endereco || undefined,
     start: { dateTime: inicio.toISOString(), timeZone: FUSO },
     end: { dateTime: fim.toISOString(), timeZone: FUSO },
+    // Ata de 27/10: lembrete de 2h só na agenda de quem atende; a agenda da
+    // operação (equipe interna) fica sem notificações, para não receber
+    // dezenas de alertas por dia.
+    reminders: {
+      useDefault: false,
+      overrides: pedido.profissional?.googleAgendaId ? [{ method: "popup", minutes: 120 }] : [],
+    },
   };
 }

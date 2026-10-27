@@ -167,8 +167,9 @@ export function EditarAjudaDeCusto({ pedidoId, inicial }: { pedidoId: string; in
  * mesmo caminho que o "Novo agendamento" interno usa). Fecha sem confirmar,
  * igual ao padrão de `AcaoComMotivo`.
  */
-function AcaoReagendar({ disabled, onConfirmar }: { disabled?: boolean; onConfirmar: (data: string, hora: string) => void }) {
+function AcaoReagendar({ disabled, onConfirmar }: { disabled?: boolean; onConfirmar: (data: string, hora: string, motivo: string) => void }) {
   const [aberto, setAberto] = useState(false);
+  const [motivo, setMotivo] = useState("");
   const [data, setData] = useState("");
   const [hora, setHora] = useState("");
 
@@ -197,11 +198,19 @@ function AcaoReagendar({ disabled, onConfirmar }: { disabled?: boolean; onConfir
         onChange={(e) => setHora(e.target.value)}
         className="!w-auto !py-1.5"
       />
+      <Campo
+        aria-label="Motivo do reagendamento"
+        placeholder="Motivo do reagendamento"
+        value={motivo}
+        onChange={(e) => setMotivo(e.target.value)}
+        className="!w-56 !py-1.5"
+      />
       <Botao
         variante="secundario"
-        disabled={disabled || !data || !hora}
+        disabled={disabled || !data || !hora || !motivo.trim()}
         onClick={() => {
-          onConfirmar(data, hora);
+          onConfirmar(data, hora, motivo);
+          setMotivo("");
           setAberto(false);
         }}
       >
@@ -340,7 +349,7 @@ export function AcoesPedido({
       {podeReagendar && (
         <AcaoReagendar
           disabled={pendente}
-          onConfirmar={(data, hora) => executar(() => reagendarPedidoInterno(pedidoId, data, hora))}
+          onConfirmar={(data, hora, motivo) => executar(() => reagendarPedidoInterno(pedidoId, data, hora, motivo))}
         />
       )}
 

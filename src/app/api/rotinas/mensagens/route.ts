@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/prisma";
-import { despacharPendentes, enfileirarMensagem } from "@/lib/integracoes/whatsapp";
+import { despacharPendentes, enfileirarMensagem, envioAutomaticoLigado } from "@/lib/integracoes/whatsapp";
 import { hojeUTC, somarDias } from "@/lib/data";
 import { parametros } from "@/lib/alocacao";
 import { gerarPesquisasNps } from "@/lib/rotinas/nps";
@@ -60,7 +60,9 @@ export async function GET(requisicao: Request) {
     await enfileirarMensagem(pedido.id, "LEMBRETE");
   }
 
-  const entrega = await despacharPendentes();
+  const entrega = envioAutomaticoLigado()
+    ? await despacharPendentes()
+    : { enviadas: 0, falhas: 0, canceladas: 0, pausado: true };
   const nps = await gerarPesquisasNps();
   // O que ficou para trás no PipeDrive (revisão de 25/10): uma queda de rede
   // à tarde não pode depender de alguém lembrar de clicar em "reprocessar".
