@@ -62,7 +62,7 @@ export function AcoesGrupo({
   }
 
   const podeAlocar = perfilPermite(perfil, "LOGISTICA");
-  const podeCancelar = perfilPermite(perfil, "COMERCIAL");
+  const podeCancelar = perfilPermite(perfil, "COMERCIAL", "LOGISTICA");
 
   return (
     <div className="mt-3 pt-3 border-t border-gray-100 flex flex-wrap items-center gap-2">

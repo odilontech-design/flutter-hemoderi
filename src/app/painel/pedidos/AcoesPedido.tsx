@@ -270,10 +270,10 @@ export function AcoesPedido({
   if (terminal) return null;
 
   const podeAlocar = perfilPermite(perfil, "LOGISTICA");
-  const podeCancelar = perfilPermite(perfil, "COMERCIAL");
+  const podeCancelar = perfilPermite(perfil, "COMERCIAL", "LOGISTICA");
   // Mesmo perfil do cancelamento — ata de 21/09: é a Ana quem decide, com a
   // clínica, se o atendimento muda de data.
-  const podeReagendar = perfilPermite(perfil, "COMERCIAL");
+  const podeReagendar = perfilPermite(perfil, "COMERCIAL", "LOGISTICA");
 
   return (
     <div className="mt-3 pt-3 border-t border-gray-100 flex flex-wrap items-center gap-2">

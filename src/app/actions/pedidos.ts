@@ -905,8 +905,9 @@ export async function desalocarPedido(pedidoId: string, motivo: string): Promise
 /** Exclusivo do comercial (ata de 21/09) — é quem decide, com a clínica, se o atendimento cai. */
 export async function cancelarPedido(pedidoId: string, motivo: string): Promise<Resultado> {
   const sessao = await exigirInterno();
-  if (!perfilPermite(sessao.perfil, "COMERCIAL")) {
-    return { ok: false, erro: "Só o comercial cancela um agendamento." };
+  // A logística também cancela e reagenda (pedido de 27/10, a Joyce fecha a agenda).
+  if (!perfilPermite(sessao.perfil, "COMERCIAL", "LOGISTICA")) {
+    return { ok: false, erro: "Só o comercial ou a logística cancela um agendamento." };
   }
   if (!motivo.trim()) {
     return { ok: false, erro: "Informe o motivo do cancelamento." };
@@ -1397,8 +1398,8 @@ async function aplicarTrocaDeLocal(
  */
 export async function reagendarPedidoInterno(pedidoId: string, dataISO: string, horaInicio: string): Promise<Resultado> {
   const sessao = await exigirInterno();
-  if (!perfilPermite(sessao.perfil, "COMERCIAL")) {
-    return { ok: false, erro: "Só o comercial reagenda um atendimento." };
+  if (!perfilPermite(sessao.perfil, "COMERCIAL", "LOGISTICA")) {
+    return { ok: false, erro: "Só o comercial ou a logística reagenda um atendimento." };
   }
   if (!dataISO || !horaInicio) return { ok: false, erro: "Escolha a nova data e o novo horário." };
 
