@@ -200,7 +200,7 @@ async function criarAgendamento(
     return { ok: false, erro: "O cadastro desta clínica foi recusado. Reveja o cadastro antes de agendar." };
   }
 
-  let pedidos: { servicoId: string; quantidade: number; paciente: string }[] = [];
+  let pedidos: { servicoId: string; quantidade: number; paciente: string; valorCentavos: number | null }[] = [];
   try {
     const bruto = JSON.parse(String(dados.get("itens") ?? "[]"));
     if (Array.isArray(bruto)) {
@@ -208,6 +208,9 @@ async function criarAgendamento(
         servicoId: String(item?.servicoId ?? ""),
         quantidade: Number(item?.quantidade ?? 1),
         paciente: String(item?.paciente ?? "").trim().slice(0, 120),
+        // Valor ajustado à mão: só a equipe define (pedido de 27/10).
+        valorCentavos:
+          quem.tipo === "equipe" && Number.isInteger(item?.valorCentavos) && item.valorCentavos >= 0 ? item.valorCentavos : null,
       }));
     }
   } catch {
@@ -381,18 +384,21 @@ async function criarAgendamento(
     duracaoMin: number;
     horaInicio: string;
     valorServicoCentavos: number;
+    valorManual: boolean;
   }[] = [];
   for (const item of pedidos) {
     const servico = porId.get(item.servicoId)!;
     const duracaoMin = duracaoEfetiva(servico, item.quantidade);
-    const unitario = await valorDoServico(quem.clinicaId, servico.id, uf, modalidade);
+    const manual = item.valorCentavos !== null;
+    const unitario = manual ? 0 : await valorDoServico(quem.clinicaId, servico.id, uf, modalidade);
     itens.push({
       servico,
       paciente: item.paciente,
       quantidade: item.quantidade,
       duracaoMin,
       horaInicio: paraHora(cursor),
-      valorServicoCentavos: totalDoItem(unitario, item.quantidade, servico),
+      valorServicoCentavos: manual ? (item.valorCentavos as number) : totalDoItem(unitario, item.quantidade, servico),
+      valorManual: manual,
     });
     cursor += duracaoMin;
   }
@@ -433,6 +439,7 @@ async function criarAgendamento(
             status: pelaEquipe ? "CONFIRMADO" : "SOLICITADO",
             origem: pelaEquipe ? "INTERNO" : "PORTAL_CLINICA",
             valorServicoCentavos: item.valorServicoCentavos,
+            valorManual: item.valorManual,
             // O paciente da linha vence o campo geral do formulário.
             pacienteNome: item.paciente || String(dados.get("pacienteNome") ?? "").trim() || null,
             pacienteContato: String(dados.get("pacienteContato") ?? "") || null,
@@ -451,7 +458,7 @@ async function criarAgendamento(
   if (!resultado.ok) return resultado;
 
   for (const pedido of resultado.criados) {
-    await registrarAuditoria(quem.usuarioId, "Pedido", pedido.id, pelaEquipe ? "criar" : "solicitar", `nº ${pedido.numero}`);
+    await registrarAuditoria(quem.usuarioId, "Pedido", pedido.id, pelaEquipe ? "criar" : "solicitar", `nº ${pedido.numero}${pedido.valorManual ? ` · valor definido à mão: ${formatarReais(pedido.valorServicoCentavos)}` : ""}`);
     if (pelaEquipe) {
       // Já nasce confirmado: o que a confirmação dispararia, dispara aqui.
       await enfileirarMensagem(pedido.id, "CONFIRMACAO");
@@ -1584,7 +1591,7 @@ export async function editarAgendamento(_anterior: Resultado, dados: FormData): 
   // quando algum desses dois muda.)
   const duracaoMin = mudouServico || mudouQuantidade ? duracaoEfetiva(servico, quantidade) : pedido.duracaoMin;
   let valorServicoCentavos = pedido.valorServicoCentavos;
-  if (mudouServico || mudouQuantidade || mudouLocal) {
+  if (mudouServico || mudouQuantidade || (mudouLocal && !pedido.valorManual)) {
     const unitario = await valorDoServico(pedido.clinicaId, servicoId, endereco?.uf, pedido.modalidade);
     valorServicoCentavos = totalDoItem(unitario, quantidade, servico);
   }
@@ -1842,7 +1849,7 @@ export async function definirValorServico(pedidoId: string, valorTexto: string):
   if (!pedido) return { ok: false, erro: "Agendamento não encontrado." };
   if (pedido.status === "CANCELADO") return { ok: false, erro: "Pedido cancelado não tem valor para ajustar." };
 
-  const dados: Prisma.PedidoUpdateInput = { valorServicoCentavos };
+  const dados: Prisma.PedidoUpdateInput = { valorServicoCentavos, valorManual: true };
   if (pedido.profissionalId) {
     const repasse = await repasseDoPedido(pedido.profissionalId, pedido.servicoId, valorServicoCentavos, {
       clinicaId: pedido.clinicaId,
@@ -2155,7 +2162,7 @@ export async function editarVisita(_anterior: Resultado, dados: FormData): Promi
 
   const valores = new Map<string, number>();
   if (mudouLocal) {
-    for (const m of membros) {
+    for (const m of membros.filter((x) => !x.valorManual)) {
       const unitario = await valorDoServico(m.clinicaId, m.servicoId, endereco?.uf, m.modalidade);
       valores.set(m.id, totalDoItem(unitario, m.quantidade, m.servico));
     }
@@ -2261,10 +2268,14 @@ export async function alterarLocalDoAgendamento(_anterior: Resultado, dados: For
   if (membros.length === 0) return { ok: false, erro: "Agendamento já finalizado." };
 
   for (const m of membros) {
-    const unitario = await valorDoServico(m.clinicaId, m.servicoId, endereco?.uf, m.modalidade);
+    // Valor definido à mão não é refeito pela tabela ao trocar o local.
+    const unitario = m.valorManual ? 0 : await valorDoServico(m.clinicaId, m.servicoId, endereco?.uf, m.modalidade);
     await prisma.pedido.update({
       where: { id: m.id },
-      data: { enderecoId: endereco?.id ?? null, valorServicoCentavos: totalDoItem(unitario, m.quantidade, m.servico) },
+      data: {
+        enderecoId: endereco?.id ?? null,
+        ...(m.valorManual ? {} : { valorServicoCentavos: totalDoItem(unitario, m.quantidade, m.servico) }),
+      },
     });
     await sincronizarEvento(m.id);
     revalidatePath(`/painel/pedidos/${m.id}`);

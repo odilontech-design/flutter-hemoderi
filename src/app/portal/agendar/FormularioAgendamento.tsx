@@ -12,7 +12,7 @@ import { FORMAS_DE_PAGAMENTO } from "@/lib/pagamento";
 import { OUTRO_PROCEDIMENTO, PROCEDIMENTOS_NO_PACIENTE } from "@/lib/procedimentos";
 import { agendarPelaEquipe, solicitarAgendamento, type Resultado } from "@/app/actions/pedidos";
 import { linkWhatsapp, mensagemDeUrgencia } from "@/lib/whatsapp-link";
-import { formatarReais } from "@/lib/dinheiro";
+import { formatarReais, lerCentavos } from "@/lib/dinheiro";
 import { descricaoDoPreco, quantidadeMinimaDe, totalDoItem } from "@/lib/cobranca";
 import { descritivoDaFamilia } from "@/lib/catalogo-familias";
 import type { LocalDeAtendimento } from "@/lib/endereco";
@@ -57,7 +57,14 @@ export type ModoEquipe = {
  * entrar mais de uma vez, uma para cada paciente (reunião de 27/10:
  * "agendamento de serviço por paciente").
  */
-type Item = { chave: string; servicoId: string; quantidade: number; paciente: string };
+type Item = {
+  chave: string;
+  servicoId: string;
+  quantidade: number;
+  paciente: string;
+  /** Valor da linha definido à mão pela equipe (centavos); ausente = o da tabela. */
+  valorCentavos?: number | null;
+};
 
 let proximaChave = 0;
 const novaChave = () => `item-${++proximaChave}`;
@@ -350,7 +357,9 @@ function FormularioBase({
     .map((item) => ({ item, servico: porId.get(item.servicoId) }))
     .filter((l): l is { item: Item; servico: ServicoDoCarrinho } => Boolean(l.servico));
   const totalDaLinha = (l: { item: Item; servico: ServicoDoCarrinho }) =>
-    totalDoItem(precoUnitario(l.servico.id), l.item.quantidade, l.servico);
+    equipe && l.item.valorCentavos != null
+      ? l.item.valorCentavos
+      : totalDoItem(precoUnitario(l.servico.id), l.item.quantidade, l.servico);
   const totalCentavos = linhas.reduce((soma, l) => soma + totalDaLinha(l), 0);
   // Serviço que aparece mais de uma vez precisa do paciente em cada linha: é
   // ele que diferencia um atendimento do outro (e o servidor confere de novo).
@@ -611,9 +620,18 @@ function FormularioBase({
                         />
                       </label>
                     )}
-                    <div className="text-xs font-semibold text-bordo w-24 text-right">
-                      {unitario > 0 ? formatarReais(totalDaLinha({ item, servico })) : "sob consulta"}
-                    </div>
+                    {equipe ? (
+                      <ValorDaLinha
+                        centavos={totalDaLinha({ item, servico })}
+                        daTabela={unitario > 0}
+                        editado={item.valorCentavos != null}
+                        aoMudar={(valor) => setItens((atuais) => atuais.map((i) => (i.chave === item.chave ? { ...i, valorCentavos: valor } : i)))}
+                      />
+                    ) : (
+                      <div className="text-xs font-semibold text-bordo w-24 text-right">
+                        {unitario > 0 ? formatarReais(totalDaLinha({ item, servico })) : "sob consulta"}
+                      </div>
+                    )}
                     <button
                       type="button"
                       onClick={() => removerLinha(item.chave)}
@@ -954,6 +972,77 @@ export function FormularioAgendamento({
         grupos={emCurso && curso ? curso.grupos : resto.grupos}
         precosPorUf={emCurso && curso ? curso.precosPorUf : resto.precosPorUf}
       />
+    </div>
+  );
+}
+
+/**
+ * O valor da linha, editável pela equipe (pedido de 27/10): um agendamento que
+ * foge da tabela — desconto combinado, valor aberto — se acerta na hora, sem
+ * passar pela tela de valores depois. "usar o da tabela" desfaz.
+ */
+function ValorDaLinha({
+  centavos,
+  daTabela,
+  editado,
+  aoMudar,
+}: {
+  centavos: number;
+  daTabela: boolean;
+  editado: boolean;
+  aoMudar: (valor: number | null) => void;
+}) {
+  const [editando, setEditando] = useState(false);
+  const [texto, setTexto] = useState("");
+
+  function confirmar() {
+    setEditando(false);
+    if (texto.trim() === "") return;
+    aoMudar(lerCentavos(texto));
+  }
+
+  if (editando) {
+    return (
+      <div className="flex items-center gap-1 text-xs">
+        <span className="text-gray-500">R$</span>
+        <input
+          autoFocus
+          inputMode="decimal"
+          aria-label="Valor do serviço"
+          value={texto}
+          onChange={(e) => setTexto(e.target.value)}
+          onBlur={confirmar}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") {
+              e.preventDefault();
+              confirmar();
+            }
+            if (e.key === "Escape") setEditando(false);
+          }}
+          className="w-24 rounded-lg border border-bordo/50 px-2 py-1 text-right text-xs"
+        />
+      </div>
+    );
+  }
+
+  return (
+    <div className="w-28 text-right">
+      <button
+        type="button"
+        onClick={() => {
+          setTexto(centavos > 0 ? (centavos / 100).toFixed(2).replace(".", ",") : "");
+          setEditando(true);
+        }}
+        title="Alterar o valor deste serviço"
+        className={`text-xs font-semibold hover:underline ${editado ? "text-amber-700" : "text-bordo"}`}
+      >
+        {centavos > 0 || editado ? formatarReais(centavos) : daTabela ? formatarReais(centavos) : "sob consulta"} ✏️
+      </button>
+      {editado && (
+        <button type="button" onClick={() => aoMudar(null)} className="block w-full text-right text-[10px] text-gray-500 hover:underline">
+          usar o da tabela
+        </button>
+      )}
     </div>
   );
 }

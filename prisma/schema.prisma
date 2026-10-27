@@ -939,6 +939,10 @@ model Pedido {
   /// (perfil CURSO) e exige o nome do paciente.
   modalidade ModalidadeAtendimento @default(PARTICULAR)
 
+  /// O valor foi definido à mão (agendamento da equipe ou ajuste do comercial):
+  /// trocar o local do atendimento não o recalcula pela tabela.
+  valorManual Boolean @default(false)
+
   /// Quem vai atender. Em SOLICITADO é o profissional que a clínica pediu no
   /// portal — reserva provisória, que já segura o horário dele; em ALOCADO é
   /// compromisso assumido pela equipe. O status é o que separa os dois.
