@@ -64,8 +64,9 @@ export function textoDoRelatorio(d: DadosTextoRelatorio): string {
   if (d.compareceu) {
     const recebeu = d.recebimento === "TOTAL" ? "sim" : d.recebimento === "PARCIAL" ? "parcial" : d.recebimento ? "não" : "";
     linhas.push(`Pagamento (Sim/Não): ${recebeu}`);
-    const forma = d.formaRecebimento ? rotuloDaForma(d.formaRecebimento) : (d.formaDoCliente ?? "");
-    linhas.push(`Forma de Pagamento: ${forma}`);
+    // "Forma de Pagamento" é a combinada no agendamento; o "PG=" é o que o
+    // profissional preenche no relatório — a forma como foi de fato pago.
+    linhas.push(`Forma de Pagamento: ${d.formaDoCliente ?? ""}`);
     if (d.valorRecebido) linhas.push(`Valor recebido: ${d.valorRecebido}`);
     if (d.observacaoRecebimento) linhas.push(`Pagamento fora do habitual: ${d.observacaoRecebimento}`);
     const sinal = (nome: string) => valorDoSinal(d.sinais[nome]);
@@ -73,6 +74,7 @@ export function textoDoRelatorio(d: DadosTextoRelatorio): string {
     linhas.push(`Sato2=${sinal("saturacaoOxigenio")}`);
     linhas.push(`PA=${sinal("pressaoArterial")}`);
     linhas.push(`Destro=${sinal("glicemia")}`);
+    linhas.push(`PG=${d.formaRecebimento ? rotuloDaForma(d.formaRecebimento) : ""}`);
     if (sinal("oxidoNitroso")) linhas.push(`N2O=${sinal("oxidoNitroso")}`);
     if (sinal("oxigenio")) linhas.push(`O2=${sinal("oxigenio")}`);
     if (d.intercorrencia) linhas.push("Intercorrência: sim");

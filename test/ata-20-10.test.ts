@@ -54,7 +54,7 @@ test("texto do relatório para o grupo: no modelo que a equipe usa à mão", () 
     sinais: { frequenciaCardiaca: "80", saturacaoOxigenio: "não se aplica", pressaoArterial: "12x8", glicemia: "N/A" },
     recebimento: "TOTAL",
     formaRecebimento: "PIX",
-    formaDoCliente: null,
+    formaDoCliente: "Pix",
     valorRecebido: null,
     observacaoRecebimento: "Pix direto para a Hemoderi",
     observacoes: "Finalizado com sucesso",
@@ -63,7 +63,8 @@ test("texto do relatório para o grupo: no modelo que a equipe usa à mão", () 
   assert.match(texto, /Nome da Clínica: Clínica Exemplo\nCirurgião: Dra\. Teste Exemplo\nPaciente: Paciente Exemplo/);
   assert.match(texto, /Serviços Hemoderi: AirFlow – GBT Machine \(1 paciente\) \+ 2× Membranas – PRF/);
   assert.match(texto, /Profissional Hemoderi: Profissional Exemplo\nValor: 350,00\nPagamento \(Sim\/Não\): sim/);
-  assert.match(texto, /FC=80\nSato2=\nPA=12x8\nDestro=\n/);
+  assert.match(texto, /Forma de Pagamento: Pix\n/);
+  assert.match(texto, /FC=80\nSato2=\nPA=12x8\nDestro=\nPG=Pix\n/);
   assert.doesNotMatch(texto, /N\/A|não se aplica/);
   assert.match(texto, /Obs: Finalizado com sucesso\nAgendamento: 2026-9002-TESTE$/);
 });
