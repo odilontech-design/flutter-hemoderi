@@ -27,6 +27,8 @@ type DadosPedido = {
   /** O contato informado no agendamento — vence o telefone do cadastro. */
   contatoClinica?: string | null;
   doutorNome?: string | null;
+  pacienteNome?: string | null;
+  valorServicoCentavos?: number;
   procedimentoPaciente?: string | null;
   formaPagamento?: string | null;
   clinica: { nome: string; telefone: string | null; endereco?: string | null; cidade?: string | null };
@@ -43,6 +45,8 @@ const SELECAO_DO_PEDIDO = {
   horaInicio: true,
   contatoClinica: true,
   doutorNome: true,
+  pacienteNome: true,
+  valorServicoCentavos: true,
   procedimentoPaciente: true,
   formaPagamento: true,
   clinica: { select: { nome: true, telefone: true, endereco: true, cidade: true } },
@@ -83,23 +87,25 @@ function montarTexto(tipo: TipoMensagem, pedido: DadosPedido): string {
       return `Olá! Recebemos o agendamento de ${pedido.servico.nome}${doutor} para ${quando}. Em breve enviamos o resumo com todos os detalhes. Agendamento ${codigo}.`;
     }
     case "RESUMO": {
+      // O mesmo modelo que a equipe escrevia à mão (pedido do André, 28/10):
+      // Data, Horário, Endereço, Clínica, Cirurgião, Paciente, Procedimento,
+      // Serviços, Profissional, Valor e Forma de Pagamento.
       const local = resumoDoEndereco(comEnderecoDoPedido(pedido.clinica, pedido.endereco ?? null));
+      const valor = pedido.valorServicoCentavos ? (pedido.valorServicoCentavos / 100).toFixed(2).replace(".", ",") : "";
       return [
-        `Agendamento ${codigo} confirmado!`,
         `Data: ${formatarData(pedido.data)}`,
         `Horário: ${pedido.horaInicio}`,
-        `Local: ${local || "a confirmar"}`,
-        `Clínica: ${pedido.clinica.nome}`,
-        pedido.doutorNome ? `Doutor(a): ${pedido.doutorNome}` : null,
-        `Serviço: ${pedido.servico.nome}`,
-        pedido.procedimentoPaciente ? `Procedimento: ${pedido.procedimentoPaciente}` : null,
-        pedido.profissional ? `Profissional: ${pedido.profissional.nome}` : null,
-        pedido.formaPagamento ? `Pagamento: ${pedido.formaPagamento}` : null,
-        "",
-        "Um dia antes do atendimento entramos em contato para reforçar.",
-      ]
-        .filter((linha) => linha !== null)
-        .join("\n");
+        `Endereço: ${local || "a confirmar"}`,
+        `Nome da Clínica: ${pedido.clinica.nome}`,
+        `Cirurgião: ${pedido.doutorNome ?? ""}`,
+        `Paciente: ${pedido.pacienteNome ?? ""}`,
+        `Procedimento que será realizado no paciente: ${pedido.procedimentoPaciente ?? ""}`,
+        `Serviços Hemoderi: ${pedido.servico.nome}`,
+        `Profissional Hemoderi: ${pedido.profissional?.nome ?? "a definir"}`,
+        `Valor: ${valor}`,
+        `Forma de Pagamento: ${pedido.formaPagamento ?? ""}`,
+        `Agendamento: ${codigo}`,
+      ].join("\n");
     }
     case "ALOCACAO":
       // A notificação de alocação NÃO diz a clínica (ata de 14/09): sabendo o

@@ -31,32 +31,39 @@ test("responsável financeiro: outra pessoa exige nome, CPF/CNPJ e telefone", ()
   assert.equal(lerResponsavelFinanceiro(campos({ financeiroOutro: "sim", financeiroDocumento: "11222333000181", financeiroTelefone: "11988887777" })).ok, false);
 });
 
-test("texto do relatório para o grupo: sem paciente, com o essencial", () => {
+test("texto do relatório para o grupo: no modelo que a equipe usa à mão", () => {
   const texto = textoDoRelatorio({
     codigo: "2026-9002-TESTE",
     data: "20/10/2026",
     hora: "09:00",
     profissional: "Profissional Exemplo",
     clinica: "Clínica Exemplo",
+    endereco: "Rua Exemplo, 100 — São Paulo/SP",
     doutor: "Dra. Teste Exemplo",
+    paciente: "Paciente Exemplo",
+    procedimento: "Enxerto ósseo",
     servico: "AirFlow – GBT Machine (1 paciente)",
     quantidade: 1,
     adicionais: [{ nome: "Membranas – PRF", quantidade: 2 }],
     justificativaAdicionais: null,
+    valor: "350,00",
     compareceu: true,
     inicioReal: "09:05",
     fimReal: "10:00",
     intercorrencia: false,
-    sinais: { frequenciaCardiaca: "80 bpm", saturacaoOxigenio: "não se aplica", glicemia: "N/A" },
+    sinais: { frequenciaCardiaca: "80", saturacaoOxigenio: "não se aplica", pressaoArterial: "12x8", glicemia: "N/A" },
     recebimento: "TOTAL",
     formaRecebimento: "PIX",
+    formaDoCliente: null,
     valorRecebido: null,
     observacaoRecebimento: "Pix direto para a Hemoderi",
-    observacoes: null,
+    observacoes: "Finalizado com sucesso",
   });
-  assert.match(texto, /^\*Relatório Hemoderi — 2026-9002-TESTE\*/);
-  assert.match(texto, /\+ 2× Membranas – PRF/);
-  assert.match(texto, /80 bpm/);
-  assert.doesNotMatch(texto, /N\/A|não se aplica|Glicemia/);
-  assert.match(texto, /Pagamento fora do habitual: Pix direto para a Hemoderi/);
+  assert.match(texto, /^Data: 20\/10\/2026\nHorário: 09:00\nHorário real: 09:05 até 10:00\nEndereço: Rua Exemplo/);
+  assert.match(texto, /Nome da Clínica: Clínica Exemplo\nCirurgião: Dra\. Teste Exemplo\nPaciente: Paciente Exemplo/);
+  assert.match(texto, /Serviços Hemoderi: AirFlow – GBT Machine \(1 paciente\) \+ 2× Membranas – PRF/);
+  assert.match(texto, /Profissional Hemoderi: Profissional Exemplo\nValor: 350,00\nPagamento \(Sim\/Não\): sim/);
+  assert.match(texto, /FC=80\nSato2=\nPA=12x8\nDestro=\n/);
+  assert.doesNotMatch(texto, /N\/A|não se aplica/);
+  assert.match(texto, /Obs: Finalizado com sucesso\nAgendamento: 2026-9002-TESTE$/);
 });
