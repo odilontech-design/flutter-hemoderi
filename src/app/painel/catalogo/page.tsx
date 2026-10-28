@@ -1,3 +1,4 @@
+import { EditarEquipamento } from "./EditarEquipamento";
 import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 import { exigirInterno } from "@/lib/sessao";
@@ -100,14 +101,9 @@ export default async function Catalogo() {
         {equipamentos.length === 0 ? (
           <Vazio>Nenhum equipamento cadastrado.</Vazio>
         ) : (
-          <Tabela cabecalho={["Equipamento", "Tipo", "Patrimônio", "Status"]}>
+          <Tabela cabecalho={["Equipamento", "Tipo", "Patrimônio", "Status", ""]}>
             {equipamentos.map((equipamento) => (
-              <tr key={equipamento.id} className="border-b border-gray-100 last:border-0">
-                <td className="py-2 pr-3 font-semibold text-bordo">{equipamento.nome}</td>
-                <td className="py-2 pr-3 text-gray-500">{equipamento.tipo ?? "—"}</td>
-                <td className="py-2 pr-3 text-gray-500">{equipamento.patrimonio ?? "—"}</td>
-                <td className="py-2 pr-3">{ROTULO_EQUIPAMENTO[equipamento.status]}</td>
-              </tr>
+              <EditarEquipamento key={equipamento.id} equipamento={equipamento} />
             ))}
           </Tabela>
         )}

@@ -388,11 +388,13 @@ export async function salvarEquipamento(_anterior: Resultado, dados: FormData): 
   const nome = String(dados.get("nome") ?? "").trim();
   if (!nome) return { ok: false, erro: "Informe o nome do equipamento." };
 
+  const status = String(dados.get("status") ?? "DISPONIVEL");
+  if (!["DISPONIVEL", "EM_USO", "MANUTENCAO", "INATIVO"].includes(status)) return { ok: false, erro: "Status inválido." };
   const comum = {
     nome,
-    tipo: String(dados.get("tipo") ?? "") || null,
-    patrimonio: String(dados.get("patrimonio") ?? "") || null,
-    status: (String(dados.get("status") ?? "DISPONIVEL") as any) || "DISPONIVEL",
+    tipo: String(dados.get("tipo") ?? "").trim() || null,
+    patrimonio: String(dados.get("patrimonio") ?? "").trim() || null,
+    status: status as "DISPONIVEL" | "EM_USO" | "MANUTENCAO" | "INATIVO",
     observacoes: String(dados.get("observacoes") ?? "") || null,
   };
 
