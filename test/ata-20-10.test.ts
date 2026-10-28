@@ -58,13 +58,28 @@ test("texto do relatório para o grupo: no modelo que a equipe usa à mão", () 
     valorRecebido: null,
     observacaoRecebimento: "Pix direto para a Hemoderi",
     observacoes: "Finalizado com sucesso",
+    mandic: null,
   });
   assert.match(texto, /^Data: 20\/10\/2026\nHorário: 09:00\nHorário real: 09:05 até 10:00\nEndereço: Rua Exemplo/);
   assert.match(texto, /Nome da Clínica: Clínica Exemplo\nCirurgião: Dra\. Teste Exemplo\nPaciente: Paciente Exemplo/);
   assert.match(texto, /Serviços Hemoderi: AirFlow – GBT Machine \(1 paciente\) \+ 2× Membranas – PRF/);
   assert.match(texto, /Profissional Hemoderi: Profissional Exemplo\nValor: 350,00\nPagamento \(Sim\/Não\): sim/);
   assert.match(texto, /Forma de Pagamento: Pix\n/);
-  assert.match(texto, /FC=80\nSato2=\nPA=12x8\nDestro=\nPG=Pix\n/);
+  assert.match(texto, /FC=80\nSato2=\nPA=12x8\nDestro=\nObs:/);
+  assert.doesNotMatch(texto, /PG=|Orçamento/);
   assert.doesNotMatch(texto, /N\/A|não se aplica/);
   assert.match(texto, /Obs: Finalizado com sucesso\nAgendamento: 2026-9002-TESTE$/);
+});
+
+test("texto do relatório: Orçamento e PG só no atendimento Mandic", () => {
+  const base = {
+    codigo: "2026-9003-MANDIC", data: "20/10/2026", hora: "09:00", profissional: "Profissional Exemplo", clinica: "Mandic Exemplo",
+    endereco: null, doutor: null, paciente: null, procedimento: null, servico: "PRF", quantidade: 1, adicionais: [],
+    justificativaAdicionais: null, valor: null, compareceu: true, inicioReal: null, fimReal: null, intercorrencia: false,
+    sinais: {}, recebimento: "TOTAL", formaRecebimento: "PIX", formaDoCliente: null, valorRecebido: null,
+    observacaoRecebimento: null, observacoes: null,
+  };
+  const com = textoDoRelatorio({ ...base, mandic: { orcamento: "1234", pg: "5678" } });
+  assert.match(com, /Destro=\nOrçamento =1234\nPG=5678\nObs:/);
+  assert.doesNotMatch(textoDoRelatorio({ ...base, mandic: null }), /PG=|Orçamento/);
 });

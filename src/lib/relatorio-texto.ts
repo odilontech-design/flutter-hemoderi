@@ -9,8 +9,7 @@ import { rotuloDaForma } from "@/lib/recebimento";
  * Paciente, Procedimento, Serviços, Profissional, Valor, Pagamento e os sinais
  * (FC, SatO2, PA, Destro). O nome do paciente entra porque o modelo de hoje o
  * traz e é com ele que a equipe confere o lançamento; o contato dele não.
- * Orçamento e PG, que existiam no modelo à mão, o sistema não registra e ficam
- * de fora.
+ * Orçamento e PG são números de atendimento Mandic: entram só para eles.
  */
 export type DadosTextoRelatorio = {
   codigo: string;
@@ -39,6 +38,8 @@ export type DadosTextoRelatorio = {
   valorRecebido: string | null;
   observacaoRecebimento: string | null;
   observacoes: string | null;
+  /** Só atendimento Mandic: os números de orçamento e PG. Ausente nos demais clientes. */
+  mandic?: { orcamento: string | null; pg: string | null } | null;
 };
 
 /** "não se aplica" (o botão N/A) e um "N/A" digitado à mão ficam em branco, como no modelo à mão. */
@@ -64,9 +65,8 @@ export function textoDoRelatorio(d: DadosTextoRelatorio): string {
   if (d.compareceu) {
     const recebeu = d.recebimento === "TOTAL" ? "sim" : d.recebimento === "PARCIAL" ? "parcial" : d.recebimento ? "não" : "";
     linhas.push(`Pagamento (Sim/Não): ${recebeu}`);
-    // "Forma de Pagamento" é a combinada no agendamento; o "PG=" é o que o
-    // profissional preenche no relatório — a forma como foi de fato pago.
-    linhas.push(`Forma de Pagamento: ${d.formaDoCliente ?? ""}`);
+    const forma = d.formaRecebimento ? rotuloDaForma(d.formaRecebimento) : (d.formaDoCliente ?? "");
+    linhas.push(`Forma de Pagamento: ${forma}`);
     if (d.valorRecebido) linhas.push(`Valor recebido: ${d.valorRecebido}`);
     if (d.observacaoRecebimento) linhas.push(`Pagamento fora do habitual: ${d.observacaoRecebimento}`);
     const sinal = (nome: string) => valorDoSinal(d.sinais[nome]);
@@ -74,7 +74,11 @@ export function textoDoRelatorio(d: DadosTextoRelatorio): string {
     linhas.push(`Sato2=${sinal("saturacaoOxigenio")}`);
     linhas.push(`PA=${sinal("pressaoArterial")}`);
     linhas.push(`Destro=${sinal("glicemia")}`);
-    linhas.push(`PG=${d.formaRecebimento ? rotuloDaForma(d.formaRecebimento) : ""}`);
+    // Orçamento e PG são números de atendimento Mandic: só entram para eles.
+    if (d.mandic) {
+      linhas.push(`Orçamento =${d.mandic.orcamento ?? ""}`);
+      linhas.push(`PG=${d.mandic.pg ?? ""}`);
+    }
     if (sinal("oxidoNitroso")) linhas.push(`N2O=${sinal("oxidoNitroso")}`);
     if (sinal("oxigenio")) linhas.push(`O2=${sinal("oxigenio")}`);
     if (d.intercorrencia) linhas.push("Intercorrência: sim");

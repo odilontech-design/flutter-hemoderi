@@ -184,6 +184,16 @@ export function RelatorioPreenchido({
         </div>
       )}
 
+      {(relatorio.orcamentoNumero || relatorio.pgNumero) && (
+        <div className="text-xs">
+          <div className="text-gray-400">Mandic</div>
+          <div className="text-gray-700">
+            {relatorio.orcamentoNumero ? `Orçamento ${relatorio.orcamentoNumero}` : ""}
+            {relatorio.orcamentoNumero && relatorio.pgNumero ? " · " : ""}
+            {relatorio.pgNumero ? `PG ${relatorio.pgNumero}` : ""}
+          </div>
+        </div>
+      )}
       {relatorio.observacoes && (
         <div className="text-xs">
           <div className="text-gray-400 mb-0.5">Observações</div>

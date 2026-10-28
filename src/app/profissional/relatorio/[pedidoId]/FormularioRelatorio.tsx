@@ -412,6 +412,7 @@ export function FormularioRelatorio({
   adicionaisIniciais,
   comprovanteAtual,
   anexosGuardados,
+  mandic = false,
 }: {
   pedidoId: string;
   horaPrevista: string;
@@ -429,6 +430,8 @@ export function FormularioRelatorio({
   comprovanteAtual: string | null;
   /** Anexos já enviados, quando é uma correção. */
   anexosGuardados: AnexoGuardado[];
+  /** Atendimento Mandic: pede o número do orçamento e o do PG. */
+  mandic?: boolean;
 }) {
   const router = useRouter();
   const [anexosNovos, setAnexosNovos] = useState<File[]>([]);
@@ -567,6 +570,19 @@ export function FormularioRelatorio({
 
           <BlocoRecebimento valores={valores} comprovanteAtual={comprovanteAtual} />
         </>
+      )}
+
+      {mandic && (
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div>
+            <Rotulo>Número do orçamento (Mandic)</Rotulo>
+            <Campo name="orcamentoNumero" defaultValue={valores.orcamentoNumero} inputMode="numeric" />
+          </div>
+          <div>
+            <Rotulo>Número do PG (Mandic)</Rotulo>
+            <Campo name="pgNumero" defaultValue={valores.pgNumero} inputMode="numeric" />
+          </div>
+        </div>
       )}
 
       <div>

@@ -1,5 +1,6 @@
 "use server";
 
+import { atendimentoMandic } from "@/lib/mandic";
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { comEnderecoDoPedido } from "@/lib/endereco";
@@ -42,6 +43,7 @@ export async function enviarRelatorio(_anterior: Resultado, dados: FormData): Pr
   const pedido = await prisma.pedido.findFirst({
     where: { id: pedidoId, profissionalId: sessao.profissionalId },
     select: {
+      clinicaId: true,
       id: true,
       status: true,
       servicoId: true,
@@ -199,6 +201,7 @@ export async function enviarRelatorio(_anterior: Resultado, dados: FormData): Pr
     doutorNomeInformado: divergiu(pedido.doutorNome, doutor) ? doutor : null,
   };
 
+  const mandic = await atendimentoMandic(prisma, pedido.clinicaId);
   const conteudo = {
     compareceu,
     inicioReal: String(dados.get("inicioReal") ?? "") || null,
@@ -207,6 +210,9 @@ export async function enviarRelatorio(_anterior: Resultado, dados: FormData): Pr
     servicoRealizadoId,
     intercorrencia: String(dados.get("intercorrencia") ?? "") === "sim",
     observacoes: String(dados.get("observacoes") ?? "") || null,
+    // Orçamento e PG: números de atendimento Mandic (28/10); nos demais, ignorados.
+    orcamentoNumero: mandic ? String(dados.get("orcamentoNumero") ?? "").trim().slice(0, 40) || null : null,
+    pgNumero: mandic ? String(dados.get("pgNumero") ?? "").trim().slice(0, 40) || null : null,
     ...clinicos,
     // O que a pessoa executou além do contratado — a membrana que virou
     // stickybone. Declarado aqui, validado pelo pós-venda na aprovação.

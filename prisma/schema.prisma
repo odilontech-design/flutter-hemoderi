@@ -1177,6 +1177,11 @@ model RelatorioAtendimento {
   oxidoNitroso       String?
   oxigenio           String?
 
+  /// Só atendimento Mandic (28/10): o número do orçamento e o do PG, que a
+  /// operação lança no grupo. Para os outros clientes ficam vazios.
+  orcamentoNumero String?
+  pgNumero        String?
+
   /// O que foi executado além (ou no lugar) do serviço contratado — a
   /// membrana que virou stickybone. Quem declara é quem atendeu; quem
   /// valida é o pós-venda, e é por isso que a aprovação tem uma validação

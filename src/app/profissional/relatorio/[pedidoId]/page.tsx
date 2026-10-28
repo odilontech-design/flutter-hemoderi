@@ -17,6 +17,7 @@ import { BotaoCheckin } from "../../AcoesAtendimento";
 import { houveAtraso } from "@/lib/atraso";
 import { CompartilharWhatsapp } from "@/components/CompartilharWhatsapp";
 import { textoDoRelatorio } from "@/lib/relatorio-texto";
+import { atendimentoMandic } from "@/lib/mandic";
 import { FormularioRelatorio } from "./FormularioRelatorio";
 
 export const dynamic = "force-dynamic";
@@ -56,6 +57,7 @@ export default async function Relatorio({
   if (!pedido) notFound();
 
   const config = await parametros();
+  const mandic = await atendimentoMandic(prisma, pedido.clinicaId);
   const revelado = localVisivel(pedido, config.horasRevelarLocal);
   // Relatório aprovado: a página vira a leitura do que foi enviado (ata de
   // 13/10 — "resumo detalhado ao clicar no relatório"), sem formulário. Já
@@ -92,6 +94,7 @@ export default async function Relatorio({
         valorRecebido: enviado.valorRecebidoCentavos != null ? formatarReais(enviado.valorRecebidoCentavos) : null,
         observacaoRecebimento: enviado.observacaoRecebimento,
         observacoes: enviado.observacoes,
+        mandic: mandic ? { orcamento: enviado.orcamentoNumero, pg: enviado.pgNumero } : null,
       })
     : null;
 
@@ -141,6 +144,8 @@ export default async function Relatorio({
     quantidade: String(r ? r.quantidade : pedido.quantidade),
     intercorrencia: r ? (r.intercorrencia ? "sim" : "nao") : "",
     observacoes: r?.observacoes ?? "",
+    orcamentoNumero: r?.orcamentoNumero ?? "",
+    pgNumero: r?.pgNumero ?? "",
     frequenciaCardiaca: r?.frequenciaCardiaca ?? "",
     saturacaoOxigenio: r?.saturacaoOxigenio ?? "",
     pressaoArterial: r?.pressaoArterial ?? "",
@@ -253,6 +258,7 @@ export default async function Relatorio({
             adicionaisIniciais={r?.adicionais ?? []}
             comprovanteAtual={r?.comprovante?.nome ?? null}
             anexosGuardados={r?.anexos ?? []}
+            mandic={mandic}
           />
         )}
       </Cartao>
