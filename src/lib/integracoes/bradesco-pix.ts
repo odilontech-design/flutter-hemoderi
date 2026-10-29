@@ -258,7 +258,10 @@ export function expiracaoEmSegundos(vencimento: Date, agora: Date = new Date()):
 // ─── Criar cobrança ───────────────────────────────────────────────────────
 
 type DadosCobranca = {
-  faturaId: string;
+  /** A cobrança é de uma fatura OU de um agendamento (pedido + grupo da visita). */
+  faturaId?: string;
+  pedidoId?: string;
+  grupoId?: string | null;
   valorCentavos: number;
   vencimento: Date;
   descricao: string;
@@ -279,6 +282,9 @@ async function registrarSincronizacao(
   });
 }
 
+const alvoDaCobranca = (d: { faturaId?: string; pedidoId?: string }) => d.faturaId ?? d.pedidoId ?? "—";
+const entidadeDaCobranca = (d: { faturaId?: string }) => (d.faturaId ? "Fatura" : "Pedido");
+
 /** Cria a cobrança Pix (cob) no Bradesco e grava em CobrancaPix. */
 export async function criarCobrancaPix(dados: DadosCobranca): Promise<{
   ok: boolean;
@@ -288,7 +294,7 @@ export async function criarCobrancaPix(dados: DadosCobranca): Promise<{
   erro?: string;
 }> {
   if (!configuradoBradesco()) {
-    await registrarSincronizacao(dados.faturaId, "criar-cobranca", false, undefined, "Integração Bradesco não configurada.");
+    await registrarSincronizacao(alvoDaCobranca(dados), "criar-cobranca", false, undefined, "Integração Bradesco não configurada.", entidadeDaCobranca(dados));
     return { ok: false, erro: "Integração Bradesco não configurada." };
   }
 
@@ -315,7 +321,9 @@ export async function criarCobrancaPix(dados: DadosCobranca): Promise<{
 
     await prisma.cobrancaPix.create({
       data: {
-        faturaId: dados.faturaId,
+        faturaId: dados.faturaId ?? null,
+        pedidoId: dados.pedidoId ?? null,
+        grupoId: dados.grupoId ?? null,
         txid,
         valorCentavos: dados.valorCentavos,
         chavePix,
@@ -324,11 +332,11 @@ export async function criarCobrancaPix(dados: DadosCobranca): Promise<{
         copiaECola,
       },
     });
-    await registrarSincronizacao(dados.faturaId, "criar-cobranca", true, txid);
+    await registrarSincronizacao(alvoDaCobranca(dados), "criar-cobranca", true, txid, undefined, entidadeDaCobranca(dados));
     return { ok: true, txid, copiaECola };
   } catch (erro) {
     const mensagem = erro instanceof Error ? erro.message : String(erro);
-    await registrarSincronizacao(dados.faturaId, "criar-cobranca", false, undefined, mensagem);
+    await registrarSincronizacao(alvoDaCobranca(dados), "criar-cobranca", false, undefined, mensagem, entidadeDaCobranca(dados));
     return { ok: false, erro: mensagem };
   }
 }
@@ -357,10 +365,22 @@ export async function consultarCobranca(txid: string): Promise<{
 
     if (pagamento) {
       const pagoEm = new Date(pagamento.horario);
-      const cobranca = await prisma.cobrancaPix.findUnique({ where: { txid }, select: { id: true, faturaId: true, status: true } });
+      const cobranca = await prisma.cobrancaPix.findUnique({
+        where: { txid },
+        select: { id: true, faturaId: true, pedidoId: true, grupoId: true, status: true },
+      });
       if (cobranca && cobranca.status !== "CONCLUIDA") {
         await prisma.cobrancaPix.update({ where: { txid }, data: { status: "CONCLUIDA", endToEndId: pagamento.endToEndId, pagoEm } });
-        await prisma.fatura.update({ where: { id: cobranca.faturaId }, data: { status: "PAGA", pagaEm: pagoEm } });
+        if (cobranca.faturaId) {
+          await prisma.fatura.update({ where: { id: cobranca.faturaId }, data: { status: "PAGA", pagaEm: pagoEm } });
+        }
+        // Pix do agendamento: todos os serviços da visita ficam como pagos.
+        if (cobranca.pedidoId) {
+          await prisma.pedido.updateMany({
+            where: cobranca.grupoId ? { grupoId: cobranca.grupoId } : { id: cobranca.pedidoId },
+            data: { pixPagoEm: pagoEm },
+          });
+        }
         await registrarSincronizacao(cobranca.id, "pagamento-confirmado", true, pagamento.endToEndId, undefined, "CobrancaPix");
       }
     }

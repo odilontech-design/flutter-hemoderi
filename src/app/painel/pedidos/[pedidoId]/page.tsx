@@ -215,7 +215,14 @@ export default async function DetalheDoPedido({
           {pedido.formaPagamento && (
             <div>
               <div className="text-gray-400">Forma de pagamento (cliente)</div>
-              <div className="text-gray-700">{pedido.formaPagamento}</div>
+              <div className="text-gray-700">
+                {pedido.formaPagamento}
+                {pedido.pixPagoEm && (
+                  <span className="ml-2 text-[10px] font-semibold text-green-700">
+                    Pix pago em {formatarDataHora(pedido.pixPagoEm)}
+                  </span>
+                )}
+              </div>
             </div>
           )}
           <div>

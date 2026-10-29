@@ -943,6 +943,11 @@ model Pedido {
   /// trocar o local do atendimento não o recalcula pela tabela.
   valorManual Boolean @default(false)
 
+  /// Pago pelo Pix do portal (QR Code gerado para o agendamento). Marcado em
+  /// todos os serviços da visita quando o banco confirma.
+  pixPagoEm    DateTime?
+  cobrancasPix CobrancaPix[] @relation("PixDoPedido")
+
   /// Quem vai atender. Em SOLICITADO é o profissional que a clínica pediu no
   /// portal — reserva provisória, que já segura o horário dele; em ALOCADO é
   /// compromisso assumido pela equipe. O status é o que separa os dois.
@@ -1671,8 +1676,17 @@ enum StatusCobrancaPix {
 model CobrancaPix {
   id String @id @default(cuid())
 
-  faturaId String
-  fatura   Fatura @relation(fields: [faturaId], references: [id])
+  /// A cobrança pode ser da FATURA (cobrança mensal, pelo pós-venda) ou do
+  /// AGENDAMENTO (a clínica que escolheu Pix paga pelo QR Code no portal,
+  /// 29/10) — nunca as duas.
+  faturaId String?
+  fatura   Fatura? @relation(fields: [faturaId], references: [id])
+
+  /// Cobrança do agendamento: o primeiro pedido da visita e o grupo, que
+  /// reúne todos os serviços cobrados no mesmo Pix.
+  pedidoId String?
+  pedido   Pedido? @relation("PixDoPedido", fields: [pedidoId], references: [id], onDelete: SetNull)
+  grupoId  String?
 
   /// Identificador da cobrança no banco (txid). Único, gerado pelo
   /// sistema no formato que o BACEN exige (26-35 alfanuméricos).
@@ -1704,6 +1718,7 @@ model CobrancaPix {
   atualizadaEm DateTime @updatedAt
 
   @@index([faturaId])
+  @@index([pedidoId])
   @@index([status])
   @@index([txid])
 }

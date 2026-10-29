@@ -5,7 +5,8 @@ import { prisma } from "@/lib/prisma";
 import { exigirInterno, registrarAuditoria } from "@/lib/sessao";
 import { perfilPermite } from "@/lib/papeis";
 import { criarCobrancaPix, consultarCobranca, registrarWebhook, testarConexao } from "@/lib/integracoes/bradesco-pix";
-import { exigirAdministradorTecnico } from "@/lib/sessao";
+import { exigirAdministradorTecnico, exigirClinica } from "@/lib/sessao";
+import QRCode from "qrcode";
 import type { Resultado } from "./pedidos";
 
 /**
@@ -141,4 +142,103 @@ export async function registrarAvisoDePagamentoBradesco(): Promise<Resultado> {
   const base = process.env.NEXTAUTH_URL?.trim() || "https://app.hemoderi.com.br";
   const r = await registrarWebhook(base);
   return r.ok ? { ok: true, avisos: ["Aviso de pagamento cadastrado no Bradesco."] } : { ok: false, erro: r.erro ?? "Falhou." };
+}
+
+export type PixDoAgendamento = {
+  ok: boolean;
+  erro?: string;
+  valorCentavos?: number;
+  copiaECola?: string;
+  /** O QR Code já como imagem (data URL). */
+  imagem?: string;
+  pago?: boolean;
+  pagoEm?: string;
+};
+
+const STATUS_QUE_PAGAM = ["CONFIRMADO", "ALOCADO", "REALIZADO"];
+
+/**
+ * O Pix do agendamento no portal da clínica (pedido de 29/10): quem escolheu
+ * Pix como forma de pagamento paga pelo QR Code, sem esperar a fatura.
+ *
+ * Uma cobrança por VISITA (todos os serviços juntos). `gerar: false` só
+ * consulta — é o que o "já paguei" e a verificação automática chamam. Reusa a
+ * cobrança ativa quando o valor não mudou, para a clínica ver sempre o mesmo
+ * código; mudou o valor, gera outra.
+ */
+export async function pixDoAgendamento(pedidoId: string, gerar: boolean): Promise<PixDoAgendamento> {
+  const sessao = await exigirClinica();
+
+  const pedido = await prisma.pedido.findFirst({
+    where: { id: pedidoId, clinicaId: sessao.clinicaId },
+    select: { id: true, grupoId: true, clinica: { select: { nome: true, cnpj: true } } },
+  });
+  if (!pedido) return { ok: false, erro: "Agendamento não encontrado." };
+
+  const membros = await prisma.pedido.findMany({
+    where: { clinicaId: sessao.clinicaId, ...(pedido.grupoId ? { grupoId: pedido.grupoId } : { id: pedido.id }) },
+    select: { id: true, status: true, formaPagamento: true, valorServicoCentavos: true, pixPagoEm: true },
+  });
+  const ativos = membros.filter((m) => m.status !== "CANCELADO");
+  if (ativos.length === 0) return { ok: false, erro: "Este agendamento foi cancelado." };
+  if (ativos.some((m) => m.formaPagamento !== "Pix")) return { ok: false, erro: "A forma de pagamento deste agendamento não é Pix." };
+
+  const pagoEm = ativos.find((m) => m.pixPagoEm)?.pixPagoEm;
+  if (pagoEm) return { ok: true, pago: true, pagoEm: pagoEm.toISOString() };
+
+  if (!ativos.every((m) => STATUS_QUE_PAGAM.includes(m.status))) {
+    return { ok: false, erro: "O Pix fica disponível depois que a central confirmar o agendamento." };
+  }
+  const valorCentavos = ativos.reduce((soma, m) => soma + m.valorServicoCentavos, 0);
+  if (valorCentavos <= 0) return { ok: false, erro: "O valor ainda está sob consulta: a central informa o valor antes do pagamento." };
+
+  const primeiro = ativos[0];
+  const filtro = { pedidoId: primeiro.id, status: "ATIVA" as const };
+  let cobranca = await prisma.cobrancaPix.findFirst({ where: filtro, orderBy: { criadaEm: "desc" } });
+
+  // Já foi paga, ou o valor mudou: confere antes de decidir.
+  if (cobranca) {
+    const consulta = await consultarCobranca(cobranca.txid);
+    if (consulta.ok && consulta.pago) {
+      const agora = await prisma.pedido.findFirst({ where: { id: primeiro.id }, select: { pixPagoEm: true } });
+      return { ok: true, pago: true, pagoEm: (agora?.pixPagoEm ?? new Date()).toISOString() };
+    }
+    if (cobranca.valorCentavos !== valorCentavos) {
+      await prisma.cobrancaPix.update({ where: { id: cobranca.id }, data: { status: "CANCELADA" } });
+      cobranca = null;
+    }
+  }
+
+  if (!cobranca) {
+    if (!gerar) return { ok: true, pago: false, valorCentavos };
+    const criada = await criarCobrancaPix({
+      pedidoId: primeiro.id,
+      grupoId: pedido.grupoId,
+      valorCentavos,
+      vencimento: new Date(Date.now() + 3 * 24 * 3600 * 1000),
+      descricao: `Hemoderi - Agendamento ${pedido.clinica.nome}`,
+      devedorNome: pedido.clinica.nome,
+      devedorCnpj: pedido.clinica.cnpj ?? undefined,
+    });
+    if (!criada.ok || !criada.copiaECola) {
+      return { ok: false, erro: "Não foi possível gerar o Pix agora. Tente de novo em instantes ou fale com a central." };
+    }
+    return {
+      ok: true,
+      pago: false,
+      valorCentavos,
+      copiaECola: criada.copiaECola,
+      imagem: await QRCode.toDataURL(criada.copiaECola, { margin: 1, width: 280 }),
+    };
+  }
+
+  const copiaECola = cobranca.copiaECola ?? cobranca.qrCode;
+  if (!copiaECola) return { ok: false, erro: "O código Pix desta cobrança não está disponível. Fale com a central." };
+  return {
+    ok: true,
+    pago: false,
+    valorCentavos,
+    copiaECola,
+    imagem: await QRCode.toDataURL(copiaECola, { margin: 1, width: 280 }),
+  };
 }

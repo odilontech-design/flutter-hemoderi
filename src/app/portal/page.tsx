@@ -175,6 +175,16 @@ export default async function MeusAgendamentos() {
                       >
                         Ver resumo
                       </Link>
+                      {/* Pix escolhido, já confirmado e ainda não pago: o QR está no resumo (29/10). */}
+                      {primeiro.formaPagamento === "Pix" && ["CONFIRMADO", "ALOCADO", "REALIZADO"].includes(statusDaVisita) && !primeiro.pixPagoEm && (
+                        <Link
+                          href={`/portal/resumo/${primeiro.id}`}
+                          className="text-[11px] font-semibold text-green-800 hover:underline whitespace-nowrap"
+                        >
+                          Pagar com Pix
+                        </Link>
+                      )}
+                      {primeiro.pixPagoEm && <span className="text-[10px] font-semibold text-green-700">Pix pago ✓</span>}
                       <AcoesClinica pedidoId={primeiro.id} />
                       {statusDaVisita !== "SOLICITADO" && (
                         <AdicionarAgenda

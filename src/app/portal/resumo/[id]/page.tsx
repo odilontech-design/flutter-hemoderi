@@ -8,6 +8,8 @@ import { formatarReais } from "@/lib/dinheiro";
 import { resumoDoEndereco } from "@/lib/endereco";
 import { AdicionarAgenda } from "@/components/AdicionarAgenda";
 import { ROTULO_STATUS_CLIENTE, STATUS_ATIVOS } from "@/lib/pedido";
+import { PagarComPix } from "../PagarComPix";
+import { configuradoBradesco } from "@/lib/integracoes/bradesco-pix";
 
 export const dynamic = "force-dynamic";
 
@@ -61,6 +63,17 @@ export default async function ResumoDoAgendamento({ params }: { params: { id: st
   const nomes = membros.map((m) => m.servico.nome).join(" + ");
 
   const totalCentavos = membros.reduce((soma, m) => soma + m.valorServicoCentavos, 0);
+  // Pix escolhido no agendamento (pedido de 29/10): o QR aparece aqui.
+  const ativos = membros.filter((m) => m.status !== "CANCELADO");
+  const escolheuPix = ativos.length > 0 && ativos.every((m) => m.formaPagamento === "Pix");
+  const pixPagoEm = ativos.find((m) => m.pixPagoEm)?.pixPagoEm ?? null;
+  const confirmado = ativos.every((m) => ["CONFIRMADO", "ALOCADO", "REALIZADO"].includes(m.status));
+  const pixDisponivel = configuradoBradesco() && confirmado && totalCentavos > 0;
+  const motivoPix = !configuradoBradesco()
+    ? "O pagamento por Pix pelo portal ainda não está disponível. A central envia o Pix pelo WhatsApp."
+    : !confirmado
+      ? "O QR Code do Pix fica disponível assim que a central confirmar o agendamento."
+      : "O valor ainda está sob consulta: a central informa o valor antes do pagamento.";
   const profissionais = Array.from(
     new Set(membros.map((m) => m.profissional?.nome).filter((n): n is string => Boolean(n)))
   );
@@ -154,6 +167,18 @@ export default async function ResumoDoAgendamento({ params }: { params: { id: st
           )}
         </div>
       </Cartao>
+
+      {escolheuPix && ativos.length > 0 && (
+        <div className="max-w-2xl mt-3">
+          <PagarComPix
+            pedidoId={primeiro.id}
+            valorCentavos={ativos.reduce((soma, m) => soma + m.valorServicoCentavos, 0)}
+            pagoEm={pixPagoEm?.toISOString() ?? null}
+            disponivel={pixDisponivel}
+            motivoIndisponivel={motivoPix}
+          />
+        </div>
+      )}
     </>
   );
 }
