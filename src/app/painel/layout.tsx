@@ -1,7 +1,8 @@
 import { MenuLateral } from "@/components/MenuLateral";
 import { Provedores } from "@/components/Provedores";
 import { CentralDeAvisos } from "@/components/CentralDeAvisos";
-import { exigirInterno } from "@/lib/sessao";
+import { emailDaSessao, exigirInterno } from "@/lib/sessao";
+import { ehAdministradorTecnico } from "@/lib/acesso-tecnico";
 import { perfilPermite } from "@/lib/papeis";
 import { agendamentoPublicoAtivo } from "@/lib/agendamento-publico";
 import {
@@ -40,7 +41,9 @@ const ITENS = [
 // é só atendente. Tirar do menu não substitui a guarda (`exigirResponsavel`
 // em cada página e ação): é só o que evita a pessoa clicar em algo que a
 // própria tela vai recusar.
-const ITENS_SO_RESPONSAVEL = new Set(["/painel/financeiro", "/painel/cupons", "/painel/acessos", "/painel/integracoes"]);
+const ITENS_SO_RESPONSAVEL = new Set(["/painel/financeiro", "/painel/cupons", "/painel/acessos"]);
+// As Integrações são só do administrador técnico (pedido de 29/10).
+const ITENS_SO_TECNICO = new Set(["/painel/integracoes"]);
 
 // A grade de disponibilidade é a mesa da logística (ata de 28/09). Quem não
 // aloca não precisa dela no menu — mesma lógica dos itens de responsável:
@@ -56,9 +59,11 @@ export default async function LayoutPainel({ children }: { children: React.React
   const sessao = await exigirInterno();
   const podeLogistica = perfilPermite(sessao.perfil, "LOGISTICA");
   const sitePublico = agendamentoPublicoAtivo();
+  const tecnico = sessao.perfil === "RESPONSAVEL" && ehAdministradorTecnico(await emailDaSessao());
   const itens = ITENS.filter((item) => {
     if (ITENS_DO_SITE.has(item.href)) return sitePublico;
     if (ITENS_SO_RESPONSAVEL.has(item.href)) return sessao.perfil === "RESPONSAVEL";
+    if (ITENS_SO_TECNICO.has(item.href)) return tecnico;
     if (ITENS_SO_LOGISTICA.has(item.href)) return podeLogistica;
     return true;
   });

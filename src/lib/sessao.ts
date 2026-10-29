@@ -5,6 +5,7 @@ import { prisma } from "./prisma";
 import type { PerfilInterno } from "@prisma/client";
 import { inicioDe, perfilEfetivo } from "./papeis";
 import { VERSAO_DO_TERMO } from "./termo-aceite";
+import { ehAdministradorTecnico } from "./acesso-tecnico";
 
 export type SessaoInterno = {
   usuarioId: string;
@@ -79,6 +80,23 @@ export async function exigirInterno(): Promise<SessaoInterno> {
 export async function exigirResponsavel(): Promise<SessaoInterno> {
   const sessao = await exigirInterno();
   if (sessao.perfil !== "RESPONSAVEL") redirect("/painel");
+  return sessao;
+}
+
+/** O e-mail de quem está logado — só para decidir o que mostrar no menu. */
+export async function emailDaSessao(): Promise<string | null> {
+  const sessao = await getServerSession(authOptions);
+  return sessao?.user?.email ?? null;
+}
+
+/**
+ * As Integrações (credenciais, certificado, filas de sistemas externos) são do
+ * administrador técnico (pedido de 29/10): RESPONSÁVEL E e-mail na lista. Os
+ * demais caem em `/painel`, como em `exigirResponsavel`.
+ */
+export async function exigirAdministradorTecnico(): Promise<SessaoInterno> {
+  const sessao = await exigirResponsavel();
+  if (!ehAdministradorTecnico(await emailDaSessao())) redirect("/painel");
   return sessao;
 }
 

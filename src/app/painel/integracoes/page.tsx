@@ -1,7 +1,7 @@
 import { envioAutomaticoLigado } from "@/lib/integracoes/whatsapp";
 import Link from "next/link";
 import { prisma } from "@/lib/prisma";
-import { exigirResponsavel } from "@/lib/sessao";
+import { exigirAdministradorTecnico } from "@/lib/sessao";
 import { Cartao, Kpi, Tabela, Titulo, Vazio } from "@/components/ui";
 import { BotaoAcao } from "@/components/BotaoAcao";
 import { registrarAvisoDePagamentoBradesco, testarConexaoBradesco } from "@/app/actions/cobrancas";
@@ -34,7 +34,7 @@ const ROTULO_ACAO: Record<string, string> = {
  * sistema externo e é decisão de quem responde pela operação.
  */
 export default async function Integracoes() {
-  await exigirResponsavel();
+  await exigirAdministradorTecnico();
 
   const tentativas = await prisma.sincronizacaoExterna.findMany({
     where: { sistema: "PIPEDRIVE", entidade: "Pedido" },

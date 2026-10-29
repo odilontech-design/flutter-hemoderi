@@ -5,7 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { exigirInterno, registrarAuditoria } from "@/lib/sessao";
 import { perfilPermite } from "@/lib/papeis";
 import { criarCobrancaPix, consultarCobranca, registrarWebhook, testarConexao } from "@/lib/integracoes/bradesco-pix";
-import { exigirResponsavel } from "@/lib/sessao";
+import { exigirAdministradorTecnico } from "@/lib/sessao";
 import type { Resultado } from "./pedidos";
 
 /**
@@ -130,14 +130,14 @@ export async function cancelarCobrancaPix(cobrancaId: string): Promise<Resultado
 
 /** Tela Integrações: o certificado e as credenciais estão certos? */
 export async function testarConexaoBradesco(): Promise<Resultado> {
-  await exigirResponsavel();
+  await exigirAdministradorTecnico();
   const r = await testarConexao();
   return r.ok ? { ok: true, avisos: ["Conexão com o Bradesco funcionando (token obtido)."] } : { ok: false, erro: r.erro ?? "Falhou." };
 }
 
 /** Cadastra no Bradesco o endereço que avisa quando um Pix é pago. */
 export async function registrarAvisoDePagamentoBradesco(): Promise<Resultado> {
-  await exigirResponsavel();
+  await exigirAdministradorTecnico();
   const base = process.env.NEXTAUTH_URL?.trim() || "https://app.hemoderi.com.br";
   const r = await registrarWebhook(base);
   return r.ok ? { ok: true, avisos: ["Aviso de pagamento cadastrado no Bradesco."] } : { ok: false, erro: r.erro ?? "Falhou." };

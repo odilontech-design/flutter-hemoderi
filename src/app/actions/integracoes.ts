@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
-import { exigirResponsavel } from "@/lib/sessao";
+import { exigirAdministradorTecnico } from "@/lib/sessao";
 import { testarConexao } from "@/lib/integracoes/pipedrive";
 import { reprocessarPedidoPipedrive, reprocessarPendenciasPipedrive } from "@/lib/integracoes/pipedrive-pendencias";
 import { despacharPendentes } from "@/lib/integracoes/whatsapp";
@@ -14,7 +14,7 @@ import type { Resultado } from "./pedidos";
  * A regra de qual ação refazer está em lib/integracoes/pipedrive-pendencias.ts.
  */
 export async function reprocessarPipedrive(pedidoId: string): Promise<Resultado> {
-  await exigirResponsavel();
+  await exigirAdministradorTecnico();
   const r = await reprocessarPedidoPipedrive(pedidoId);
   revalidatePath("/painel/integracoes");
   return r.ok ? { ok: true } : { ok: false, erro: r.erro };
@@ -22,7 +22,7 @@ export async function reprocessarPipedrive(pedidoId: string): Promise<Resultado>
 
 /** Confere token e domínio sem escrever nada no PipeDrive. */
 export async function testarConexaoPipedrive(): Promise<Resultado> {
-  await exigirResponsavel();
+  await exigirAdministradorTecnico();
   const teste = await testarConexao();
   return teste.ok ? { ok: true, avisos: [teste.descricao] } : { ok: false, erro: teste.erro };
 }
@@ -35,7 +35,7 @@ const LOTE = 20;
  * sozinha todo dia de manhã (app/api/rotinas/mensagens).
  */
 export async function reprocessarTodasPipedrive(): Promise<Resultado> {
-  await exigirResponsavel();
+  await exigirAdministradorTecnico();
   const r = await reprocessarPendenciasPipedrive(LOTE);
   revalidatePath("/painel/integracoes");
   if (r.erro) return { ok: false, erro: `${r.feitos} sincronizado(s); parou no erro: ${r.erro}` };
@@ -51,7 +51,7 @@ export async function reprocessarTodasPipedrive(): Promise<Resultado> {
  * despacho cancela em vez de mandar informação velha.
  */
 export async function reenviarFalhasWhatsapp(): Promise<Resultado> {
-  await exigirResponsavel();
+  await exigirAdministradorTecnico();
   if (!process.env.WHATSAPP_API_URL) return { ok: false, erro: "WHATSAPP_API_URL não configurada." };
 
   const { count } = await prisma.mensagemWhatsapp.updateMany({
