@@ -71,6 +71,15 @@ export const ETAPAS: Etapa[] = [
     },
   },
   {
+    chave: "aguardando-aceite",
+    rotulo: "Aguardando aceite",
+    descricao: "Alocados, de hoje em diante, cujo profissional ainda não deu o aceite — só quem falta.",
+    dono: "LOGISTICA",
+    get onde(): Prisma.PedidoWhereInput {
+      return { status: "ALOCADO", aceitoEm: null, data: { gte: hojeUTC() } };
+    },
+  },
+  {
     chave: "conferir",
     rotulo: "Para conferir",
     descricao: "Atendido, com relatório aguardando a conferência do pós-venda.",
@@ -156,7 +165,7 @@ export function etapaPorChave(chave: string | undefined): Etapa | undefined {
 const ETAPAS_DO_PERFIL: Partial<Record<PerfilInterno, string[]>> = {
   COMERCIAL: ["triagem", "alocados", "fechados", "cancelados", "todos"],
   ATENDENTE: ["triagem", "alocados", "fechados", "cancelados", "todos"],
-  LOGISTICA: ["alocar", "alocados", "sem-relatorio", "cancelados"],
+  LOGISTICA: ["alocar", "alocados", "aguardando-aceite", "sem-relatorio", "cancelados"],
   // Desde a ata de 20/10 o pós-venda também lança e confirma os pedidos do dia.
   POS_VENDA: ["conferir", "sem-relatorio", "devolvidos", "triagem", "fechados", "todos"],
 };

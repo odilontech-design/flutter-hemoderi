@@ -229,7 +229,7 @@ export default async function Hoje({ searchParams }: { searchParams: { servico?:
   ]);
   const atencao = [
     ...filas.map((f, i) => ({ ...f, total: contagens[i], href: `/painel/pedidos?filtro=${f.chave}` })),
-    { chave: "aceite", rotulo: "Aguardando aceite", dono: "ver quem falta ↓", total: aguardandoAceite.length, href: "#aguardando-aceite" },
+    { chave: "aceite", rotulo: "Aguardando aceite", dono: "só quem ainda não aceitou", total: aguardandoAceite.length, href: "/painel/pedidos?filtro=aguardando-aceite" },
   ];
   const concluidosHoje = doDia.filter((p) => p.status === "REALIZADO" || p.status === "FALTOU").length;
 
