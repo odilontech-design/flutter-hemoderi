@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import { Area, Campo, Rotulo } from "@/components/ui";
 import { FormularioAcao } from "@/components/FormularioAcao";
 import { CamposEndereco } from "@/components/CamposEndereco";
-import { adicionarEnderecoPelaEquipe } from "@/app/actions/enderecos";
+import { adicionarEndereco, adicionarEnderecoPelaEquipe } from "@/app/actions/enderecos";
 
 /**
  * "Usar outro endereço" no agendamento da equipe (reunião de 27/10): a
@@ -16,7 +16,7 @@ import { adicionarEnderecoPelaEquipe } from "@/app/actions/enderecos";
  * Abre numa janela por cima da tela — fora do formulário do agendamento no
  * DOM (portal), para os campos de um não irem junto com o envio do outro.
  */
-export function OutroEndereco({ clinicaId, aoCriar }: { clinicaId: string; aoCriar: (id: string) => void }) {
+export function OutroEndereco({ clinicaId, aoCriar }: { clinicaId?: string; aoCriar: (id: string) => void }) {
   const router = useRouter();
   const [aberto, setAberto] = useState(false);
   const [montado, setMontado] = useState(false);
@@ -42,7 +42,7 @@ export function OutroEndereco({ clinicaId, aoCriar }: { clinicaId: string; aoCri
                 </button>
               </div>
               <FormularioAcao
-                acao={adicionarEnderecoPelaEquipe}
+                acao={clinicaId ? adicionarEnderecoPelaEquipe : adicionarEndereco}
                 botao="Salvar e usar neste agendamento"
                 aoSalvar={(estado) => {
                   setAberto(false);
@@ -50,7 +50,7 @@ export function OutroEndereco({ clinicaId, aoCriar }: { clinicaId: string; aoCri
                   router.refresh();
                 }}
               >
-                <input type="hidden" name="clinicaId" value={clinicaId} />
+                {clinicaId && <input type="hidden" name="clinicaId" value={clinicaId} />}
                 <div>
                   <Rotulo>Nome da clínica (onde será o atendimento)</Rotulo>
                   <Campo name="rotulo" required placeholder="Clínica Sorriso, Unidade Moema, consultório do Dr. Fulano…" />

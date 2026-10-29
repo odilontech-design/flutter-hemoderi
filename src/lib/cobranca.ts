@@ -38,6 +38,24 @@ export const ROTULO_UNIDADE: Record<UnidadeCobranca, string> = {
 };
 
 /**
+ * "por paciente", "por período", "por hora" — ou, quando o serviço é vendido
+ * por quantidade sem franquia (disparos do Atria, dentes do Light Touch), "por
+ * disparo", "por dente": o preço unitário que a clínica lê (ata de 29/10).
+ */
+export function unidadeDoPreco(servico: {
+  unidadeCobranca: UnidadeCobranca;
+  permiteQuantidade?: boolean;
+  quantidadeIncluida?: number | null;
+  rotuloQuantidade?: string | null;
+}): string {
+  const rotulo = servico.rotuloQuantidade?.trim();
+  if (servico.permiteQuantidade && servico.quantidadeIncluida == null && rotulo && servico.unidadeCobranca !== "HORA") {
+    return `por ${rotulo.toLowerCase().endsWith("s") ? rotulo.toLowerCase().slice(0, -1) : rotulo.toLowerCase()}`;
+  }
+  return ROTULO_UNIDADE[servico.unidadeCobranca];
+}
+
+/**
  * A quantidade que vale: serviço sem quantidade variável é sempre 1, e o
  * resto é inteiro entre 1 e o máximo (quando existe). Nunca devolve algo
  * inválido — quem chama grava o resultado.
@@ -74,10 +92,13 @@ export function totalDoItem(valorCentavos: number, quantidade: number, regra: Re
 /** "R$ 990,00 até 400 disparos + R$ 1,70 por disparo adicional" — para catálogo e carrinho. */
 export function descricaoDoPreco(
   valorCentavos: number,
-  servico: RegraDePreco & { unidadeCobranca: UnidadeCobranca; rotuloQuantidade?: string | null }
+  servico: RegraDePreco & { unidadeCobranca: UnidadeCobranca; rotuloQuantidade?: string | null; permiteQuantidade?: boolean; quantidadeMinima?: number | null }
 ): string {
   if (valorCentavos <= 0) return "sob consulta";
-  if (servico.quantidadeIncluida == null) return `${formatarReais(valorCentavos)} ${ROTULO_UNIDADE[servico.unidadeCobranca]}`;
+  if (servico.quantidadeIncluida == null) {
+    const minimo = servico.permiteQuantidade && (servico.quantidadeMinima ?? 1) > 1 ? ` (mínimo ${servico.quantidadeMinima!.toLocaleString("pt-BR")})` : "";
+    return `${formatarReais(valorCentavos)} ${unidadeDoPreco(servico)}${minimo}`;
+  }
 
   const rotulo = servico.rotuloQuantidade?.trim() || "unidades";
   const adicional = servico.valorAdicionalCentavos ?? 0;

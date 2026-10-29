@@ -84,6 +84,41 @@ export function CamposEndereco({
     }
   }
 
+  // "Não sei o CEP" (André, 29/10: o profissional teve que sair do app para
+  // procurar no Google). Busca pela rua, cidade e UF no ViaCEP e deixa a pessoa
+  // escolher — rua repetida em vários CEPs (Avenida Brasil) vira uma lista, não um chute.
+  const [procurando, setProcurando] = useState(false);
+  const [buscaUf, setBuscaUf] = useState(uf || "SP");
+  const [buscaCidade, setBuscaCidade] = useState(cidade);
+  const [buscaRua, setBuscaRua] = useState("");
+  const [opcoes, setOpcoes] = useState<{ cep: string; logradouro: string; bairro: string; complemento: string }[] | null>(null);
+  const [buscandoRua, setBuscandoRua] = useState(false);
+
+  async function procurarPelaRua() {
+    if (buscaRua.trim().length < 3 || buscaCidade.trim().length < 3 || buscaUf.trim().length !== 2) {
+      setErro("Informe o estado (2 letras), a cidade e pelo menos 3 letras da rua.");
+      return;
+    }
+    setBuscandoRua(true);
+    setErro("");
+    try {
+      const url = `https://viacep.com.br/ws/${encodeURIComponent(buscaUf.trim())}/${encodeURIComponent(buscaCidade.trim())}/${encodeURIComponent(buscaRua.trim())}/json/`;
+      const lista = (await (await fetch(url)).json()) as { cep: string; logradouro: string; bairro: string; complemento: string }[];
+      setOpcoes(Array.isArray(lista) ? lista.slice(0, 30) : []);
+    } catch {
+      setErro("Não deu para buscar agora. Tente de novo ou preencha o CEP.");
+    } finally {
+      setBuscandoRua(false);
+    }
+  }
+
+  function escolherOpcao(o: { cep: string }) {
+    setCep(formatarCep(o.cep));
+    setProcurando(false);
+    setOpcoes(null);
+    void buscar(o.cep);
+  }
+
   return (
     <>
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
@@ -100,7 +135,10 @@ export function CamposEndereco({
             onBlur={(e) => buscar(e.target.value)}
           />
           <div className="text-[10px] text-gray-400 mt-1">
-            {buscando ? "Buscando…" : "O endereço vem do CEP."}
+            {buscando ? "Buscando…" : "O endereço vem do CEP."}{" "}
+            <button type="button" onClick={() => setProcurando((a) => !a)} className="font-semibold text-bordo hover:underline">
+              Não sei o CEP
+            </button>
           </div>
         </div>
         <div className="sm:col-span-2">
@@ -114,6 +152,33 @@ export function CamposEndereco({
           />
         </div>
       </div>
+
+      {procurando && (
+        <div className="rounded-xl border border-bordo/30 bg-bege/40 p-3 space-y-2">
+          <div className="text-[11px] font-semibold text-bordo">Achar o CEP pelo endereço</div>
+          <div className="grid grid-cols-4 gap-2">
+            <input value={buscaUf} onChange={(e) => setBuscaUf(e.target.value.toUpperCase().slice(0, 2))} aria-label="Estado" placeholder="UF" className="border border-gray-300 rounded-lg px-2 py-1.5 text-xs" />
+            <input value={buscaCidade} onChange={(e) => setBuscaCidade(e.target.value)} aria-label="Cidade" placeholder="Cidade" className="col-span-3 border border-gray-300 rounded-lg px-2 py-1.5 text-xs" />
+          </div>
+          <div className="flex gap-2">
+            <input value={buscaRua} onChange={(e) => setBuscaRua(e.target.value)} aria-label="Rua" placeholder="Rua ou avenida" className="flex-1 border border-gray-300 rounded-lg px-2 py-1.5 text-xs" />
+            <button type="button" onClick={procurarPelaRua} disabled={buscandoRua} className="rounded-lg bg-bordo px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-60">
+              {buscandoRua ? "Buscando…" : "Buscar"}
+            </button>
+          </div>
+          {opcoes && (
+            <div className="max-h-48 overflow-y-auto rounded-lg border border-gray-200 bg-white divide-y divide-gray-100">
+              {opcoes.length === 0 && <div className="p-2 text-[11px] text-gray-500">Nada encontrado. Confira a grafia da rua e da cidade.</div>}
+              {opcoes.map((o) => (
+                <button type="button" key={o.cep} onClick={() => escolherOpcao(o)} className="block w-full px-2 py-1.5 text-left text-[11px] hover:bg-bege/60">
+                  <span className="font-semibold text-gray-800">{o.logradouro}</span>
+                  <span className="text-gray-500"> · {o.bairro || "—"}{o.complemento ? ` · ${o.complemento}` : ""} · {o.cep}</span>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
 
       {erro && <div className="text-[11px] text-amber-700">{erro}</div>}
 

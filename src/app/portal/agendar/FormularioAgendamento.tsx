@@ -13,7 +13,7 @@ import { OUTRO_PROCEDIMENTO, PROCEDIMENTOS_NO_PACIENTE } from "@/lib/procediment
 import { agendarPelaEquipe, solicitarAgendamento, type Resultado } from "@/app/actions/pedidos";
 import { linkWhatsapp, mensagemDeUrgencia } from "@/lib/whatsapp-link";
 import { formatarReais, lerCentavos } from "@/lib/dinheiro";
-import { descricaoDoPreco, quantidadeMinimaDe, totalDoItem } from "@/lib/cobranca";
+import { descricaoDoPreco, quantidadeMinimaDe, totalDoItem, unidadeDoPreco } from "@/lib/cobranca";
 import { descritivoDaFamilia } from "@/lib/catalogo-familias";
 import type { LocalDeAtendimento } from "@/lib/endereco";
 import type { UnidadeCobranca } from "@prisma/client";
@@ -429,13 +429,7 @@ function FormularioBase({
           {local.resumo && <div className="text-xs text-gray-600">{local.resumo}</div>}
           <div className="mt-1.5 text-[11px] text-gray-500">
             Não é este endereço?{" "}
-            {equipe ? (
-              <OutroEndereco clinicaId={equipe.clinicaId} aoCriar={escolherLocalNovo} />
-            ) : (
-              <Link href={enderecosHref} className="font-semibold text-bordo hover:underline">
-                cadastrar outro endereço
-              </Link>
-            )}
+            <OutroEndereco clinicaId={equipe?.clinicaId} aoCriar={escolherLocalNovo} />
           </div>
         </div>
       )}
@@ -466,13 +460,7 @@ function FormularioBase({
             })}
           </div>
           <div className="mt-2">
-            {equipe ? (
-              <OutroEndereco clinicaId={equipe.clinicaId} aoCriar={escolherLocalNovo} />
-            ) : (
-              <Link href={enderecosHref} className="inline-block text-[11px] font-semibold text-bordo hover:underline">
-                + Cadastrar outro endereço
-              </Link>
-            )}
+            <OutroEndereco clinicaId={equipe?.clinicaId} aoCriar={escolherLocalNovo} />
           </div>
         </Etapa>
       )}
@@ -588,6 +576,17 @@ function FormularioBase({
                     )}
                     <div className="min-w-0 flex-1 basis-48">
                       <div className="text-xs font-semibold text-bordo">{servico.nome}</div>
+                      {/* O preço POR PACIENTE (ou por período/hora) fica sob o nome; o total da linha vai
+                          em destaque no canto (ata de 29/10: só o montante final assusta). */}
+                      {precoUnitario(servico.id) > 0 && (
+                        <div className="text-[10px] text-gray-500">
+                          {formatarReais(precoUnitario(servico.id))} {unidadeDoPreco(servico)}
+                          {item.quantidade > 1 ? ` · ${item.quantidade} ${servico.rotuloQuantidade?.toLowerCase() ?? "unidades"}` : ""}
+                        </div>
+                      )}
+                      {/* O paciente vai para "Informações do atendimento" (ata de 29/10): na linha do
+                          equipamento só aparece quando precisa diferenciar pacientes. */}
+                      {(variosServicos || linhas.filter((l) => l.servico.id === servico.id).length > 1) && (
                       <input
                         value={item.paciente}
                         onChange={(e) => mudarPaciente(item, e.target.value)}
@@ -602,6 +601,7 @@ function FormularioBase({
                         aria-label={`Paciente de ${servico.nome}`}
                         className="mt-1 w-full max-w-xs border border-gray-300 rounded-lg px-2 py-1 text-[11px]"
                       />
+                      )}
                       <button
                         type="button"
                         onClick={() => outroPaciente(item, servico)}
@@ -631,8 +631,11 @@ function FormularioBase({
                         aoMudar={(valor) => setItens((atuais) => atuais.map((i) => (i.chave === item.chave ? { ...i, valorCentavos: valor } : i)))}
                       />
                     ) : (
-                      <div className="text-xs font-semibold text-bordo w-24 text-right">
-                        {unitario > 0 ? formatarReais(totalDaLinha({ item, servico })) : "sob consulta"}
+                      <div className="text-right w-28">
+                        <div className="text-[9px] uppercase tracking-wide text-gray-400">total</div>
+                        <div className="text-sm font-bold text-bordo">
+                          {unitario > 0 ? formatarReais(totalDaLinha({ item, servico })) : "sob consulta"}
+                        </div>
                       </div>
                     )}
                     <button
@@ -740,25 +743,6 @@ function FormularioBase({
             )}
           </div>
 
-          {urgente && (
-            <Aviso tom="alerta">
-              <div className="font-semibold mb-1">Esse dia está dentro das próximas {antecedenciaHoras}h.</div>
-              Para horários antes do limite do portal, a central trata direto — assim consegue remanejar quem já está
-              em rota.
-              {linkCentral ? (
-                <a
-                  href={linkCentral}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="mt-2 inline-flex items-center gap-1.5 bg-[#1EA952] text-white text-xs font-semibold px-3 py-2 rounded-lg hover:bg-[#178943]"
-                >
-                  Falar com a central no WhatsApp →
-                </a>
-              ) : (
-                <div className="mt-1">Fale com a central — o número não está configurado no sistema.</div>
-              )}
-            </Aviso>
-          )}
 
           <div>
             <Rotulo>Horário agendado com o paciente</Rotulo>
@@ -792,6 +776,28 @@ function FormularioBase({
               </div>
             )}
           </div>
+
+          {urgente && (
+            <Aviso tom="alerta">
+              <div className="font-semibold mb-1">Esse dia está dentro das próximas {antecedenciaHoras}h.</div>
+              Para horários antes do limite do portal, a central trata direto — assim consegue remanejar quem já está
+              em rota.
+              {linkCentral ? (
+                // Link discreto e afastado dos botões de avançar: o botão verde grande, colado no
+                // "Continuar", gerava cliques acidentais no celular (André, 29/10).
+                <a
+                  href={linkCentral}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="mt-3 block text-[11px] font-semibold text-green-800 underline"
+                >
+                  Falar com a central no WhatsApp
+                </a>
+              ) : (
+                <div className="mt-1">Fale com a central — o número não está configurado no sistema.</div>
+              )}
+            </Aviso>
+          )}
 
           <Botao type="button" disabled={!horaLivre} onClick={() => setPasso(4)}>
             Continuar
