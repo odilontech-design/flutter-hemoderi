@@ -146,8 +146,13 @@ export async function sincronizarEvento(
  * que integração nenhuma: a equipe continua confiando na agenda do celular.
  */
 export async function falhasRecentes(): Promise<number> {
+  // Sem a integração configurada não há falha a avisar: o registro "não
+  // configurada" é só a lista do que ficou para trás (ver sincronizarEvento).
+  // Contá-lo acendia o alerta de "agenda deixou de estar compartilhada" sem
+  // nenhuma agenda ligada (29/10).
+  if (!integracaoConfigurada()) return 0;
   const desde = new Date(Date.now() - 24 * 60 * 60 * 1000);
   return prisma.sincronizacaoExterna.count({
-    where: { sistema: "GOOGLE_AGENDA", sucesso: false, criadaEm: { gte: desde } },
+    where: { sistema: "GOOGLE_AGENDA", sucesso: false, criadaEm: { gte: desde }, NOT: { erro: "Integração do Google não configurada." } },
   });
 }
