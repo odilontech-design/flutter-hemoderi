@@ -1674,7 +1674,7 @@ model CobrancaPix {
   faturaId String
   fatura   Fatura @relation(fields: [faturaId], references: [id])
 
-  /// Identificador da cobrança no Santander (txid). Único, gerado pelo
+  /// Identificador da cobrança no banco (txid). Único, gerado pelo
   /// sistema no formato que o BACEN exige (26-35 alfanuméricos).
   txid String @unique
 
@@ -1763,7 +1763,9 @@ enum SistemaExterno {
   PIPEDRIVE
   GOOGLE_AGENDA
   WHATSAPP
+  /// Mantido só pelo histórico: a integração saiu em 28/10 (troca pelo Bradesco).
   SANTANDER
+  BRADESCO
 }
 
 /// Log das chamadas a sistemas de terceiros. Existe porque falha de

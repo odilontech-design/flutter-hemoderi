@@ -4,12 +4,13 @@ import { prisma } from "@/lib/prisma";
 import { exigirResponsavel } from "@/lib/sessao";
 import { Cartao, Kpi, Tabela, Titulo, Vazio } from "@/components/ui";
 import { BotaoAcao } from "@/components/BotaoAcao";
+import { registrarAvisoDePagamentoBradesco, testarConexaoBradesco } from "@/app/actions/cobrancas";
 import { codigoDoPedido } from "@/lib/numeracao";
 import { formatarData, formatarDataHora } from "@/lib/data";
 import { pendenciasDeSincronizacao } from "@/lib/sincronizacao";
 import { reenviarFalhasWhatsapp, reprocessarPipedrive, reprocessarTodasPipedrive, testarConexaoPipedrive } from "@/app/actions/integracoes";
 import { integracaoConfigurada as googleConfigurado, agendaDaOperacao } from "@/lib/integracoes/google-api";
-import { configuradoSantander } from "@/lib/integracoes/santander-pix";
+import { configuradoBradesco } from "@/lib/integracoes/bradesco-pix";
 import { pipedriveConfigurado } from "@/lib/integracoes/pipedrive";
 
 export const dynamic = "force-dynamic";
@@ -109,16 +110,29 @@ export default async function Integracoes() {
       linhas: [`${falhasGoogle} falha(s) nas últimas 24h`],
     },
     {
-      nome: "Pix Santander",
-      ligado: configuradoSantander(),
-      linhas: ["cobrança Pix por agendamento"],
-      alerta: configuradoSantander() ? null : "Aguardando as credenciais do Santander.",
+      nome: "Pix Bradesco",
+      ligado: configuradoBradesco(),
+      linhas: ["cobrança Pix dinâmica por fatura", process.env.BRADESCO_AMBIENTE === "producao" ? "ambiente: produção" : "ambiente: homologação (testes)"],
+      alerta: configuradoBradesco() ? null : "Aguardando as credenciais e o certificado do Bradesco (variáveis BRADESCO_* na Vercel).",
     },
   ];
 
   return (
     <>
       <Titulo>Integrações</Titulo>
+
+      {configuradoBradesco() && (
+        <div className="mb-4 flex flex-wrap items-center gap-2 rounded-2xl border border-gray-200 bg-white px-4 py-3">
+          <div className="mr-auto text-xs">
+            <div className="font-semibold text-bordo">Pix Bradesco</div>
+            <div className="text-[10px] text-gray-500">Teste a conexão e cadastre o aviso de pagamento (só o responsável).</div>
+          </div>
+          <BotaoAcao tela acao={testarConexaoBradesco}>Testar conexão</BotaoAcao>
+          <BotaoAcao tela acao={registrarAvisoDePagamentoBradesco} confirmar="Cadastrar no Bradesco o endereço que avisa quando um Pix é pago?">
+            Registrar aviso de pagamento
+          </BotaoAcao>
+        </div>
+      )}
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 mb-4">
         {situacoes.map((i) => (
