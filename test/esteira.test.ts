@@ -73,7 +73,7 @@ test("a etapa `todos` não filtra nada", () => {
 
 test("cada perfil vê só as etapas do seu setor; gestão e responsável veem tudo", () => {
   const chaves = (perfil: Parameters<typeof etapasDoPerfil>[0]) => etapasDoPerfil(perfil).map((e) => e.chave);
-  assert.deepEqual(chaves("LOGISTICA"), ["alocar", "alocados", "sem-relatorio", "cancelados"]);
+  assert.deepEqual(chaves("LOGISTICA"), ["alocar", "alocados", "aguardando-aceite", "sem-relatorio", "cancelados"]);
   assert.deepEqual(chaves("POS_VENDA"), ["triagem", "conferir", "sem-relatorio", "devolvidos", "fechados", "todos"]);
   assert.equal(chaves("COMERCIAL").includes("alocar"), false);
   assert.equal(chaves("COMERCIAL").includes("triagem"), true);
@@ -96,4 +96,11 @@ test("atendimento que passou sem relatório sai de Alocados e vai para Sem relat
   assert.equal(alocados.data.gte.getTime(), semRelatorio.data.lt.getTime());
   assert.ok(etapasDoPerfil("POS_VENDA").some((e) => e.chave === "sem-relatorio"));
   assert.ok(etapasDoPerfil("LOGISTICA").some((e) => e.chave === "sem-relatorio"));
+});
+
+test("Aguardando aceite mostra só alocados sem aceite, de hoje em diante", () => {
+  const onde = etapaPorChave("aguardando-aceite")?.onde as { status: string; aceitoEm: null; data: { gte: Date } };
+  assert.equal(onde.status, "ALOCADO");
+  assert.equal(onde.aceitoEm, null);
+  assert.ok(onde.data.gte instanceof Date);
 });

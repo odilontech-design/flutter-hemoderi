@@ -73,8 +73,8 @@ export const ETAPAS: Etapa[] = [
   {
     chave: "aguardando-aceite",
     rotulo: "Aguardando aceite",
+    // Sem dono: é um recorte de "Alocados" para acompanhar, não uma fila de trabalho própria.
     descricao: "Alocados, de hoje em diante, cujo profissional ainda não deu o aceite — só quem falta.",
-    dono: "LOGISTICA",
     get onde(): Prisma.PedidoWhereInput {
       return { status: "ALOCADO", aceitoEm: null, data: { gte: hojeUTC() } };
     },
