@@ -164,7 +164,7 @@ type QuemAgenda =
 async function criarAgendamento(
   quem: QuemAgenda,
   dados: FormData
-): Promise<Resultado & { criados?: { id: string; numero: number }[]; conflitos?: string[] }> {
+): Promise<Resultado & { criados?: { id: string; numero: number }[]; conflitos?: string[]; simultaneo?: boolean }> {
   const pelaEquipe = quem.tipo === "equipe";
   const clinica = await prisma.clinica.findUnique({
     where: { id: quem.clinicaId },
@@ -335,7 +335,9 @@ async function criarAgendamento(
   // duplo clique, ou o envio repetido ao recarregar, cria o mesmo agendamento
   // de novo — e a equipe não é mais travada por sobreposição. Idêntico e
   // criado há instantes, não se repete.
-  const repetido = await prisma.pedido.findFirst({
+  // Mesmo serviço, mesmo paciente: outro paciente no mesmo horário é
+  // agendamento legítimo (Joyce, 29/10), não duplicidade.
+  const recentes = await prisma.pedido.findMany({
     where: {
       clinicaId: quem.clinicaId,
       data: dataDeISO(dataISO),
@@ -344,8 +346,11 @@ async function criarAgendamento(
       status: { not: "CANCELADO" },
       criadoEm: { gte: new Date(Date.now() - 3 * 60 * 1000) },
     },
-    select: { id: true },
+    select: { servicoId: true, pacienteNome: true },
   });
+  const chave = (servicoId: string, paciente: string | null | undefined) => `${servicoId}|${(paciente ?? "").trim().toLowerCase()}`;
+  const jaCriados = new Set(recentes.map((r) => chave(r.servicoId, r.pacienteNome)));
+  const repetido = pedidos.some((p) => jaCriados.has(chave(p.servicoId, p.paciente || pacienteGeral)));
   if (repetido) {
     return { ok: false, erro: "Este agendamento acabou de ser criado — confira a esteira antes de criar de novo." };
   }
@@ -375,6 +380,12 @@ async function criarAgendamento(
     conflitos.push("O horário já tinha outro agendamento (sala da clínica ou equipamento) para estes serviços.");
   }
 
+  // Pacientes diferentes ao mesmo tempo (Joyce, 29/10: "1 paciente para
+  // sedação e 1 para PRF" do mesmo doutor, no mesmo horário): cada serviço
+  // vira um agendamento próprio, todos no horário escolhido, para um
+  // profissional cada. Só a equipe — o portal continua em sequência.
+  const simultaneo = pelaEquipe && pedidos.length > 1 && String(dados.get("simultaneo") ?? "") === "sim";
+
   // Valor e duração de cada item, e o instante em que ele começa dentro do bloco.
   let cursor = paraMinutos(horaInicio);
   const itens: {
@@ -400,9 +411,11 @@ async function criarAgendamento(
       valorServicoCentavos: manual ? (item.valorCentavos as number) : totalDoItem(unitario, item.quantidade, servico),
       valorManual: manual,
     });
-    cursor += duracaoMin;
+    if (!simultaneo) cursor += duracaoMin;
   }
-  const duracaoTotalMin = itens.reduce((soma, i) => soma + i.duracaoMin, 0);
+  const duracaoTotalMin = simultaneo
+    ? Math.max(...itens.map((i) => i.duracaoMin))
+    : itens.reduce((soma, i) => soma + i.duracaoMin, 0);
   const grupoId = crypto.randomUUID();
 
   const resultado = await prisma.$transaction(async (tx) => {
@@ -431,7 +444,7 @@ async function criarAgendamento(
             modalidade,
             enderecoId: endereco?.id ?? null,
             quantidade: item.quantidade,
-            grupoId: itens.length > 1 ? grupoId : null,
+            grupoId: itens.length > 1 && !simultaneo ? grupoId : null,
             observacoes: String(dados.get("observacoes") ?? "") || null,
             data,
             horaInicio: item.horaInicio,
@@ -466,7 +479,7 @@ async function criarAgendamento(
     }
     await criarNegocio(pedido.id);
   }
-  return { ok: true, id: resultado.criados[0].id, criados: resultado.criados, conflitos: [...new Set(conflitos)] };
+  return { ok: true, id: resultado.criados[0].id, criados: resultado.criados, conflitos: [...new Set(conflitos)], simultaneo };
 }
 
 /**
@@ -522,7 +535,9 @@ export async function agendarPelaEquipe(_anterior: Resultado, dados: FormData): 
 
   const avisos: string[] = (resultado.conflitos ?? []).map((c) => `Atenção: ${c}`);
   const profissionalId = String(dados.get("profissionalId") ?? "");
-  if (profissionalId) {
+  if (profissionalId && resultado.simultaneo) {
+    avisos.push("Agendamentos ao mesmo tempo: aloque um profissional para cada paciente na esteira.");
+  } else if (profissionalId) {
     const grupoId = resultado.criados.length > 1
       ? (await prisma.pedido.findUnique({ where: { id: resultado.criados[0].id }, select: { grupoId: true } }))?.grupoId
       : null;
@@ -1121,9 +1136,15 @@ async function efetuarReagendamento(
    * equipamento — quem foi alocado para o dia antigo não vale para o novo. É o
    * caminho do portal; a equipe, que reagenda por conta própria, mantém tudo.
    */
-  voltaParaTriagem = false
+  voltaParaTriagem = false,
+  /**
+   * A equipe não é travada por conflito (pedido de 27/10, reforçado pela Joyce
+   * em 29/10): profissional ou equipamento ocupado no novo horário vira aviso.
+   */
+  conflitoViraAviso = false
 ): Promise<Resultado> {
   const profissionalId = voltaParaTriagem ? null : pedido.profissionalId;
+  const avisos: string[] = [];
   const equipamentoId = voltaParaTriagem ? null : pedido.equipamentoId;
 
   const resultado = await prisma.$transaction(async (tx) => {
@@ -1146,10 +1167,13 @@ async function efetuarReagendamento(
       tx
     );
     if (temBloqueio(impedimentos)) {
-      return {
-        ok: false as const,
-        erro: impedimentos.filter((i) => i.bloqueante).map((i) => i.mensagem).join(" "),
-      };
+      if (!conflitoViraAviso) {
+        return {
+          ok: false as const,
+          erro: impedimentos.filter((i) => i.bloqueante).map((i) => i.mensagem).join(" "),
+        };
+      }
+      avisos.push(...impedimentos.filter((i) => i.bloqueante).map((i) => `Atenção: ${i.mensagem}`));
     }
 
     await tx.pedido.update({
@@ -1178,7 +1202,7 @@ async function efetuarReagendamento(
   await sincronizarEvento(pedido.id);
 
   atualizarTelas();
-  return { ok: true };
+  return { ok: true, avisos };
 }
 
 /**
@@ -1473,7 +1497,7 @@ export async function reagendarPedidoInterno(pedidoId: string, dataISO: string, 
   }
 
   const dataAnterior = `${isoDeData(pedido.data)} ${pedido.horaInicio}`;
-  const resultado = await efetuarReagendamento(pedido, dataDeISO(dataISO), horaInicio);
+  const resultado = await efetuarReagendamento(pedido, dataDeISO(dataISO), horaInicio, false, true);
   if (!resultado.ok) return resultado;
 
   await registrarAuditoria(
@@ -1484,7 +1508,7 @@ export async function reagendarPedidoInterno(pedidoId: string, dataISO: string, 
     `${dataAnterior} → ${dataISO} ${horaInicio} · motivo: ${motivo.trim().slice(0, 300)}`
   );
 
-  return { ok: true };
+  return { ok: true, avisos: resultado.avisos };
 }
 
 /**
@@ -1504,8 +1528,9 @@ export async function reagendarPedidoInterno(pedidoId: string, dataISO: string, 
  */
 export async function editarAgendamento(_anterior: Resultado, dados: FormData): Promise<Resultado> {
   const sessao = await exigirInterno();
-  if (!perfilPermite(sessao.perfil, "COMERCIAL", "ATENDENTE", "POS_VENDA")) {
-    return { ok: false, erro: "Só o comercial edita o agendamento." };
+  // A logística também edita (Joyce, 29/10): é ela quem fecha a agenda.
+  if (!perfilPermite(sessao.perfil, "COMERCIAL", "ATENDENTE", "POS_VENDA", "LOGISTICA")) {
+    return { ok: false, erro: "Sem permissão para editar o agendamento." };
   }
 
   const pedido = await prisma.pedido.findUnique({
@@ -1584,7 +1609,12 @@ export async function editarAgendamento(_anterior: Resultado, dados: FormData): 
   const mudouLocal = (endereco?.id ?? null) !== (pedido.enderecoId ?? null);
   const mudouQuantidade = quantidade !== pedido.quantidade;
   const critico = mudouData || mudouServico || mudouLocal;
-  const reaprovar = critico && pedido.status !== "SOLICITADO";
+  // Mudar data, horário ou local mantém o agendamento como está — confirmado,
+  // com o mesmo profissional (Joyce, 29/10: "o cliente mudou das 11h para as
+  // 10h e abre como um novo agendamento"). Só a troca de SERVIÇO volta para a
+  // aprovação: o profissional alocado pode não ser apto ao serviço novo.
+  const reaprovar = mudouServico && pedido.status !== "SOLICITADO";
+  const avisos: string[] = [];
 
   // Serviço ou quantidade novos mudam duração e valor: recalcula pelo mesmo
   // caminho do agendamento original. (Um valor editado à mão só é refeito
@@ -1618,9 +1648,8 @@ export async function editarAgendamento(_anterior: Resultado, dados: FormData): 
         },
         tx
       );
-      if (temBloqueio(impedimentos)) {
-        return { ok: false as const, erro: impedimentos.filter((i) => i.bloqueante).map((i) => i.mensagem).join(" ") };
-      }
+      // Conflito não trava a equipe: vira aviso.
+      if (temBloqueio(impedimentos)) avisos.push(...impedimentos.filter((i) => i.bloqueante).map((i) => `Atenção: ${i.mensagem}`));
     }
 
     await tx.pedido.update({
@@ -1670,9 +1699,12 @@ export async function editarAgendamento(_anterior: Resultado, dados: FormData): 
       .join(" · ") || "dados do resumo"
   );
 
+  if (critico && !reaprovar && pedido.profissionalId) {
+    avisos.push("O profissional continua alocado: avise-o da mudança pelo botão \"Enviar aviso ao profissional\".");
+  }
   atualizarTelas();
   revalidatePath(`/painel/pedidos/${pedido.id}`);
-  return { ok: true };
+  return { ok: true, avisos };
 }
 
 /**
@@ -2099,8 +2131,9 @@ export async function marcarAgendaSalva(pedidoId: string): Promise<Resultado> {
  */
 export async function editarVisita(_anterior: Resultado, dados: FormData): Promise<Resultado> {
   const sessao = await exigirInterno();
-  if (!perfilPermite(sessao.perfil, "COMERCIAL", "ATENDENTE", "POS_VENDA")) {
-    return { ok: false, erro: "Só o comercial edita o agendamento." };
+  // A logística também edita (Joyce, 29/10): é ela quem fecha a agenda.
+  if (!perfilPermite(sessao.perfil, "COMERCIAL", "ATENDENTE", "POS_VENDA", "LOGISTICA")) {
+    return { ok: false, erro: "Sem permissão para editar o agendamento." };
   }
 
   const grupoId = String(dados.get("grupoId") ?? "");
@@ -2149,7 +2182,9 @@ export async function editarVisita(_anterior: Resultado, dados: FormData): Promi
   const mudouData = isoDeData(primeiro.data) !== dataISO || primeiro.horaInicio !== horaInicio;
   const mudouLocal = (endereco?.id ?? null) !== (primeiro.enderecoId ?? null);
   const critico = mudouData || mudouLocal;
-  const reaprovar = critico && membros.some((m) => m.status !== "SOLICITADO");
+  // Data, horário e local mudam sem devolver a visita para a aprovação nem
+  // tirar o profissional (Joyce, 29/10). Conflito vira aviso.
+  const avisos: string[] = [];
 
   // Os serviços continuam em sequência, com os mesmos intervalos entre eles.
   const deslocamento = paraMinutos(horaInicio) - paraMinutos(primeiro.horaInicio);
@@ -2175,9 +2210,7 @@ export async function editarVisita(_anterior: Resultado, dados: FormData): Promi
         { clinicaId: primeiro.clinicaId, data: novaData, horaInicio, duracaoMin: duracaoTotal, ignorarGrupoId: grupoId },
         tx
       );
-      if (temBloqueio(impedimentos)) {
-        return { ok: false as const, erro: impedimentos.filter((i) => i.bloqueante).map((i) => i.mensagem).join(" ") };
-      }
+      if (temBloqueio(impedimentos)) avisos.push(...impedimentos.filter((i) => i.bloqueante).map((i) => `Atenção: ${i.mensagem}`));
     }
     for (const m of novos) {
       await tx.pedido.update({
@@ -2192,7 +2225,6 @@ export async function editarVisita(_anterior: Resultado, dados: FormData): Promi
           procedimentoPaciente: String(dados.get("procedimentoPaciente") ?? "").trim().slice(0, 120) || null,
           formaPagamento: forma || null,
           observacoes: String(dados.get("observacoes") ?? "").trim() || null,
-          ...(reaprovar ? { status: "SOLICITADO" as const, profissionalId: null, equipamentoId: null, aceitoEm: null } : {}),
         },
       });
     }
@@ -2215,14 +2247,17 @@ export async function editarVisita(_anterior: Resultado, dados: FormData): Promi
     "Pedido",
     primeiro.id,
     "editar-visita",
-    [mudouData && `data/hora → ${dataISO} ${horaInicio}`, mudouLocal && "local", reaprovar && "voltou para aprovação"]
+    [mudouData && `data/hora → ${dataISO} ${horaInicio}`, mudouLocal && "local"]
       .filter(Boolean)
       .join(" · ") || "dados da visita"
   );
 
   atualizarTelas();
   for (const m of membros) revalidatePath(`/painel/pedidos/${m.id}`);
-  return { ok: true };
+  if (critico && membros.some((m) => m.profissionalId)) {
+    avisos.push("O profissional continua alocado: avise-o da mudança pelo botão \"Enviar aviso ao profissional\".");
+  }
+  return { ok: true, avisos };
 }
 
 /**

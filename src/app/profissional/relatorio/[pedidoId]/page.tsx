@@ -40,7 +40,7 @@ export default async function Relatorio({
         select: { nome: true, endereco: true, numero: true, complemento: true, bairro: true, cidade: true, uf: true },
       },
       endereco: {
-        select: { endereco: true, numero: true, complemento: true, bairro: true, cidade: true, uf: true, observacoes: true },
+        select: { endereco: true, numero: true, complemento: true, bairro: true, cidade: true, uf: true, observacoes: true, rotulo: true },
       },
       servico: { select: { id: true, nome: true } },
       relatorio: {
@@ -71,7 +71,7 @@ export default async function Relatorio({
         data: formatarData(pedido.data),
         hora: pedido.horaInicio,
         profissional: sessao.profissionalNome,
-        clinica: enviado.clinicaNomeInformado ?? pedido.clinica.nome,
+        clinica: enviado.clinicaNomeInformado ?? (pedido.endereco?.rotulo || pedido.clinica.nome),
         endereco: revelado ? enviado.enderecoInformado ?? enderecoEmUmaLinha(comEnderecoDoPedido(pedido.clinica, pedido.endereco)) : null,
         doutor: enviado.doutorNomeInformado ?? pedido.doutorNome,
         paciente: pedido.pacienteNome,

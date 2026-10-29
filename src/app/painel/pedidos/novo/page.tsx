@@ -216,10 +216,8 @@ async function Agendamento({
       {locais.length === 0 && (
         <Aviso tom="alerta">
           A clínica não tem endereço cadastrado: os preços aparecem como &quot;sob consulta&quot; e o profissional não
-          recebe o local.{" "}
-          <a href={`/painel/clinicas/${clinicaId}`} className="font-semibold underline">
-            Cadastrar o endereço
-          </a>
+          recebe o local. Use <strong>&quot;+ Usar outro endereço&quot;</strong> logo abaixo — fica salvo sem sair do
+          agendamento.
         </Aviso>
       )}
       <FormularioAgendamento

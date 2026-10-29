@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { Area, Campo, Rotulo, Selecao } from "@/components/ui";
 import { FormularioAcao } from "@/components/FormularioAcao";
+import { SeletorDeLocal } from "@/components/SeletorDeLocal";
 import { CampoHora } from "@/components/CampoHora";
 import { editarAgendamento } from "@/app/actions/pedidos";
 import { FORMAS_DE_PAGAMENTO } from "@/lib/pagamento";
@@ -26,14 +27,15 @@ export type DadosEditaveis = {
 
 /**
  * A correção do resumo do agendamento pela equipe (ata de 02/10): todos os
- * campos editáveis. Mudar data, horário, local ou serviço devolve o pedido
- * confirmado para a aprovação — o aviso no topo diz isso antes de a pessoa
+ * campos editáveis. Trocar o serviço devolve o pedido confirmado para a
+ * aprovação (data, horário e local não, desde 29/10) — o aviso no topo diz isso antes de a pessoa
  * salvar, e não depois.
  */
 export function EditarAgendamento({
   dados,
   grupos,
   locais,
+  clinicaId,
   aberto = false,
   rotulo = "Editar agendamento",
 }: {
@@ -42,6 +44,7 @@ export function EditarAgendamento({
   rotulo?: string;
   grupos: { familia: string; servicos: { id: string; nome: string }[] }[];
   locais: { id: string; rotulo: string }[];
+  clinicaId: string;
 }) {
   const router = useRouter();
   const jaConfirmado = dados.status !== "SOLICITADO";
@@ -51,8 +54,9 @@ export function EditarAgendamento({
       <summary className="cursor-pointer select-none text-xs font-semibold text-bordo">{rotulo}</summary>
       <div className="mt-3">
         <div className="text-[11px] text-gray-500 mb-3 leading-relaxed">
-          Mudar <strong>data, horário, local ou serviço</strong>
-          {jaConfirmado ? " devolve o pedido para a aprovação (solicitado) e libera profissional e equipamento." : " refaz a checagem de agenda."}{" "}
+          Mudar <strong>data, horário ou local</strong> mantém o agendamento confirmado e o profissional; um conflito de
+          agenda aparece como aviso. Trocar o <strong>serviço</strong>
+          {jaConfirmado ? " devolve o pedido para a aprovação e libera profissional e equipamento." : " refaz a checagem de agenda."}{" "}
           Os demais campos salvam direto.
         </div>
         <FormularioAcao acao={editarAgendamento} botao="Salvar alterações" limparAoSalvar={false} aoSalvar={() => router.refresh()}>
@@ -86,13 +90,7 @@ export function EditarAgendamento({
             </div>
             <div className="sm:col-span-2">
               <Rotulo>Local do atendimento</Rotulo>
-              <Selecao name="enderecoId" defaultValue={dados.enderecoId}>
-                {locais.map((l) => (
-                  <option key={l.id || "principal"} value={l.id}>
-                    {l.rotulo}
-                  </option>
-                ))}
-              </Selecao>
+              <SeletorDeLocal clinicaId={clinicaId} inicial={dados.enderecoId} locais={locais} />
             </div>
             <div>
               <Rotulo>Doutor(a) responsável</Rotulo>

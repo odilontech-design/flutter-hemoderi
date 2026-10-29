@@ -32,7 +32,7 @@ type DadosPedido = {
   procedimentoPaciente?: string | null;
   formaPagamento?: string | null;
   clinica: { nome: string; telefone: string | null; endereco?: string | null; cidade?: string | null };
-  endereco?: { endereco: string | null; cidade: string | null } | null;
+  endereco?: { endereco: string | null; cidade: string | null; rotulo?: string | null } | null;
   servico: { nome: string };
   profissional: { nome: string; telefone: string | null } | null;
 };
@@ -50,7 +50,7 @@ const SELECAO_DO_PEDIDO = {
   procedimentoPaciente: true,
   formaPagamento: true,
   clinica: { select: { nome: true, telefone: true, endereco: true, cidade: true } },
-  endereco: { select: { endereco: true, cidade: true } },
+  endereco: { select: { endereco: true, cidade: true, rotulo: true } },
   servico: { select: { nome: true } },
   profissional: { select: { nome: true, telefone: true } },
 } as const;
@@ -96,7 +96,8 @@ function montarTexto(tipo: TipoMensagem, pedido: DadosPedido): string {
         `Data: ${formatarData(pedido.data)}`,
         `Horário: ${pedido.horaInicio}`,
         `Endereço: ${local || "a confirmar"}`,
-        `Nome da Clínica: ${pedido.clinica.nome}`,
+        // O nome da clínica onde é o atendimento, quando o endereço tem um.
+        `Nome da Clínica: ${pedido.endereco?.rotulo || pedido.clinica.nome}`,
         `Cirurgião: ${pedido.doutorNome ?? ""}`,
         `Paciente: ${pedido.pacienteNome ?? ""}`,
         `Procedimento que será realizado no paciente: ${pedido.procedimentoPaciente ?? ""}`,

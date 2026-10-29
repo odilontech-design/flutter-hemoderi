@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { Area, Campo, Rotulo, Selecao } from "@/components/ui";
 import { FormularioAcao } from "@/components/FormularioAcao";
+import { SeletorDeLocal } from "@/components/SeletorDeLocal";
 import { CampoTelefone } from "@/components/CampoTelefone";
 import { CampoHora } from "@/components/CampoHora";
 import { editarVisita } from "@/app/actions/pedidos";
@@ -31,10 +32,12 @@ export type DadosDaVisita = {
 export function EditarVisita({
   dados,
   locais,
+  clinicaId,
   aberto,
 }: {
   dados: DadosDaVisita;
   locais: { id: string; rotulo: string }[];
+  clinicaId: string;
   aberto: boolean;
 }) {
   const router = useRouter();
@@ -56,7 +59,7 @@ export function EditarVisita({
           </ul>
           {dados.confirmada && (
             <div className="mt-1 text-amber-700">
-              Mudar <strong>data, horário ou local</strong> devolve a visita para a aprovação e libera os profissionais.
+              Mudar <strong>data, horário ou local</strong> mantém a visita confirmada e os profissionais; conflito de agenda aparece como aviso.
             </div>
           )}
           O paciente e o serviço de cada item se editam no próprio serviço.
@@ -74,13 +77,7 @@ export function EditarVisita({
             </div>
             <div className="sm:col-span-2">
               <Rotulo>Local do atendimento</Rotulo>
-              <Selecao name="enderecoId" defaultValue={dados.enderecoId}>
-                {locais.map((l) => (
-                  <option key={l.id || "principal"} value={l.id}>
-                    {l.rotulo}
-                  </option>
-                ))}
-              </Selecao>
+              <SeletorDeLocal clinicaId={clinicaId} inicial={dados.enderecoId} locais={locais} />
             </div>
             <div>
               <Rotulo>Doutor(a) responsável</Rotulo>

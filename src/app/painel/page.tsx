@@ -12,7 +12,7 @@ import { Aviso } from "@/components/ui";
 import { FiltroProdutividade } from "./FiltroProdutividade";
 import { formatarAtraso, statusDeChegada } from "@/lib/atraso";
 import { BotaoAcao } from "@/components/BotaoAcao";
-import { enviarPelaCentral } from "@/app/actions/pedidos";
+import { enviarAvisoAoProfissional, enviarPelaCentral } from "@/app/actions/pedidos";
 import { formatarDataCurta } from "@/lib/data";
 import { etapaPorChave } from "@/lib/esteira";
 import { resumoDoEndereco, comEnderecoDoPedido } from "@/lib/endereco";
@@ -211,11 +211,25 @@ export default async function Hoje({ searchParams }: { searchParams: { servico?:
   ];
   const [contagens, aguardandoAceite] = await Promise.all([
     Promise.all(filas.map((f) => prisma.pedido.count({ where: etapaPorChave(f.chave)!.onde }))),
-    prisma.pedido.count({ where: { status: "ALOCADO", aceitoEm: null, data: { gte: hoje } } }),
+    // Quem ainda não deu o aceite, por nome (Joyce, 29/10: "consigo ver
+    // quais não deram ainda?"): o número sozinho mandava procurar na esteira.
+    prisma.pedido.findMany({
+      where: { status: "ALOCADO", aceitoEm: null, data: { gte: hoje } },
+      orderBy: [{ data: "asc" }, { horaInicio: "asc" }],
+      take: 50,
+      select: {
+        id: true,
+        data: true,
+        horaInicio: true,
+        servico: { select: { nome: true } },
+        clinica: { select: { nome: true } },
+        profissional: { select: { nome: true } },
+      },
+    }),
   ]);
   const atencao = [
     ...filas.map((f, i) => ({ ...f, total: contagens[i], href: `/painel/pedidos?filtro=${f.chave}` })),
-    { chave: "aceite", rotulo: "Aguardando aceite", dono: "profissional ainda não confirmou", total: aguardandoAceite, href: "/painel/pedidos?filtro=alocados" },
+    { chave: "aceite", rotulo: "Aguardando aceite", dono: "ver quem falta ↓", total: aguardandoAceite.length, href: "#aguardando-aceite" },
   ];
   const concluidosHoje = doDia.filter((p) => p.status === "REALIZADO" || p.status === "FALTOU").length;
 
@@ -262,6 +276,34 @@ export default async function Hoje({ searchParams }: { searchParams: { servico?:
           </Link>
         ))}
       </div>
+
+      {aguardandoAceite.length > 0 && (
+        <Cartao className="mb-4" >
+          <div id="aguardando-aceite" className="font-display font-bold text-bordo text-sm mb-2 scroll-mt-24">
+            Aguardando aceite ({aguardandoAceite.length})
+          </div>
+          <ul className="divide-y divide-gray-100">
+            {aguardandoAceite.map((p) => (
+              <li key={p.id} className="py-2 flex flex-wrap items-center justify-between gap-2 text-xs">
+                <div className="min-w-0">
+                  <div className="font-semibold text-gray-800">{p.profissional?.nome ?? "—"}</div>
+                  <div className="text-[11px] text-gray-500">
+                    {formatarDataCurta(p.data)} às {p.horaInicio} · {p.servico.nome} · {p.clinica.nome}
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <BotaoAcao tela acao={enviarAvisoAoProfissional.bind(null, p.id)} confirmar="Reenviar o aviso de alocação para o profissional pelo WhatsApp?">
+                    Reenviar aviso
+                  </BotaoAcao>
+                  <Link href={`/painel/pedidos/${p.id}`} className="text-[11px] font-semibold text-bordo hover:underline">
+                    abrir
+                  </Link>
+                </div>
+              </li>
+            ))}
+          </ul>
+        </Cartao>
+      )}
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
         <Kpi

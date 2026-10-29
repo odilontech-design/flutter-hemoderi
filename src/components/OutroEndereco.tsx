@@ -52,8 +52,8 @@ export function OutroEndereco({ clinicaId, aoCriar }: { clinicaId: string; aoCri
               >
                 <input type="hidden" name="clinicaId" value={clinicaId} />
                 <div>
-                  <Rotulo>Nome do lugar</Rotulo>
-                  <Campo name="rotulo" required placeholder="Unidade Moema, consultório do Dr. Fulano…" />
+                  <Rotulo>Nome da clínica (onde será o atendimento)</Rotulo>
+                  <Campo name="rotulo" required placeholder="Clínica Sorriso, Unidade Moema, consultório do Dr. Fulano…" />
                 </div>
                 <CamposEndereco />
                 <div>

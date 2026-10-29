@@ -56,7 +56,7 @@ export default async function Esteira({
 
   const minhaEtapa = etapaDoPerfil(sessao.perfil);
   // Quem edita o agendamento: o mesmo perfil da página de detalhe.
-  const podeEditarAgendamento = perfilPermite(sessao.perfil, "COMERCIAL", "ATENDENTE", "POS_VENDA");
+  const podeEditarAgendamento = perfilPermite(sessao.perfil, "COMERCIAL", "ATENDENTE", "POS_VENDA", "LOGISTICA");
   // Cada perfil vê só as etapas do seu setor (ata de 02/10); pedir uma aba que
   // não é sua pela URL cai na própria fila.
   const etapasVisiveis = etapasDoPerfil(sessao.perfil);

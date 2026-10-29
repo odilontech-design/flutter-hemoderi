@@ -61,7 +61,7 @@ export default async function DetalheDoPedido({
 
   // Edição do resumo (ata de 02/10): só para quem atende o telefone e só
   // enquanto o atendimento ainda está de pé.
-  const podeEditar = perfilPermite(sessao.perfil, "COMERCIAL", "ATENDENTE", "POS_VENDA") && STATUS_ATIVOS.includes(pedido.status);
+  const podeEditar = perfilPermite(sessao.perfil, "COMERCIAL", "ATENDENTE", "POS_VENDA", "LOGISTICA") && STATUS_ATIVOS.includes(pedido.status);
   // A logística só corrige o local (ata de 27/10); o resto é do comercial.
   const podeAlterarLocal = !podeEditar && perfilPermite(sessao.perfil, "LOGISTICA") && STATUS_ATIVOS.includes(pedido.status);
   const [servicosDoCatalogo, locais] = podeEditar || podeAlterarLocal
@@ -243,6 +243,7 @@ export default async function DetalheDoPedido({
       {/* A visita inteira, quando tem mais de um serviço (reunião de 27/10). */}
       {podeEditar && visita.length > 1 && (
         <EditarVisita
+          clinicaId={pedido.clinicaId}
           aberto={searchParams.editar === "1"}
           locais={locais.map((l) => ({ id: l.id, rotulo: l.rotulo }))}
           dados={{
@@ -263,6 +264,7 @@ export default async function DetalheDoPedido({
 
       {podeEditar && (
         <EditarAgendamento
+          clinicaId={pedido.clinicaId}
           aberto={searchParams.editar === "1" && visita.length <= 1}
           rotulo={visita.length > 1 ? `Editar só este serviço (${pedido.servico.nome})` : "Editar agendamento"}
           dados={{

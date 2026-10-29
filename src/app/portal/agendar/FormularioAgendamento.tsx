@@ -369,6 +369,8 @@ function FormularioBase({
   // Paciente (ata de 27/10): obrigatório no curso e quando a visita tem mais de
   // um serviço — aí a primeira pergunta é se é o mesmo paciente para todos.
   const [mesmoPaciente, setMesmoPaciente] = useState<boolean | null>(null);
+  // Pacientes diferentes no mesmo horário, um profissional cada (Joyce, 29/10).
+  const [simultaneo, setSimultaneo] = useState(false);
   const variosServicos = linhas.length > 1;
   const exigePaciente = modalidade === "CURSO" || variosServicos;
   const perguntaPendente = variosServicos && mesmoPaciente === null;
@@ -406,6 +408,7 @@ function FormularioBase({
     <form action={enviar} className="space-y-3 max-w-4xl">
       <input type="hidden" name="itens" value={JSON.stringify(itens)} />
       <input type="hidden" name="modalidade" value={modalidade} />
+      <input type="hidden" name="simultaneo" value={equipe && simultaneo && linhas.length > 1 && mesmoPaciente === false ? "sim" : ""} />
       <input type="hidden" name="enderecoId" value={local?.id ?? ""} />
       <input type="hidden" name="data" value={data} />
       <input type="hidden" name="horaInicio" value={hora} />
@@ -684,6 +687,18 @@ function FormularioBase({
                 {mesmoPaciente === false && (
                   <div className="mt-1 text-[10px] text-gray-500">Informe o paciente em cada linha da lista acima.</div>
                 )}
+                {mesmoPaciente === false && equipe && (
+                  <div className="mt-2 flex flex-wrap gap-x-5 gap-y-1 text-xs text-gray-700">
+                    <label className="flex items-center gap-1.5">
+                      <input type="radio" name="ordem" checked={!simultaneo} onChange={() => setSimultaneo(false)} />
+                      Um depois do outro
+                    </label>
+                    <label className="flex items-center gap-1.5">
+                      <input type="radio" name="ordem" checked={simultaneo} onChange={() => setSimultaneo(true)} />
+                      Ao mesmo tempo (um profissional para cada paciente)
+                    </label>
+                  </div>
+                )}
                 {faltaPacienteNaLinha && (
                   <div className="mt-1 text-[10px] font-semibold text-amber-700">Falta o paciente em alguma linha.</div>
                 )}
@@ -761,10 +776,9 @@ function FormularioBase({
                   {situacaoHora === "livre" && <span className="font-semibold text-green-700">Horário disponível para solicitar.</span>}
                   {situacaoHora === "indisponivel" && (
                     <span className="font-semibold text-amber-700">
-                      Esse horário não está disponível para {linhas.length > 1 ? "esses serviços juntos" : "esse serviço"}{" "}
                       {equipe
-                        ? "(sala da clínica ou equipamento já ocupados). Atenção: já existe agendamento nesse horário para o mesmo serviço — você pode criar mesmo assim."
-                        : `(já ocupado, com menos de ${antecedenciaHoras}h de antecedência ou passando da meia-noite). Tente outro horário ou fale com a central.`}
+                        ? `Só um aviso, não impede: já existe agendamento nesse horário para ${linhas.length > 1 ? "esses serviços" : "esse serviço"} (sala da clínica ou equipamento). Pode continuar e criar.`
+                        : `Esse horário não está disponível para ${linhas.length > 1 ? "esses serviços juntos" : "esse serviço"} (já ocupado, com menos de ${antecedenciaHoras}h de antecedência ou passando da meia-noite). Tente outro horário ou fale com a central.`}
                     </span>
                   )}
                   {situacaoHora === null && (
