@@ -361,7 +361,7 @@ export default async function MinhaAgenda() {
           </Link>
         </div>
         <div className="text-[11px] text-gray-500 mb-3">
-          A cidade aparece desde a alocação; a clínica e o endereço, {config.horasRevelarLocal}h antes do atendimento — ou já na alocação, quando a clínica agendou com menos de 24h.
+          Em São Paulo a cidade aparece desde a alocação; a clínica e o endereço, {config.horasRevelarLocal}h antes do atendimento (atendimento de segunda ou depois de feriado: no último dia útil antes). Fora de São Paulo o endereço já aparece na alocação, e também quando a clínica agendou com menos de 24h.
         </div>
         <div className="hidden sm:grid grid-cols-[7rem_minmax(0,1fr)_minmax(0,1.6fr)] gap-3 pb-1 border-b border-gray-100 text-[10px] font-semibold uppercase tracking-wide text-gray-400">
           <div>Dia</div>

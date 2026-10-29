@@ -186,7 +186,7 @@ export function RelatorioPreenchido({
 
       {(relatorio.orcamentoNumero || relatorio.pgNumero) && (
         <div className="text-xs">
-          <div className="text-gray-400">Mandic</div>
+          <div className="text-gray-400">Orçamento e PG</div>
           <div className="text-gray-700">
             {relatorio.orcamentoNumero ? `Orçamento ${relatorio.orcamentoNumero}` : ""}
             {relatorio.orcamentoNumero && relatorio.pgNumero ? " · " : ""}

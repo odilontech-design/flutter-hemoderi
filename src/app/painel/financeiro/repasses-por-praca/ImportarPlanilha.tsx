@@ -34,9 +34,16 @@ export function ImportarPlanilha() {
           Aplicar a planilha
         </Botao>
       </div>
+      <label className="flex items-start gap-2 text-xs text-gray-700">
+        <input type="checkbox" name="retroativo" value="sim" className="mt-0.5" />
+        <span>
+          <strong>Aplicar também aos atendimentos passados</strong> que ainda não foram pagos (é uma correção da tabela).
+          Os já pagos não mudam.
+        </span>
+      </label>
       <div className="text-[10px] text-gray-400">
-        Conferir não grava nada. Aplicar substitui a tabela inteira pela planilha; pedidos já alocados mantêm o repasse
-        calculado na alocação.
+        Conferir não grava nada. Aplicar substitui a tabela inteira pela planilha. Sem a caixa marcada, os pedidos já
+        alocados mantêm o repasse calculado na alocação, e ajustes futuros valem só para os próximos atendimentos.
       </div>
 
       {estado.erro && <Aviso tom="erro">{estado.erro}</Aviso>}
@@ -46,6 +53,12 @@ export function ImportarPlanilha() {
             {estado.aplicada ? "Tabela aplicada." : "Conferência — nada foi gravado ainda."} {estado.regras} regra(s) em{" "}
             {estado.servicosComRegra} serviço(s).
           </div>
+          {estado.aplicada && estado.recalculados != null && (
+            <div className="mb-1">
+              Atendimentos passados refeitos: {estado.recalculados}
+              {estado.jaPagos ? ` · ${estado.jaPagos} já pago(s), sem mudança` : ""}.
+            </div>
+          )}
           {estado.amostra && estado.amostra.length > 0 && (
             <ul className="list-disc pl-4 space-y-0.5">
               {estado.amostra.map((a, i) => (

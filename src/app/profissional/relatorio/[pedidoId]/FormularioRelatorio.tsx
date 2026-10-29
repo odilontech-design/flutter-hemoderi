@@ -575,11 +575,11 @@ export function FormularioRelatorio({
       {mandic && (
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <div>
-            <Rotulo>Número do orçamento (Mandic)</Rotulo>
+            <Rotulo>Número do orçamento</Rotulo>
             <Campo name="orcamentoNumero" defaultValue={valores.orcamentoNumero} inputMode="numeric" />
           </div>
           <div>
-            <Rotulo>Número do PG (Mandic)</Rotulo>
+            <Rotulo>Número do PG</Rotulo>
             <Campo name="pgNumero" defaultValue={valores.pgNumero} inputMode="numeric" />
           </div>
         </div>

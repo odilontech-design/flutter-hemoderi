@@ -38,7 +38,7 @@ export type DadosTextoRelatorio = {
   valorRecebido: string | null;
   observacaoRecebimento: string | null;
   observacoes: string | null;
-  /** Só atendimento Mandic: os números de orçamento e PG. Ausente nos demais clientes. */
+  /** Os números de orçamento e PG. Ausente nos demais clientes. */
   mandic?: { orcamento: string | null; pg: string | null } | null;
 };
 

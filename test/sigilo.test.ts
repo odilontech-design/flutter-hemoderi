@@ -5,8 +5,9 @@ import { localRevelado, agendadoDeUltimaHora, localVisivel } from "../src/lib/si
 const DIA = new Date("2026-09-20T00:00:00.000Z");
 
 test("atendimento distante ainda não mostra a clínica", () => {
-  // 20/09 às 14:00 em São Paulo, visto do dia 18.
-  const agora = new Date("2026-09-18T12:00:00.000Z");
+  // 20/09 (domingo) às 14:00 em São Paulo, visto da quinta 17/09: a janela só
+  // abre na sexta (a de sábado cai em fim de semana, ata de 29/10).
+  const agora = new Date("2026-09-17T12:00:00.000Z");
   assert.equal(localRevelado(DIA, "14:00", 24, agora), false);
 });
 
@@ -42,4 +43,33 @@ test("agendamento do portal com até 24h de antecedência abre o local desde a a
   // Pedido da equipe não entra nessa regra, mesmo feito em cima da hora.
   const daEquipe = { ...base, origem: "INTERNO", criadoEm: new Date("2026-11-10T08:00:00Z") };
   assert.equal(localVisivel(daEquipe, 24, agora), false);
+});
+
+test("fora de São Paulo o local aparece desde a alocação", () => {
+  const data = new Date("2026-11-20T00:00:00.000Z");
+  const longe = new Date("2026-11-10T12:00:00.000Z");
+  assert.equal(localRevelado(data, "09:00", 24, longe, "RJ"), true);
+  assert.equal(localRevelado(data, "09:00", 24, longe, "SP"), false);
+  assert.equal(localRevelado(data, "09:00", 24, longe, null), false);
+});
+
+test("atendimento de segunda: o local abre na sexta, não no domingo", () => {
+  const segunda = new Date("2026-11-09T00:00:00.000Z"); // 09/11/2026, segunda-feira
+  // Sexta 06/11 às 07h (Brasília) — ainda cedo; às 09h já abriu.
+  assert.equal(localRevelado(segunda, "09:00", 24, new Date("2026-11-06T10:00:00.000Z"), "SP"), false);
+  assert.equal(localRevelado(segunda, "09:00", 24, new Date("2026-11-06T12:00:00.000Z"), "SP"), true);
+});
+
+test("atendimento no meio da semana segue a janela normal de 24h", () => {
+  const quarta = new Date("2026-11-11T00:00:00.000Z");
+  assert.equal(localRevelado(quarta, "09:00", 24, new Date("2026-11-10T11:00:00.000Z"), "SP"), false); // terça 08h
+  assert.equal(localRevelado(quarta, "09:00", 24, new Date("2026-11-10T13:00:00.000Z"), "SP"), true); // terça 10h
+});
+
+test("feriado pega a abertura: após Sexta-feira Santa o local abre na quinta", () => {
+  const sabado = new Date("2026-04-04T00:00:00.000Z");
+  const segundaDepois = new Date("2026-04-06T00:00:00.000Z"); // abertura no domingo de Páscoa → quinta 02/04
+  assert.equal(localRevelado(segundaDepois, "09:00", 24, new Date("2026-04-02T10:00:00.000Z"), "SP"), false);
+  assert.equal(localRevelado(segundaDepois, "09:00", 24, new Date("2026-04-02T12:00:00.000Z"), "SP"), true);
+  assert.ok(sabado);
 });

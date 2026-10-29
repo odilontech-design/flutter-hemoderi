@@ -1,6 +1,6 @@
 "use server";
 
-import { atendimentoMandic } from "@/lib/mandic";
+import { pedeOrcamentoEPg } from "@/lib/mandic";
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { comEnderecoDoPedido } from "@/lib/endereco";
@@ -201,7 +201,7 @@ export async function enviarRelatorio(_anterior: Resultado, dados: FormData): Pr
     doutorNomeInformado: divergiu(pedido.doutorNome, doutor) ? doutor : null,
   };
 
-  const mandic = await atendimentoMandic(prisma, pedido.clinicaId);
+  const mandic = await pedeOrcamentoEPg(prisma, pedido.clinicaId);
   const conteudo = {
     compareceu,
     inicioReal: String(dados.get("inicioReal") ?? "") || null,

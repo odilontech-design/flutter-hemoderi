@@ -17,7 +17,7 @@ import { BotaoCheckin } from "../../AcoesAtendimento";
 import { houveAtraso } from "@/lib/atraso";
 import { CompartilharWhatsapp } from "@/components/CompartilharWhatsapp";
 import { textoDoRelatorio } from "@/lib/relatorio-texto";
-import { atendimentoMandic } from "@/lib/mandic";
+import { pedeOrcamentoEPg } from "@/lib/mandic";
 import { FormularioRelatorio } from "./FormularioRelatorio";
 
 export const dynamic = "force-dynamic";
@@ -57,7 +57,7 @@ export default async function Relatorio({
   if (!pedido) notFound();
 
   const config = await parametros();
-  const mandic = await atendimentoMandic(prisma, pedido.clinicaId);
+  const mandic = await pedeOrcamentoEPg(prisma, pedido.clinicaId);
   const revelado = localVisivel(pedido, config.horasRevelarLocal);
   // Relatório aprovado: a página vira a leitura do que foi enviado (ata de
   // 13/10 — "resumo detalhado ao clicar no relatório"), sem formulário. Já
