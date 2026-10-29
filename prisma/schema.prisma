@@ -132,7 +132,7 @@ model Usuario {
 model Parametros {
   id   String @id @default("hemoderi")
   nome String @default("Hemoderi")
-  cnpj String @default("35.272.539/0001-89")
+  cnpj String @default("35.272.539/0001-84")
 
   /// Número da central usado nos disparos de confirmação e lembrete.
   whatsapp String?
