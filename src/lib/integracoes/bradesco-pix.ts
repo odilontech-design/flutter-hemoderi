@@ -35,6 +35,8 @@
  */
 
 import https from "node:https";
+import tls from "node:tls";
+import forge from "node-forge";
 import { prisma } from "@/lib/prisma";
 
 // ─── Configuração ─────────────────────────────────────────────────────────
@@ -63,14 +65,74 @@ function pem(valor: string): string {
   return valor.includes("\\n") ? valor.replace(/\\n/g, "\n") : valor;
 }
 
+/**
+ * Abre o .pfx com o próprio Node e, se ele recusar ("Unsupported PKCS12 PFX
+ * data"), converte para PEM em JavaScript puro. Os .pfx das autoridades
+ * brasileiras costumam vir com cifras antigas (RC2-40, 3DES) que o OpenSSL 3
+ * do Node não abre sem a opção "legacy" — e ligar essa opção no servidor é
+ * pior do que ler o arquivo com uma biblioteca.
+ */
+export function pfxParaPem(pfx: Buffer, senha?: string): { cert: string; key: string } {
+  const asn1 = forge.asn1.fromDer(forge.util.createBuffer(pfx.toString("binary")));
+  const p12 = forge.pkcs12.pkcs12FromAsn1(asn1, false, senha ?? "");
+
+  const chaves = [
+    ...(p12.getBags({ bagType: forge.pki.oids.pkcs8ShroudedKeyBag })[forge.pki.oids.pkcs8ShroudedKeyBag] ?? []),
+    ...(p12.getBags({ bagType: forge.pki.oids.keyBag })[forge.pki.oids.keyBag] ?? []),
+  ];
+  const certificados = p12.getBags({ bagType: forge.pki.oids.certBag })[forge.pki.oids.certBag] ?? [];
+  const chave = chaves[0]?.key;
+  if (!chave) throw new Error("O .pfx não tem chave privada.");
+
+  // O certificado da empresa é o que casa com a chave; os demais são a cadeia.
+  const modulo = (chave as { n?: { toString(base: number): string } }).n?.toString(16);
+  const todos = certificados.map((c) => c.cert).filter((c): c is NonNullable<typeof c> => Boolean(c));
+  const proprio = todos.find((c) => (c.publicKey as { n?: { toString(base: number): string } }).n?.toString(16) === modulo) ?? todos[0];
+  if (!proprio) throw new Error("O .pfx não tem certificado.");
+  const cadeia = todos.filter((c) => c !== proprio);
+
+  return {
+    cert: [proprio, ...cadeia].map((c) => forge.pki.certificateToPem(c)).join("\n"),
+    key: forge.pki.privateKeyToPem(chave),
+  };
+}
+
+let certificadoEmCache: { chave: string; valor: { cert: string; key: string } } | null = null;
+
 /** O certificado do TLS mútuo, em qualquer dos dois formatos aceitos. */
 export function certificadoDoBradesco(): { pfx: Buffer; passphrase?: string } | { cert: string; key: string } | null {
   const pfx = process.env.BRADESCO_CERTIFICADO_PFX?.trim();
-  if (pfx) return { pfx: Buffer.from(pfx, "base64"), passphrase: process.env.BRADESCO_CERTIFICADO_SENHA };
+  if (pfx) {
+    const senha = process.env.BRADESCO_CERTIFICADO_SENHA;
+    const bytes = Buffer.from(pfx, "base64");
+    return { pfx: bytes, passphrase: senha };
+  }
   const cert = process.env.BRADESCO_CERTIFICADO?.trim();
   const key = process.env.BRADESCO_CHAVE_PRIVADA?.trim();
   if (cert && key) return { cert: pem(cert), key: pem(key) };
   return null;
+}
+
+/**
+ * O que vai de fato para o TLS: o par PEM. Para o .pfx, tenta o caminho do
+ * Node e cai para a conversão quando ele recusa — o resultado fica em cache.
+ */
+export function certificadoParaTls(): { cert: string; key: string } | { pfx: Buffer; passphrase?: string } | null {
+  const bruto = certificadoDoBradesco();
+  if (!bruto || !("pfx" in bruto)) return bruto;
+  const chave = `${bruto.pfx.length}:${bruto.passphrase ?? ""}`;
+  if (certificadoEmCache?.chave === chave) return certificadoEmCache.valor;
+  try {
+    // Prova que o Node abre: o createSecureContext é o mesmo caminho do https.request.
+    tls.createSecureContext({ pfx: bruto.pfx, passphrase: bruto.passphrase });
+    return bruto;
+  } catch (erro) {
+    const mensagem = erro instanceof Error ? erro.message : String(erro);
+    if (/mac verify failure|bad decrypt|wrong password/i.test(mensagem)) throw new Error("Senha do certificado (.pfx) incorreta.");
+    const valor = pfxParaPem(bruto.pfx, bruto.passphrase);
+    certificadoEmCache = { chave, valor };
+    return valor;
+  }
 }
 
 export function configuradoBradesco(): boolean {
@@ -94,7 +156,12 @@ function chamar(
   url: string,
   opcoes: { metodo: string; cabecalhos?: Record<string, string>; corpo?: string }
 ): Promise<RespostaHttp> {
-  const certificado = certificadoDoBradesco();
+  let certificado;
+  try {
+    certificado = certificadoParaTls();
+  } catch (erro) {
+    return Promise.reject(erro);
+  }
   if (!certificado) return Promise.reject(new Error("Certificado digital do Bradesco não configurado."));
   return new Promise((resolver, rejeitar) => {
     const requisicao = https.request(

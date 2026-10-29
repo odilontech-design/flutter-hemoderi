@@ -70,3 +70,30 @@ test("endereços: homologação por padrão, produção quando pedido", () => {
     delete process.env.BRADESCO_AMBIENTE;
   }
 });
+
+test("pfx com cifras antigas (RC2/3DES, como os das autoridades brasileiras) abre pela conversão", async (t) => {
+  const { execFileSync } = await import("node:child_process");
+  const { mkdtempSync, readFileSync, rmSync } = await import("node:fs");
+  const { tmpdir } = await import("node:os");
+  const { join } = await import("node:path");
+  const { createSecureContext } = await import("node:tls");
+  const dir = mkdtempSync(join(tmpdir(), "pfx-"));
+  try {
+    try {
+      execFileSync("openssl", ["req", "-x509", "-newkey", "rsa:2048", "-nodes", "-keyout", join(dir, "k.pem"), "-out", join(dir, "c.pem"), "-subj", "/CN=Teste", "-days", "2"], { stdio: "ignore" });
+      execFileSync("openssl", ["pkcs12", "-export", "-legacy", "-certpbe", "PBE-SHA1-RC2-40", "-keypbe", "PBE-SHA1-3DES", "-macalg", "sha1", "-inkey", join(dir, "k.pem"), "-in", join(dir, "c.pem"), "-out", join(dir, "a.pfx"), "-passout", "pass:segredo"], { stdio: "ignore" });
+    } catch {
+      t.skip("openssl indisponível neste ambiente");
+      return;
+    }
+    const { pfxParaPem } = await import("../src/lib/integracoes/bradesco-pix");
+    const par = pfxParaPem(readFileSync(join(dir, "a.pfx")), "segredo");
+    assert.match(par.cert, /^-----BEGIN CERTIFICATE-----/);
+    assert.match(par.key, /PRIVATE KEY-----/);
+    // O par convertido é aceito pelo TLS.
+    createSecureContext({ cert: par.cert, key: par.key });
+    assert.throws(() => pfxParaPem(readFileSync(join(dir, "a.pfx")), "errada"));
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
