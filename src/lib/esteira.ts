@@ -165,7 +165,7 @@ export function etapaPorChave(chave: string | undefined): Etapa | undefined {
 const ETAPAS_DO_PERFIL: Partial<Record<PerfilInterno, string[]>> = {
   COMERCIAL: ["triagem", "alocados", "fechados", "cancelados", "todos"],
   ATENDENTE: ["triagem", "alocados", "fechados", "cancelados", "todos"],
-  LOGISTICA: ["alocar", "alocados", "aguardando-aceite", "sem-relatorio", "cancelados"],
+  LOGISTICA: ["triagem", "alocar", "alocados", "aguardando-aceite", "sem-relatorio", "cancelados"],
   // Desde a ata de 20/10 o pós-venda também lança e confirma os pedidos do dia.
   POS_VENDA: ["conferir", "sem-relatorio", "devolvidos", "triagem", "fechados", "todos"],
 };

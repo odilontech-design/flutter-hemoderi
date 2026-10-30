@@ -73,7 +73,7 @@ test("a etapa `todos` não filtra nada", () => {
 
 test("cada perfil vê só as etapas do seu setor; gestão e responsável veem tudo", () => {
   const chaves = (perfil: Parameters<typeof etapasDoPerfil>[0]) => etapasDoPerfil(perfil).map((e) => e.chave);
-  assert.deepEqual(chaves("LOGISTICA"), ["alocar", "alocados", "aguardando-aceite", "sem-relatorio", "cancelados"]);
+  assert.deepEqual(chaves("LOGISTICA"), ["triagem", "alocar", "alocados", "aguardando-aceite", "sem-relatorio", "cancelados"]);
   assert.deepEqual(chaves("POS_VENDA"), ["triagem", "conferir", "sem-relatorio", "devolvidos", "fechados", "todos"]);
   assert.equal(chaves("COMERCIAL").includes("alocar"), false);
   assert.equal(chaves("COMERCIAL").includes("triagem"), true);

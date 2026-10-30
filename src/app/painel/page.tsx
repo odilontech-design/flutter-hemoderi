@@ -370,7 +370,7 @@ export default async function Hoje({ searchParams }: { searchParams: { servico?:
                       </td>
                       <td className="py-2 pr-3 text-gray-500">{pedido.servico.nome}</td>
                       <td className="py-2 pr-3">
-                        {pedido.profissional?.nome ?? <span className="text-red-600 font-semibold">a alocar</span>}
+                        {pedido.profissional?.nome ?? <span className="text-red-600 font-semibold">{pedido.status === "SOLICITADO" ? "a confirmar" : "a alocar"}</span>}
                         {pedido.status === "ALOCADO" && (
                           <div className={`text-[10px] font-semibold ${pedido.aceitoEm ? "text-green-700" : "text-amber-700"}`}>
                             {pedido.aceitoEm ? "aceitou" : "aguardando aceite"}
@@ -440,7 +440,7 @@ export default async function Hoje({ searchParams }: { searchParams: { servico?:
                     <td className="py-2 pr-3">{pedido.clinica.nome}</td>
                     <td className="py-2 pr-3 text-gray-500">{pedido.servico.nome}</td>
                     <td className="py-2 pr-3">
-                      {pedido.profissional?.nome ?? <span className="text-gray-300">a alocar</span>}
+                      {pedido.profissional?.nome ?? <span className="text-gray-300">{pedido.status === "SOLICITADO" ? "a confirmar" : "a alocar"}</span>}
                     </td>
                     <td className="py-2 pr-3">
                       <SeloStatus status={pedido.status} />

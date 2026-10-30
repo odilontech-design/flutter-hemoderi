@@ -525,8 +525,8 @@ async function transicionar(pedidoId: string, para: StatusPedido, usuarioId: str
  */
 export async function confirmarPedido(pedidoId: string): Promise<Resultado> {
   const sessao = await exigirInterno();
-  if (!perfilPermite(sessao.perfil, "COMERCIAL", "ATENDENTE", "POS_VENDA")) {
-    return { ok: false, erro: "A triagem é do comercial — quem confirma o agendamento é quem atende a clínica." };
+  if (!perfilPermite(sessao.perfil, "COMERCIAL", "ATENDENTE", "POS_VENDA", "LOGISTICA")) {
+    return { ok: false, erro: "Seu perfil não confirma agendamentos." };
   }
   const resultado = await transicionar(pedidoId, "CONFIRMADO", sessao.usuarioId);
   if (resultado.ok) {
@@ -606,6 +606,7 @@ async function alocarNaTransacao(
       horaInicio: pedido.horaInicio,
       duracaoMin: pedido.duracaoMin,
       ignorarPedidoId: pedido.id,
+      enderecoId: pedido.enderecoId,
     },
     tx
   );
@@ -627,9 +628,12 @@ async function alocarNaTransacao(
         tx
       )
     : null;
-  if (reservaEquipamento && !equipamentoId) {
-    return { ok: false as const, erro: "Nenhum equipamento livre nesse horário." };
-  }
+  // Sem equipamento livre a logística aloca mesmo assim: o profissional não pode
+  // ficar parado esperando estoque, e o aviso lembra de conferir o material.
+  const avisoDeEquipamento =
+    reservaEquipamento && !equipamentoId
+      ? ["Nenhum equipamento livre nesse horário — profissional alocado sem reservar equipamento. Confira o estoque."]
+      : [];
 
   const repasse = await repasseDoPedido(profissionalId, pedido.servicoId, pedido.valorServicoCentavos, {
     clinicaId: pedido.clinicaId,
@@ -650,7 +654,7 @@ async function alocarNaTransacao(
   return {
     ok: true as const,
     repasseOrigem: repasse.origem,
-    avisos: impedimentos.filter((i) => !i.bloqueante).map((i) => i.mensagem),
+    avisos: [...impedimentos.filter((i) => !i.bloqueante).map((i) => i.mensagem), ...avisoDeEquipamento],
   };
 }
 
@@ -679,6 +683,13 @@ export async function alocarPedido(pedidoId: string, profissionalId: string, aju
   }
   const ajuda = lerAjudaDeCusto(ajudaCusto);
   if (!ajuda.ok) return ajuda;
+
+  const atual = await prisma.pedido.findUnique({ where: { id: pedidoId }, select: { status: true } });
+  // A logística também confirma: alocar um "Solicitado" confirma e aloca num passo só.
+  if (atual?.status === "SOLICITADO") {
+    const confirmado = await confirmarPedido(pedidoId);
+    if (!confirmado.ok) return confirmado;
+  }
 
   const pedido = await prisma.pedido.findUnique({ where: { id: pedidoId }, include: SELECAO_PARA_ALOCAR });
   if (!pedido) return { ok: false, erro: "Pedido não encontrado." };

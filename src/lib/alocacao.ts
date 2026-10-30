@@ -112,6 +112,7 @@ export async function verificarAlocacao(
     duracaoMin,
     ignorarPedidoId,
     ignorarGrupoId,
+    enderecoId,
   }: {
     clinicaId: string;
     profissionalId?: string | null;
@@ -122,6 +123,8 @@ export async function verificarAlocacao(
     ignorarPedidoId?: string;
     /** Remarcando um agendamento com vários serviços: nenhum deles conta como conflito. */
     ignorarGrupoId?: string;
+    /** Local do atendimento: a sala só conta quem está no mesmo endereço (null = endereço principal). */
+    enderecoId?: string | null;
   },
   bd: ClientePrisma = prisma
 ): Promise<Impedimento[]> {
@@ -148,6 +151,7 @@ export async function verificarAlocacao(
       clinicaId: true,
       profissionalId: true,
       equipamentoId: true,
+      enderecoId: true,
     },
   });
 
@@ -181,7 +185,9 @@ export async function verificarAlocacao(
     where: { id: clinicaId },
     select: { salas: true, nome: true },
   });
-  const ocupacaoDaClinica = sobrepostos.filter((p) => p.clinicaId === clinicaId).length;
+  const ocupacaoDaClinica = sobrepostos.filter(
+    (p) => p.clinicaId === clinicaId && (enderecoId === undefined || p.enderecoId === enderecoId)
+  ).length;
   if (clinica && ocupacaoDaClinica >= clinica.salas) {
     impedimentos.push({
       tipo: "SALA",
