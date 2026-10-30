@@ -35,7 +35,7 @@ export default async function HistoricoEAvaliacoes() {
         clinica: { select: { nome: true, endereco: true, numero: true, complemento: true, bairro: true, cidade: true, uf: true } },
         endereco: { select: { rotulo: true, endereco: true, numero: true, complemento: true, bairro: true, cidade: true, uf: true } },
         avaliacao: { select: { nota: true } },
-        fatura: { select: { status: true } },
+        fatura: { select: { id: true, status: true } },
         // O que o profissional declarou ter recebido no ato conta como pago.
         relatorio: { select: { recebimento: true, aprovadoEm: true } },
       },
@@ -147,9 +147,26 @@ export default async function HistoricoEAvaliacoes() {
                         Pagamento pendente
                       </span>
                     ) : pagamento === "pago" ? (
-                      <span className="text-[10px] font-semibold px-2 py-1 rounded-full bg-emerald-100 text-emerald-800">
-                        Pago
-                      </span>
+                      <>
+                        <span className="text-[10px] font-semibold px-2 py-1 rounded-full bg-emerald-100 text-emerald-800">
+                          Pago
+                        </span>
+                        {/* Duas opções de recibo (30/10): o do atendimento e, quando
+                            ele foi pago numa fatura mensal, o da fatura. */}
+                        <span className="mt-1 flex flex-col gap-0.5 text-[10px] font-semibold">
+                          <Link href={`/recibo/agendamento/${primeiro.id}`} className="text-bordo hover:underline">
+                            Recibo do atendimento
+                          </Link>
+                          {itens.find((p) => p.fatura?.status === "PAGA") && (
+                            <Link
+                              href={`/recibo/fatura/${itens.find((p) => p.fatura?.status === "PAGA")!.fatura!.id}`}
+                              className="text-bordo hover:underline"
+                            >
+                              Recibo da fatura
+                            </Link>
+                          )}
+                        </span>
+                      </>
                     ) : (
                       <span className="text-gray-300">—</span>
                     )}

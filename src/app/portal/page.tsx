@@ -184,7 +184,14 @@ export default async function MeusAgendamentos() {
                           Pagar com Pix
                         </Link>
                       )}
-                      {primeiro.pixPagoEm && <span className="text-[10px] font-semibold text-green-700">Pix pago ✓</span>}
+                      {primeiro.pixPagoEm && (
+                        <>
+                          <span className="text-[10px] font-semibold text-green-700">Pix pago ✓</span>
+                          <Link href={`/recibo/agendamento/${primeiro.id}`} className="text-[11px] font-semibold text-bordo hover:underline whitespace-nowrap">
+                            Gerar recibo
+                          </Link>
+                        </>
+                      )}
                       <AcoesClinica pedidoId={primeiro.id} />
                       {statusDaVisita !== "SOLICITADO" && (
                         <AdicionarAgenda
