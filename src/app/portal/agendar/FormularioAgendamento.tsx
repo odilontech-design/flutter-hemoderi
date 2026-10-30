@@ -154,6 +154,7 @@ function FormularioBase({
   clinicaNome,
   whatsappCentral,
   servicoInicialId,
+  localInicialId = null,
   telefoneClinica,
   doutores,
   equipe,
@@ -166,6 +167,8 @@ function FormularioBase({
   clinicaNome: string;
   whatsappCentral: string | null;
   servicoInicialId: string | null;
+  /** Local já escolhido no catálogo ("" = endereço principal); null = escolher aqui. */
+  localInicialId?: string | null;
   /** O telefone do cadastro, que já vem preenchido no contato da clínica. */
   telefoneClinica: string;
   /** Doutores cadastrados na clínica (Configurações): sugeridos no campo do doutor. */
@@ -188,7 +191,11 @@ function FormularioBase({
   const enderecosHref = equipe?.enderecosHref ?? "/portal/enderecos";
 
   const [localId, setLocalId] = useState(
-    equipe?.localInicialId && locais.some((l) => l.id === equipe.localInicialId) ? equipe.localInicialId : (locais[0]?.id ?? "")
+    equipe?.localInicialId && locais.some((l) => l.id === equipe.localInicialId)
+      ? equipe.localInicialId
+      : localInicialId !== null && locais.some((l) => l.id === localInicialId)
+        ? localInicialId
+        : (locais[0]?.id ?? "")
   );
   // Endereço informado agora pela equipe: entra na lista quando a página
   // recarrega os locais, e já fica escolhido. Vai também para a URL, para a
@@ -232,7 +239,7 @@ function FormularioBase({
   // 4 informações. Quem chega pelo catálogo com um serviço escolhido já começa
   // nos serviços.
   const temEtapaDeLocal = locais.length > 1;
-  const [passo, setPasso] = useState(() => (temEtapaDeLocal && !servicoInicialId ? 1 : 2));
+  const [passo, setPasso] = useState(() => (temEtapaDeLocal && !servicoInicialId && localInicialId === null ? 1 : 2));
   const [primeiraRenderizacao, setPrimeiraRenderizacao] = useState(true);
   useEffect(() => {
     if (primeiraRenderizacao) {

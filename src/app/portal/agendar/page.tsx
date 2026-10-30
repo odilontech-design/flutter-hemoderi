@@ -14,7 +14,7 @@ import { FormularioAgendamento, type ServicoDoCarrinho } from "./FormularioAgend
 
 export const dynamic = "force-dynamic";
 
-export default async function Agendar({ searchParams }: { searchParams: { servico?: string } }) {
+export default async function Agendar({ searchParams }: { searchParams: { servico?: string; local?: string } }) {
   const sessao = await exigirClinica();
 
   const [clinica, locais, tabelaIds, config, doutores] = await Promise.all([
@@ -156,6 +156,7 @@ export default async function Agendar({ searchParams }: { searchParams: { servic
         clinicaNome={sessao.clinicaNome}
         whatsappCentral={config.whatsapp}
         servicoInicialId={searchParams.servico ?? null}
+        localInicialId={searchParams.local ? (searchParams.local === "principal" ? "" : searchParams.local) : null}
         telefoneClinica={formatarTelefone(clinica?.telefone ?? "")}
         doutores={doutores.map((d) => d.pessoa.nome)}
       />
