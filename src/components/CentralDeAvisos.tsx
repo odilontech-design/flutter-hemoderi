@@ -26,6 +26,7 @@ const chaveDoMarcador = (area: string, chave: string) => `hemoderi:aviso:${area}
  */
 export function CentralDeAvisos({ area }: { area: "painel" | "profissional" }) {
   const [avisos, setAvisos] = useState<Aviso[]>([]);
+  const [todosVisiveis, setTodosVisiveis] = useState(false);
   // O que já foi dado por lido nesta sessão, para o aviso não voltar a cada
   // consulta depois de fechado, mesmo sem localStorage.
   const lidos = useRef<Record<string, string>>({});
@@ -84,6 +85,9 @@ export function CentralDeAvisos({ area }: { area: "painel" | "profissional" }) {
   }, [area]);
 
   if (avisos.length === 0) return null;
+  // Um aviso por vez (30/10): três cartões empilhados cobriam meia tela do
+  // celular. Os outros ficam atrás de "+N avisos", a um toque.
+  const visiveis = todosVisiveis ? avisos : avisos.slice(0, 1);
 
   return (
     <div
@@ -94,7 +98,7 @@ export function CentralDeAvisos({ area }: { area: "painel" | "profissional" }) {
         area === "profissional" ? "bottom-20 sm:bottom-24" : "bottom-4 sm:bottom-6"
       }`}
     >
-      {avisos.map((aviso) => (
+      {visiveis.map((aviso) => (
         <div key={aviso.chave} className="bg-white border border-bordo/30 rounded-2xl shadow-lg p-4">
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
@@ -105,7 +109,7 @@ export function CentralDeAvisos({ area }: { area: "painel" | "profissional" }) {
               type="button"
               onClick={() => marcarComoLido(aviso)}
               aria-label="Fechar aviso"
-              className="text-gray-400 hover:text-gray-600 text-lg leading-none shrink-0"
+              className="text-gray-400 hover:text-gray-600 text-lg leading-none shrink-0 w-8 h-8 -mt-1.5 -mr-1.5 flex items-center justify-center rounded-full"
             >
               ×
             </button>
@@ -119,6 +123,15 @@ export function CentralDeAvisos({ area }: { area: "painel" | "profissional" }) {
           </Link>
         </div>
       ))}
+      {avisos.length > 1 && (
+        <button
+          type="button"
+          onClick={() => setTodosVisiveis((v) => !v)}
+          className="self-end bg-white border border-bordo/30 rounded-full shadow px-3 py-1.5 text-[11px] font-semibold text-bordo"
+        >
+          {todosVisiveis ? "Mostrar só um" : `+${avisos.length - 1} aviso${avisos.length - 1 > 1 ? "s" : ""}`}
+        </button>
+      )}
     </div>
   );
 }

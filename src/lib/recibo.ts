@@ -87,3 +87,13 @@ export function pagadorDoRecibo(clinica: ClinicaDoRecibo): ReciboDados["pagador"
 export function totalDosItens(itens: ItemDoRecibo[]): number {
   return itens.reduce((soma, i) => soma + i.totalCentavos, 0);
 }
+
+/**
+ * O que vai na discriminação (André, 30/10): "locação" e o nome do
+ * equipamento, só isso — como no modelo ("Locação de equipamento - Centrífuga
+ * para PRF"). Serviço sem equipamento (palestra, cobertura fotográfica) sai
+ * com o próprio nome.
+ */
+export function discriminacaoDoServico(servico: { nome: string; tipoEquipamento: string | null }): string {
+  return servico.tipoEquipamento ? `Locação de equipamento - ${servico.tipoEquipamento}` : servico.nome;
+}

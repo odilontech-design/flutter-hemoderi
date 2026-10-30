@@ -1,7 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { recebidoNoAto } from "@/lib/recebimento";
 import { formatarDataCurta } from "@/lib/data";
-import { numeroDoRecibo, pagadorDoRecibo, totalDosItens, type ReciboDados } from "@/lib/recibo";
+import { discriminacaoDoServico, numeroDoRecibo, pagadorDoRecibo, totalDosItens, type ReciboDados } from "@/lib/recibo";
 
 const CLINICA = {
   nome: true,
@@ -35,7 +35,7 @@ export async function reciboDoAgendamento(pedidoId: string, clinicaId: string | 
     where: base.grupoId ? { grupoId: base.grupoId } : { id: base.id },
     orderBy: [{ horaInicio: "asc" }, { numero: "asc" }],
     include: {
-      servico: { select: { nome: true } },
+      servico: { select: { nome: true, tipoEquipamento: true } },
       fatura: { select: { status: true, pagaEm: true } },
       relatorio: { select: { recebimento: true, aprovadoEm: true } },
       clinica: { select: CLINICA },
@@ -58,7 +58,7 @@ export async function reciboDoAgendamento(pedidoId: string, clinicaId: string | 
   const itens = ativos.map((p) => ({
     unidade: "Proc",
     quantidade: p.quantidade,
-    descricao: p.servico.nome,
+    descricao: discriminacaoDoServico(p.servico),
     unitarioCentavos: p.quantidade > 0 ? Math.round(p.valorServicoCentavos / p.quantidade) : p.valorServicoCentavos,
     totalCentavos: p.valorServicoCentavos,
   }));
@@ -86,7 +86,7 @@ export async function reciboDaFatura(faturaId: string, clinicaId: string | null)
       pedidos: {
         where: { status: "REALIZADO" },
         orderBy: [{ data: "asc" }, { horaInicio: "asc" }],
-        include: { servico: { select: { nome: true } } },
+        include: { servico: { select: { nome: true, tipoEquipamento: true } } },
       },
     },
   });
@@ -96,7 +96,7 @@ export async function reciboDaFatura(faturaId: string, clinicaId: string | null)
   const itens = fatura.pedidos.map((p) => ({
     unidade: "Proc",
     quantidade: p.quantidade,
-    descricao: `${p.servico.nome} (${formatarDataCurta(p.data)})`,
+    descricao: `${discriminacaoDoServico(p.servico)} (${formatarDataCurta(p.data)})`,
     unitarioCentavos: p.quantidade > 0 ? Math.round(p.valorServicoCentavos / p.quantidade) : p.valorServicoCentavos,
     totalCentavos: p.valorServicoCentavos,
   }));

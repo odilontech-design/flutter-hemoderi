@@ -24,9 +24,24 @@ function ponto(grau: number, raio: number): { x: number; y: number } {
   return { x: CENTRO + raio * Math.cos(rad), y: CENTRO + raio * Math.sin(rad) };
 }
 
+/** Enquanto digita: "1745" → "17:45" (os dois pontos entram sozinhos). */
+export function horaDigitada(texto: string): string {
+  const d = texto.replace(/\D/g, "").slice(0, 4);
+  return d.length <= 2 ? d : `${d.slice(0, 2)}:${d.slice(2)}`;
+}
+
+/** Ao sair do campo: "9" → "09:00", "14" → "14:00", "930" → "09:30". */
+export function horaAoSair(texto: string): string {
+  const d = texto.replace(/\D/g, "").slice(0, 4);
+  if (d.length === 1 || d.length === 2) return `${d.padStart(2, "0")}:00`;
+  if (d.length === 3) return `0${d[0]}:${d.slice(1)}`;
+  return horaDigitada(d);
+}
+
 /**
- * Horário num relógio analógico (pedido do André, 27/10): toque na hora, depois
- * no minuto — o ponteiro acompanha o dedo ou o mouse. Vale o mesmo `value`
+ * Horário digitado OU escolhido no relógio analógico (André, 27/10 e 30/10:
+ * "o horário deveria ser texto ou clicar no relógio"). Digitar "1430" já vale
+ * 14:30; o ícone abre o relógio — toque na hora, depois no minuto. Vale o mesmo `value`
  * "HH:MM" do campo de horário comum, então o resto do formulário não muda.
  *
  * Com `name`, vai junto no envio do formulário (uso sem estado do pai).
@@ -57,6 +72,20 @@ export function CampoHora({
   const [pm, setPm] = useState(false);
   const [minuto, setMinuto] = useState(0);
   const raiz = useRef<HTMLDivElement>(null);
+  // O que está no campo de texto, inclusive incompleto ("14:"), enquanto a
+  // pessoa digita; o valor do formulário só muda quando vira um HH:MM válido.
+  const [texto, setTexto] = useState(atual);
+  useEffect(() => setTexto(atual), [atual]);
+
+  function digitar(bruto: string) {
+    const formatado = horaDigitada(bruto);
+    setTexto(formatado);
+    const valido = lerHora(formatado) ? formatado : "";
+    if (valido !== atual) {
+      if (!controlado) setInterno(valido);
+      onChange?.(valido);
+    }
+  }
   const face = useRef<SVGSVGElement>(null);
 
   function abrir() {
@@ -111,17 +140,34 @@ export function CampoHora({
   return (
     <div ref={raiz} className={`relative inline-block ${className}`}>
       {name && <input type="hidden" name={name} value={atual} />}
-      <button
-        type="button"
-        onClick={abrir}
-        aria-haspopup="dialog"
-        aria-expanded={aberto}
-        aria-label={`${rotulo}: ${atual || "não escolhido"}`}
-        className="inline-flex w-40 items-center justify-between gap-2 rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-800 hover:border-bordo/50"
-      >
-        <span className={atual ? "" : "text-gray-400"}>{atual || "--:--"}</span>
-        <span aria-hidden>🕒</span>
-      </button>
+      <div className="inline-flex w-40 items-center rounded-lg border border-gray-300 bg-white focus-within:border-bordo/60">
+        <input
+          type="text"
+          inputMode="numeric"
+          autoComplete="off"
+          placeholder="--:--"
+          aria-label={rotulo}
+          value={texto}
+          onChange={(e) => digitar(e.target.value)}
+          onBlur={() => {
+            if (lerHora(texto)) return;
+            const completo = horaAoSair(texto);
+            if (texto && lerHora(completo)) digitar(completo);
+            else setTexto(atual);
+          }}
+          className="min-w-0 flex-1 bg-transparent px-3 py-2 text-sm text-gray-800 outline-none"
+        />
+        <button
+          type="button"
+          onClick={abrir}
+          aria-haspopup="dialog"
+          aria-expanded={aberto}
+          aria-label="Escolher no relógio"
+          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-r-lg hover:bg-gray-50"
+        >
+          <span aria-hidden>🕒</span>
+        </button>
+      </div>
       {required && !atual && <input tabIndex={-1} aria-hidden required value="" onChange={() => undefined} className="absolute inset-0 -z-10 opacity-0" />}
 
       {aberto && (
@@ -144,7 +190,7 @@ export function CampoHora({
                   onClick={() => setPm(tarde)}
                   className={`px-2.5 py-1.5 ${pm === tarde ? "bg-bordo text-white" : "bg-white text-gray-600"}`}
                 >
-                  {tarde ? "PM" : "AM"}
+                  {tarde ? "Tarde" : "Manhã"}
                 </button>
               ))}
             </div>

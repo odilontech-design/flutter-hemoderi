@@ -43,3 +43,77 @@ html {
     font-size: 16px !important;
   }
 }
+
+/* Tabelas no celular (30/10): cada linha vira um cartão de duas colunas, com o
+   nome da coluna em cima de cada valor (data-rotulo, ver RotulosDaTabela). Sem
+   rolagem lateral escondendo colunas — o que existe aparece. */
+@media (max-width: 639px) {
+  table.tabela-cartoes,
+  table.tabela-cartoes tbody {
+    display: block;
+    min-width: 0;
+    width: 100%;
+  }
+  table.tabela-cartoes thead {
+    display: none;
+  }
+  table.tabela-cartoes tbody tr {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px 12px;
+    border: 1px solid #e5e7eb;
+    border-radius: 12px;
+    padding: 12px;
+    margin-bottom: 10px;
+    background: #fff;
+  }
+  table.tabela-cartoes tbody td:not(.hidden) {
+    display: block;
+    padding: 0 !important;
+    border: 0;
+    min-width: 0;
+    white-space: normal !important;
+    overflow-wrap: anywhere;
+    text-align: left !important;
+  }
+  table.tabela-cartoes tbody td[data-rotulo]:not([data-rotulo=""])::before {
+    content: attr(data-rotulo);
+    display: block;
+    font-size: 10px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    color: #9ca3af;
+    margin-bottom: 2px;
+  }
+  /* Ações, colunas sem título e a que ocupa a linha inteira vão de ponta a ponta. */
+  table.tabela-cartoes tbody td[data-rotulo=""],
+  table.tabela-cartoes tbody td[data-rotulo="Ações"],
+  table.tabela-cartoes tbody td[data-rotulo="Sua avaliação"],
+  table.tabela-cartoes tbody td[colspan] {
+    grid-column: 1 / -1;
+  }
+}
+
+/* Alvos de toque no celular (30/10): caixas de seleção e links de texto
+   ("Ver resumo", "Editar", valores clicáveis) tinham 13–17px de altura — dava
+   para errar o dedo. Sem mudar o desenho, a área tocável cresce. */
+@media (max-width: 639px) {
+  input[type="checkbox"],
+  input[type="radio"] {
+    width: 20px;
+    height: 20px;
+  }
+  a[class*="hover:underline"]:not(.block):not(.flex):not(.grid),
+  button[class*="hover:underline"]:not(.block):not(.flex):not(.grid),
+  table.tabela-cartoes td a:not(.block):not(.flex),
+  table.tabela-cartoes td button:not(.block):not(.flex) {
+    min-height: 36px;
+    display: inline-flex;
+    align-items: center;
+  }
+  /* O botão flutuante da central não cobre o fim da página. */
+  main {
+    padding-bottom: 6rem !important;
+  }
+}

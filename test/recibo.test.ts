@@ -46,3 +46,20 @@ test("total soma os itens, desconto incluído", () => {
     55000
   );
 });
+
+import { horaAoSair, horaDigitada } from "../src/components/CampoHora";
+test("horário digitado vira HH:MM", () => {
+  assert.equal(horaDigitada("1"), "1");
+  assert.equal(horaDigitada("143"), "14:3");
+  assert.equal(horaDigitada("1430"), "14:30");
+  assert.equal(horaDigitada("14:30"), "14:30");
+  assert.equal(horaAoSair("9"), "09:00");
+  assert.equal(horaAoSair("14"), "14:00");
+  assert.equal(horaAoSair("930"), "09:30");
+});
+
+import { discriminacaoDoServico } from "../src/lib/recibo";
+test("discriminação: locação e o nome do equipamento", () => {
+  assert.equal(discriminacaoDoServico({ nome: "I-PRF Day", tipoEquipamento: "Centrífuga PRF" }), "Locação de equipamento - Centrífuga PRF");
+  assert.equal(discriminacaoDoServico({ nome: "Palestra", tipoEquipamento: null }), "Palestra");
+});

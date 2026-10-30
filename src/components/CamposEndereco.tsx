@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { Campo, Rotulo } from "@/components/ui";
 import { cepValido, formatarCep } from "@/lib/documento";
 
@@ -52,9 +52,47 @@ export function CamposEndereco({
     // eslint-disable-next-line react-hooks/exhaustive-deps -- só a mudança de `encontrado` interessa, não a identidade da função.
   }, [encontrado]);
 
+  // O CEP que gerou o endereço na tela: digitar outro apaga o anterior e busca
+  // de novo sozinho ao completar 8 dígitos (André, 30/10: "quando a pessoa
+  // digita um CEP errado ela não consegue trocar").
+  const consultado = useRef(String(inicial?.cep ?? "").replace(/\D/g, ""));
+  const idDoCep = useId();
+
+  function trocarCep(valor: string) {
+    const formatado = formatarCep(valor);
+    setCep(formatado);
+    const limpo = formatado.replace(/\D/g, "");
+    if (limpo === consultado.current) return;
+    // Endereço de outro CEP não pode continuar na tela.
+    if (consultado.current) {
+      consultado.current = "";
+      setLogradouro("");
+      setBairro("");
+      setCidade("");
+      setUf("");
+      setEncontrado(false);
+      setManual(false);
+    }
+    setErro("");
+    if (limpo.length === 8) void buscar(limpo);
+  }
+
+  function limparCep() {
+    trocarCep("");
+    document.getElementById(idDoCep)?.focus();
+  }
+
+  function preencherAMao() {
+    setManual(true);
+    setEncontrado(true);
+    setErro("");
+  }
+
   async function buscar(valor: string) {
     const limpo = valor.replace(/\D/g, "");
     if (!cepValido(limpo)) return;
+    if (limpo === consultado.current && encontrado) return;
+    consultado.current = limpo;
 
     setBuscando(true);
     setErro("");
@@ -62,7 +100,7 @@ export function CamposEndereco({
       const resposta = await fetch(`https://viacep.com.br/ws/${limpo}/json/`);
       const dados = await resposta.json();
       if (dados.erro) {
-        setErro("CEP não encontrado. Confira o número.");
+        setErro("CEP não encontrado. Corrija o número ou preencha o endereço à mão.");
         setEncontrado(false);
         setManual(false);
         return;
@@ -72,7 +110,8 @@ export function CamposEndereco({
       setCidade(dados.localidade ?? "");
       setUf(dados.uf ?? "");
       setEncontrado(true);
-      setManual(false);
+      // CEP geral da cidade (sem rua): a rua e o bairro ficam para digitar.
+      setManual(!dados.logradouro);
     } catch {
       // Sem rede ou serviço fora: liberar a digitação é melhor que travar o
       // cadastro inteiro por causa de um serviço de terceiro.
@@ -124,16 +163,30 @@ export function CamposEndereco({
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
         <div>
           <Rotulo>CEP</Rotulo>
-          <Campo
-            name="cep"
-            inputMode="numeric"
-            required
-            value={cep}
-            maxLength={9}
-            placeholder="01310-100"
-            onChange={(e) => setCep(formatarCep(e.target.value))}
-            onBlur={(e) => buscar(e.target.value)}
-          />
+          <div className="relative">
+            <Campo
+              id={idDoCep}
+              name="cep"
+              inputMode="numeric"
+              required
+              value={cep}
+              maxLength={9}
+              placeholder="01310-100"
+              onChange={(e) => trocarCep(e.target.value)}
+              onBlur={(e) => buscar(e.target.value)}
+              className="pr-10"
+            />
+            {cep && (
+              <button
+                type="button"
+                onClick={limparCep}
+                aria-label="Apagar o CEP e digitar outro"
+                className="absolute right-1 top-1/2 -translate-y-1/2 h-8 w-8 rounded-full text-gray-400 hover:text-bordo hover:bg-gray-50 text-lg leading-none"
+              >
+                ×
+              </button>
+            )}
+          </div>
           <div className="text-[10px] text-gray-400 mt-1">
             {buscando ? "Buscando…" : "O endereço vem do CEP."}{" "}
             <button type="button" onClick={() => setProcurando((a) => !a)} className="font-semibold text-bordo hover:underline">
@@ -180,7 +233,16 @@ export function CamposEndereco({
         </div>
       )}
 
-      {erro && <div className="text-[11px] text-amber-700">{erro}</div>}
+      {erro && (
+        <div className="text-[11px] text-amber-700">
+          {erro}{" "}
+          {!manual && (
+            <button type="button" onClick={preencherAMao} className="font-semibold text-bordo hover:underline">
+              Preencher à mão
+            </button>
+          )}
+        </div>
+      )}
 
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
         <div>

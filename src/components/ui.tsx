@@ -1,5 +1,6 @@
 import type { StatusPedido } from "@prisma/client";
 import { COR_STATUS, ROTULO_STATUS } from "@/lib/pedido";
+import { RotulosDaTabela } from "@/components/RotulosDaTabela";
 
 export function Cartao({
   children,
@@ -115,8 +116,12 @@ export function Tabela({ cabecalho, children }: { cabecalho: ColunaTabela[]; chi
     // fora da tela sem nenhum indício de que dava para arrastar. Colunas
     // secundárias (marcadas com `ocultoMovel`) somem abaixo do breakpoint
     // `sm`, sobra sempre o identificador principal e as Ações.
+    // No celular (abaixo de `sm`) a tabela vira cartões — uma linha por
+    // cartão, cada valor com o nome da coluna (pedido do André, 30/10: com
+    // rolagem lateral a coluna do paciente e as ações ficavam fora da tela).
     <div className="overflow-x-auto min-w-0 -mx-5 px-5 sm:mx-0 sm:px-0">
-      <table className="min-w-full text-xs">
+      <RotulosDaTabela />
+      <table className="tabela-cartoes min-w-full text-xs">
         <thead>
           <tr className="text-left text-gray-500 border-b border-gray-200">
             {cabecalho.map((c, i) => {
