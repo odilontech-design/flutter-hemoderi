@@ -382,7 +382,8 @@ export default async function Hoje({ searchParams }: { searchParams: { servico?:
                           <span className="text-gray-300">—</span>
                         ) : chegada.tipo === "chegou" ? (
                           <span className={`text-[11px] font-semibold ${chegada.atrasado ? "text-amber-700" : "text-green-700"}`}>
-                            chegou{chegada.atrasado ? ` · ${formatarAtraso(chegada.minutos)} de atraso` : ""}
+                            chegou{pedido.checkinEm ? ` às ${pedido.checkinEm.toLocaleTimeString("pt-BR", { timeZone: "America/Sao_Paulo", hour: "2-digit", minute: "2-digit" })}` : ""}
+                            {chegada.atrasado ? ` · ${formatarAtraso(chegada.minutos)} de atraso` : ""}
                           </span>
                         ) : chegada.tipo === "atrasado" ? (
                           <div>

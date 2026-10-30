@@ -1,0 +1,19 @@
+name: Lembrete de chegada
+
+# O cron da Vercel (plano Hobby) só roda uma vez por dia; o lembrete de 15 minutos
+# precisa de frequência. Requer o secret CRON_SECRET (o mesmo valor da Vercel).
+on:
+  schedule:
+    - cron: "*/5 9-23 * * *"
+  workflow_dispatch:
+
+jobs:
+  lembrar:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Chamar a rotina
+        env:
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+        run: |
+          curl -fsS --max-time 60 -H "Authorization: Bearer ${CRON_SECRET}" \
+            "https://app.hemoderi.com.br/api/rotinas/chegada"

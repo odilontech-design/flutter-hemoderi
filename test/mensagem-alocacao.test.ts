@@ -33,3 +33,11 @@ test("alocação: fora de SP o endereço completo vai desde a alocação", () =>
   assert.match(texto, /Nome da Clínica: Clínica Sorriso/);
   assert.match(texto, /Cirurgião: Dr. Rodrigo Ferreira/);
 });
+
+test("lembrete de chegada: vai ao profissional, sem clínica, com o link do app", () => {
+  const texto = montarTexto("LEMBRETE_CHEGADA", pedido, 24);
+  assert.match(texto, /^Olá, Monica!/);
+  assert.match(texto, /Cheguei/);
+  assert.match(texto, /\/profissional/);
+  assert.doesNotMatch(texto, /Sorriso|SORRISO|Rodrigo/);
+});

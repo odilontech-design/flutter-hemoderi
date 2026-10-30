@@ -90,7 +90,7 @@ export function envioAutomaticoLigado(): boolean {
 }
 
 /** Os tipos que vão para o profissional — não passam pela suspensão. */
-export const TIPOS_PARA_O_PROFISSIONAL: TipoMensagem[] = ["ALOCACAO", "COBRANCA_RELATORIO"];
+export const TIPOS_PARA_O_PROFISSIONAL: TipoMensagem[] = ["ALOCACAO", "COBRANCA_RELATORIO", "LEMBRETE_CHEGADA"];
 
 /**
  * Os textos. Ficam no código, e não no banco, enquanto forem poucos e
@@ -156,6 +156,8 @@ export function montarTexto(tipo: TipoMensagem, pedido: DadosPedido, horasRevela
         `Agendamento ${aberto ? codigo : codigo.split("-").slice(0, 2).join("-")}.`,
       ].join("\n");
     }
+    case "LEMBRETE_CHEGADA":
+      return `Olá, ${pedido.profissional?.nome?.split(" ")[0] ?? ""}! Já são ${pedido.horaInicio} e a sua chegada ao atendimento de ${pedido.servico.nome} ainda não foi registrada. Ao chegar, toque em "Cheguei" no app: ${urlBase()}/profissional. Se não puder comparecer, avise a logística. Agendamento ${codigo.split("-").slice(0, 2).join("-")}.`;
     case "LEMBRETE":
       return `Lembrete: ${pedido.servico.nome} na ${pedido.clinica.nome} amanhã, ${quando}. Agendamento ${codigo}.`;
     case "RESULTADO":
@@ -179,7 +181,7 @@ async function horasDeSigilo(): Promise<number> {
 function destinatarioDe(tipo: TipoMensagem, pedido: DadosPedido): string {
   // A clínica recebe no contato que informou para ESTE agendamento ("contato da
   // clínica para confirmação", ata de 13/10); sem ele, no telefone do cadastro.
-  const paraProfissional = tipo === "ALOCACAO" || tipo === "COBRANCA_RELATORIO";
+  const paraProfissional = TIPOS_PARA_O_PROFISSIONAL.includes(tipo);
   const alvo = paraProfissional ? pedido.profissional?.telefone : pedido.contatoClinica || pedido.clinica.telefone;
   return normalizarTelefone(alvo);
 }
@@ -336,7 +338,7 @@ export async function despacharPendentes(
       continue;
     }
 
-    const nome = mensagem.tipo === "ALOCACAO" ? mensagem.pedido?.profissional?.nome : mensagem.pedido?.clinica.nome;
+    const nome = TIPOS_PARA_O_PROFISSIONAL.includes(mensagem.tipo) ? mensagem.pedido?.profissional?.nome : mensagem.pedido?.clinica.nome;
     let desfecho: ReturnType<typeof interpretarResposta>;
     try {
       const resposta = await fetch(url, {

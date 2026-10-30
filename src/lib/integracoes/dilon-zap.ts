@@ -98,7 +98,7 @@ export function mensagemVencida(params: {
   if (params.tipo === "RESULTADO" || params.tipo === "FEEDBACK" || params.tipo === "COBRANCA_RELATORIO") {
     return params.agora.getTime() - params.criadaEm.getTime() > VALIDADE_RESULTADO_MS;
   }
-  if (params.tipo === "ATRASO") {
+  if (params.tipo === "ATRASO" || params.tipo === "LEMBRETE_CHEGADA") {
     if (!params.inicioDoAtendimento) return false;
     return params.agora.getTime() - params.inicioDoAtendimento.getTime() > VALIDADE_ATRASO_MS;
   }

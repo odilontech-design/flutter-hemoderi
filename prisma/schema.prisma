@@ -1739,6 +1739,8 @@ enum TipoMensagem {
   ATRASO // central avisa a clínica que o profissional está atrasado
   /// Resumo detalhado (27/10): só quando a equipe aciona, depois de validar a confirmação
   RESUMO
+  /// 15 min depois do horário, sem chegada registrada: lembra o profissional de marcar "cheguei" (30/10)
+  LEMBRETE_CHEGADA
 }
 
 enum StatusMensagem {
