@@ -48,6 +48,7 @@ export async function enviarRelatorio(_anterior: Resultado, dados: FormData): Pr
       status: true,
       servicoId: true,
       doutorNome: true,
+      pacienteNome: true,
       clinica: { select: { nome: true, endereco: true, numero: true, bairro: true, cidade: true, uf: true } },
       endereco: { select: { endereco: true, numero: true, bairro: true, cidade: true, uf: true } },
       relatorio: { select: { aprovadoEm: true, comprovante: { select: { id: true } }, anexos: { select: { id: true } } } },
@@ -186,6 +187,7 @@ export async function enviarRelatorio(_anterior: Resultado, dados: FormData): Pr
   const clinicaNome = String(dados.get("clinicaNomeInformado") ?? "").trim();
   const endereco = String(dados.get("enderecoInformado") ?? "").trim();
   const doutor = String(dados.get("doutorNomeInformado") ?? "").trim();
+  const paciente = String(dados.get("pacienteNomeInformado") ?? "").trim();
   // Nome e sobrenome do doutor (ata de 13/10) — só quando houve atendimento:
   // numa falta, quem recebe não chegou a existir.
   if (compareceu && !temNomeESobrenome(doutor)) {
@@ -199,6 +201,7 @@ export async function enviarRelatorio(_anterior: Resultado, dados: FormData): Pr
     clinicaNomeInformado: divergiu(pedido.clinica.nome, clinicaNome) ? clinicaNome : null,
     enderecoInformado: divergiu(enderecoEmUmaLinha(comEnderecoDoPedido(pedido.clinica, pedido.endereco)), endereco) ? endereco : null,
     doutorNomeInformado: divergiu(pedido.doutorNome, doutor) ? doutor : null,
+    pacienteNomeInformado: divergiu(pedido.pacienteNome, paciente) ? paciente : null,
   };
 
   const mandic = await pedeOrcamentoEPg(prisma, pedido.clinicaId);

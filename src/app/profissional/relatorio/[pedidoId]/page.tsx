@@ -74,7 +74,7 @@ export default async function Relatorio({
         clinica: enviado.clinicaNomeInformado ?? (pedido.endereco?.rotulo || pedido.clinica.nome),
         endereco: revelado ? enviado.enderecoInformado ?? enderecoEmUmaLinha(comEnderecoDoPedido(pedido.clinica, pedido.endereco)) : null,
         doutor: enviado.doutorNomeInformado ?? pedido.doutorNome,
-        paciente: pedido.pacienteNome,
+        paciente: enviado.pacienteNomeInformado ?? pedido.pacienteNome,
         procedimento: pedido.procedimentoPaciente,
         valor: (pedido.valorServicoCentavos / 100).toFixed(2).replace(".", ","),
         formaDoCliente: pedido.formaPagamento,
@@ -171,6 +171,7 @@ export default async function Relatorio({
     clinicaNomeInformado: r?.clinicaNomeInformado ?? pedido.clinica.nome,
     enderecoInformado: r?.enderecoInformado ?? enderecoEmUmaLinha(comEnderecoDoPedido(pedido.clinica, pedido.endereco)),
     doutorNomeInformado: r?.doutorNomeInformado ?? pedido.doutorNome ?? "",
+    pacienteNomeInformado: r?.pacienteNomeInformado ?? pedido.pacienteNome ?? "",
   };
 
   return (

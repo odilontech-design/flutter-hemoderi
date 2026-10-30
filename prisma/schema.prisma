@@ -1209,6 +1209,7 @@ model RelatorioAtendimento {
   clinicaNomeInformado String?
   enderecoInformado    String?
   doutorNomeInformado  String?
+  pacienteNomeInformado String?
 
   /// Deslocamento. Não é tabelado: a régua é até 150km, mas varia por
   /// quilometragem excedente e por tipo de transporte (moto x carro), então

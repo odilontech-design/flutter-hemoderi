@@ -36,7 +36,7 @@ export function RelatorioPreenchido({
   paraClinica?: boolean;
 }) {
   const temCorrecoes =
-    relatorio.clinicaNomeInformado || relatorio.enderecoInformado || relatorio.doutorNomeInformado;
+    relatorio.clinicaNomeInformado || relatorio.enderecoInformado || relatorio.doutorNomeInformado || relatorio.pacienteNomeInformado;
 
   return (
     <div className="space-y-4">
@@ -91,6 +91,11 @@ export function RelatorioPreenchido({
           {relatorio.doutorNomeInformado && (
             <div className="text-amber-800">
               <strong>Quem recebeu:</strong> {relatorio.doutorNomeInformado}
+            </div>
+          )}
+          {relatorio.pacienteNomeInformado && (
+            <div className="text-amber-800">
+              <strong>Paciente:</strong> {relatorio.pacienteNomeInformado}
             </div>
           )}
         </div>
