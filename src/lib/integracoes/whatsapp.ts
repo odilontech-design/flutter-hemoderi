@@ -17,6 +17,8 @@ import { corpoParaDilonZap, descreverErroDeRede, interpretarResposta, mensagemVe
 import { codigoDoPedido } from "@/lib/numeracao";
 import { comEnderecoDoPedido, resumoDoEndereco } from "@/lib/endereco";
 import { normalizarTelefone } from "@/lib/slug";
+import { LOCAL_FECHADO, localVisivel } from "@/lib/sigilo";
+import { urlBase } from "@/lib/divulgacao";
 import type { TipoMensagem } from "@prisma/client";
 
 type DadosPedido = {
@@ -31,8 +33,27 @@ type DadosPedido = {
   valorServicoCentavos?: number;
   procedimentoPaciente?: string | null;
   formaPagamento?: string | null;
-  clinica: { nome: string; telefone: string | null; endereco?: string | null; cidade?: string | null };
-  endereco?: { endereco: string | null; cidade: string | null; rotulo?: string | null } | null;
+  origem?: string;
+  criadoEm?: Date;
+  clinica: {
+    nome: string;
+    telefone: string | null;
+    endereco?: string | null;
+    numero?: string | null;
+    complemento?: string | null;
+    bairro?: string | null;
+    cidade?: string | null;
+    uf?: string | null;
+  };
+  endereco?: {
+    endereco: string | null;
+    numero?: string | null;
+    complemento?: string | null;
+    bairro?: string | null;
+    cidade: string | null;
+    uf?: string | null;
+    rotulo?: string | null;
+  } | null;
   servico: { nome: string };
   profissional: { nome: string; telefone: string | null } | null;
 };
@@ -49,8 +70,10 @@ const SELECAO_DO_PEDIDO = {
   valorServicoCentavos: true,
   procedimentoPaciente: true,
   formaPagamento: true,
-  clinica: { select: { nome: true, telefone: true, endereco: true, cidade: true } },
-  endereco: { select: { endereco: true, cidade: true, rotulo: true } },
+  origem: true,
+  criadoEm: true,
+  clinica: { select: { nome: true, telefone: true, endereco: true, numero: true, complemento: true, bairro: true, cidade: true, uf: true } },
+  endereco: { select: { endereco: true, numero: true, complemento: true, bairro: true, cidade: true, uf: true, rotulo: true } },
   servico: { select: { nome: true } },
   profissional: { select: { nome: true, telefone: true } },
 } as const;
@@ -75,7 +98,7 @@ export const TIPOS_PARA_O_PROFISSIONAL: TipoMensagem[] = ["ALOCACAO", "COBRANCA_
  * variação. Os modelos reais que a Hemoderi usa hoje entram na Fase 0
  * (docs/fase-0-insumos.md); estes são o esqueleto até lá.
  */
-function montarTexto(tipo: TipoMensagem, pedido: DadosPedido): string {
+export function montarTexto(tipo: TipoMensagem, pedido: DadosPedido, horasRevelarLocal = 24): string {
   const quando = `${formatarData(pedido.data)} às ${pedido.horaInicio}`;
   const codigo = codigoDoPedido(pedido.numero, pedido.clinica.nome, pedido.data);
 
@@ -108,12 +131,31 @@ function montarTexto(tipo: TipoMensagem, pedido: DadosPedido): string {
         `Agendamento: ${codigo}`,
       ].join("\n");
     }
-    case "ALOCACAO":
-      // A notificação de alocação NÃO diz a clínica (ata de 14/09): sabendo o
-      // endereço na hora do convite, atendimento longe é recusado e sobra
-      // sempre para os mesmos. O local vem no lembrete, com tempo de se
-      // organizar.
-      return `Olá, ${pedido.profissional?.nome ?? ""}! Você foi alocado para ${pedido.servico.nome} em ${quando}. A clínica é informada na véspera. Agendamento ${codigo}.`;
+    case "ALOCACAO": {
+      // Mesmo modelo da equipe (pedido do André, 30/10), só com os dados para
+      // confirmar o aceite. O sigilo de 14/09 continua: enquanto o local está
+      // fechado vai só bairro e cidade, e a clínica é informada na véspera.
+      const primeiroNome = pedido.profissional?.nome?.split(" ")[0] ?? "";
+      const completo = comEnderecoDoPedido(pedido.clinica, pedido.endereco ?? null);
+      const aberto = pedido.origem && pedido.criadoEm ? localVisivel({ ...pedido, origem: pedido.origem, criadoEm: pedido.criadoEm }, horasRevelarLocal) : false;
+      const area = [completo.bairro, [completo.cidade, completo.uf].filter(Boolean).join("/")].filter(Boolean).join(", ");
+      const dia = pedido.data.toLocaleDateString("pt-BR", { timeZone: "UTC", weekday: "long" });
+      return [
+        `Olá, ${primeiroNome}! Novo atendimento para você:`,
+        "",
+        `Data: ${formatarData(pedido.data)} (${dia})`,
+        `Horário: ${pedido.horaInicio}`,
+        aberto ? `Endereço completo: ${resumoDoEndereco(completo) || "a confirmar"}` : `Região: ${area || "a confirmar"}`,
+        `Nome da Clínica: ${aberto ? pedido.endereco?.rotulo || pedido.clinica.nome : LOCAL_FECHADO.replace("Clínica ", "")}`,
+        ...(aberto && pedido.doutorNome ? [`Cirurgião: ${pedido.doutorNome}`] : []),
+        `Procedimento que será realizado no paciente: ${pedido.procedimentoPaciente || "a informar"}`,
+        `Serviços Hemoderi: ${pedido.servico.nome}`,
+        "",
+        `Para aceitar ou recusar, acesse o app: ${urlBase()}/profissional`,
+        // O sufixo do código é a clínica (ou o doutor): fechado, vai só ano e número.
+        `Agendamento ${aberto ? codigo : codigo.split("-").slice(0, 2).join("-")}.`,
+      ].join("\n");
+    }
     case "LEMBRETE":
       return `Lembrete: ${pedido.servico.nome} na ${pedido.clinica.nome} amanhã, ${quando}. Agendamento ${codigo}.`;
     case "RESULTADO":
@@ -127,6 +169,11 @@ function montarTexto(tipo: TipoMensagem, pedido: DadosPedido): string {
       return mensagemDeAtraso({ clinica: pedido.clinica.nome, servico: pedido.servico.nome, hora: pedido.horaInicio, minutos });
     }
   }
+}
+
+async function horasDeSigilo(): Promise<number> {
+  const p = await prisma.parametros.findFirst({ select: { horasRevelarLocal: true } });
+  return p?.horasRevelarLocal ?? 24;
 }
 
 function destinatarioDe(tipo: TipoMensagem, pedido: DadosPedido): string {
@@ -168,7 +215,7 @@ export async function enfileirarMensagem(
       pedidoId,
       tipo,
       destinatario,
-      texto: montarTexto(tipo, pedido),
+      texto: montarTexto(tipo, pedido, await horasDeSigilo()),
       agendadaPara,
     },
     select: { id: true, status: true, agendadaPara: true },
@@ -215,7 +262,7 @@ export async function reenviarMensagem(
   }
   if (!urlDoDilonZap(process.env.WHATSAPP_API_URL)) return { ok: false, erro: "O envio pelo Dilon Zap não está configurado." };
 
-  const texto = montarTexto(tipo, pedido);
+  const texto = montarTexto(tipo, pedido, await horasDeSigilo());
   const mensagem = await prisma.mensagemWhatsapp.upsert({
     where: { pedidoId_tipo: { pedidoId, tipo } },
     update: { destinatario, texto, status: "PENDENTE", erro: null, enviadaEm: null, agendadaPara: null },
