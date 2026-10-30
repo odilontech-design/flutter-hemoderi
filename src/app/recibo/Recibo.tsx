@@ -18,7 +18,7 @@ export function Recibo({ recibo, cnpj, voltar }: { recibo: ReciboDados; cnpj: st
       <div className="max-w-3xl mx-auto bg-white shadow-sm print:shadow-none px-10 py-10 text-[13px] text-gray-900 leading-relaxed">
         <header className="flex items-start justify-between gap-6 border-b border-gray-300 pb-5">
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src="/logo-hemoderi.svg" alt="Hemoderi" className="h-16 w-auto" />
+          <img src="/logo-recibo.png" alt="Hemoderi" className="h-20 w-auto" />
           <div className="text-right text-xs">
             <div className="font-bold text-sm">{EMITENTE.nome}</div>
             <div>CNPJ: {cnpj}</div>
