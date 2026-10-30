@@ -362,14 +362,15 @@ export default async function Hoje({ searchParams }: { searchParams: { servico?:
                           {pedido.horaInicio}
                         </Link>
                       </td>
-                      <td className="py-2 pr-3">
+                      {/* Clínica e local com mais espaço (30/10): são os textos mais longos. */}
+                      <td className="py-2 pr-3 sm:min-w-[170px] sm:w-[26%]">
                         {pedido.clinica.nome}
                         <div className="text-[10px] text-gray-400">
                           {resumoDoEndereco(comEnderecoDoPedido(pedido.clinica, pedido.endereco)) || "sem endereço"}
                         </div>
                       </td>
-                      <td className="py-2 pr-3 text-gray-500">{pedido.servico.nome}</td>
-                      <td className="py-2 pr-3">
+                      <td className="py-2 pr-3 text-gray-500 sm:min-w-[120px]">{pedido.servico.nome}</td>
+                      <td className="py-2 pr-3 sm:min-w-[115px]">
                         {pedido.profissional?.nome ?? <span className="text-red-600 font-semibold">{pedido.status === "SOLICITADO" ? "a confirmar" : "a alocar"}</span>}
                         {pedido.status === "ALOCADO" && (
                           <div className={`text-[10px] font-semibold ${pedido.aceitoEm ? "text-green-700" : "text-amber-700"}`}>
@@ -377,29 +378,33 @@ export default async function Hoje({ searchParams }: { searchParams: { servico?:
                           </div>
                         )}
                       </td>
-                      <td className="py-2 pr-3 whitespace-nowrap">
+                      {/* Chegada compacta (30/10): hora em cima, atraso embaixo. */}
+                      <td className="py-2 pr-3 sm:w-[112px]">
                         {chegada === null ? (
                           <span className="text-gray-300">—</span>
                         ) : chegada.tipo === "chegou" ? (
-                          <span className={`text-[11px] font-semibold ${chegada.atrasado ? "text-amber-700" : "text-green-700"}`}>
-                            chegou{pedido.checkinEm ? ` às ${pedido.checkinEm.toLocaleTimeString("pt-BR", { timeZone: "America/Sao_Paulo", hour: "2-digit", minute: "2-digit" })}` : ""}
-                            {chegada.atrasado ? ` · ${formatarAtraso(chegada.minutos)} de atraso` : ""}
-                          </span>
+                          <div className={`text-[11px] font-semibold leading-tight ${chegada.atrasado ? "text-amber-700" : "text-green-700"}`}>
+                            <div className="whitespace-nowrap">
+                              chegou{pedido.checkinEm ? ` ${pedido.checkinEm.toLocaleTimeString("pt-BR", { timeZone: "America/Sao_Paulo", hour: "2-digit", minute: "2-digit" })}` : ""}
+                            </div>
+                            {chegada.atrasado && <div className="text-[10px] font-normal whitespace-nowrap">{formatarAtraso(chegada.minutos)} de atraso</div>}
+                          </div>
                         ) : chegada.tipo === "atrasado" ? (
                           <div>
-                            <span className="text-[11px] font-semibold text-red-600">
-                              atrasado há {formatarAtraso(chegada.minutos)}
+                            <span className="text-[11px] font-semibold text-red-600 leading-tight">
+                              atrasado
+                              <span className="block text-[10px] font-normal">há {formatarAtraso(chegada.minutos)}</span>
                             </span>
                             {/* Aviso à clínica pela central do Dilon Zap (27/10). */}
-                            <div className="mt-1">
-                              <BotaoAcao tela acao={enviarPelaCentral.bind(null, pedido.id, "ATRASO")}>Avisar a clínica</BotaoAcao>
+                            <div className="mt-1 [&_button]:!px-2 [&_button]:!py-1 [&_button]:!text-[10px] [&_button]:whitespace-nowrap">
+                              <BotaoAcao tela acao={enviarPelaCentral.bind(null, pedido.id, "ATRASO")}>Avisar clínica</BotaoAcao>
                             </div>
                           </div>
                         ) : (
                           <span className="text-[11px] text-gray-400">aguardando</span>
                         )}
                       </td>
-                      <td className="py-2 pr-3 whitespace-nowrap text-[11px]">
+                      <td className="py-2 pr-3 text-[11px]">
                         {pedido.relatorio?.aprovadoEm ? (
                           <span className="font-semibold text-green-700">aprovado</span>
                         ) : pedido.relatorio?.devolvidoEm ? (
