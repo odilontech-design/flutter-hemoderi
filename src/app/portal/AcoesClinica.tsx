@@ -23,12 +23,13 @@ export function AcoesClinica({ pedidoId }: { pedidoId: string }) {
     <div className="flex flex-wrap items-center gap-2">
       <Link
         href={`/portal/reagendar/${pedidoId}`}
-        className="text-[11px] font-semibold text-bordo border border-gray-300 rounded-lg px-2.5 py-1.5 min-h-[40px] sm:min-h-0 inline-flex items-center hover:bg-gray-50"
+        className="text-[11px] font-semibold text-bordo border border-gray-300 rounded-lg px-2.5 py-1.5 min-h-[40px] sm:min-h-0 inline-flex items-center justify-center hover:bg-gray-50"
       >
         Reagendar
       </Link>
       <Botao
         variante="perigo"
+        className="!text-[11px] !px-2.5 !py-1.5"
         disabled={pendente}
         onClick={() => {
           const motivo = window.prompt("Motivo do cancelamento (opcional):");

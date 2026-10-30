@@ -114,7 +114,7 @@ export default async function MeusAgendamentos() {
         {visitas.length === 0 ? (
           <Vazio>Nenhum atendimento agendado.</Vazio>
         ) : (
-          <Tabela cabecalho={["Data", "Horário", "Serviços", "Profissional", "Paciente", "Pagamento", "Status", ""]}>
+          <Tabela cabecalho={["Data", "Horário", "Serviços", "Profissional", "Paciente", "Pagamento", "Status", "Ações"]}>
             {visitas.map(({ chave, itens }) => {
               const primeiro = itens[0];
               // O status da visita é o menos avançado: basta um serviço ainda
@@ -163,37 +163,46 @@ export default async function MeusAgendamentos() {
                     )}
                   </td>
                   <td className="py-2 pr-3 text-gray-500">{primeiro.pacienteNome ?? "—"}</td>
-                  <td className="py-2 pr-3 text-gray-600">{primeiro.formaPagamento ?? "—"}</td>
-                  <td className="py-2 pr-3">
-                    <SeloStatusCliente status={statusDaVisita} />
-                  </td>
-                  <td className="py-2">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <Link
-                        href={`/portal/resumo/${primeiro.id}`}
-                        className="text-[11px] font-semibold text-bordo hover:underline whitespace-nowrap"
-                      >
-                        Ver resumo
-                      </Link>
-                      {/* Pix escolhido, já confirmado e ainda não pago: o QR está no resumo (29/10). */}
-                      {primeiro.formaPagamento === "Pix" && ["CONFIRMADO", "ALOCADO", "REALIZADO"].includes(statusDaVisita) && !primeiro.pixPagoEm && (
+                  {/* Pagamento numa coluna só (30/10): a forma, se já foi pago e
+                      o que fazer — pagar o Pix ou gerar o recibo. */}
+                  <td className="py-2 pr-3 text-gray-600">
+                    <div>{primeiro.formaPagamento ?? "—"}</div>
+                    {primeiro.pixPagoEm ? (
+                      <div className="mt-0.5 flex flex-wrap items-center gap-x-2">
+                        <span className="text-[10px] font-semibold text-green-700">pago ✓</span>
+                        <Link href={`/recibo/agendamento/${primeiro.id}`} className="text-[11px] font-semibold text-bordo hover:underline whitespace-nowrap">
+                          Recibo
+                        </Link>
+                      </div>
+                    ) : (
+                      primeiro.formaPagamento === "Pix" &&
+                      ["CONFIRMADO", "ALOCADO", "REALIZADO"].includes(statusDaVisita) && (
                         <Link
                           href={`/portal/resumo/${primeiro.id}`}
                           className="text-[11px] font-semibold text-green-800 hover:underline whitespace-nowrap"
                         >
                           Pagar com Pix
                         </Link>
-                      )}
-                      {primeiro.pixPagoEm && (
-                        <>
-                          <span className="text-[10px] font-semibold text-green-700">Pix pago ✓</span>
-                          <Link href={`/recibo/agendamento/${primeiro.id}`} className="text-[11px] font-semibold text-bordo hover:underline whitespace-nowrap">
-                            Gerar recibo
-                          </Link>
-                        </>
-                      )}
+                      )
+                    )}
+                  </td>
+                  <td className="py-2 pr-3">
+                    <SeloStatusCliente status={statusDaVisita} />
+                  </td>
+                  <td className="py-2">
+                    {/* Ações alinhadas: resumo, reagendar e cancelar na mesma
+                        linha e do mesmo tamanho; a agenda pessoal embaixo. */}
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Link
+                        href={`/portal/resumo/${primeiro.id}`}
+                        className="text-[11px] font-semibold text-white bg-bordo rounded-lg px-2.5 py-1.5 min-h-[40px] sm:min-h-0 inline-flex items-center justify-center hover:bg-bordoEscuro whitespace-nowrap"
+                      >
+                        Ver resumo
+                      </Link>
                       <AcoesClinica pedidoId={primeiro.id} />
-                      {statusDaVisita !== "SOLICITADO" && (
+                    </div>
+                    {statusDaVisita !== "SOLICITADO" && (
+                      <div className="mt-1">
                         <AdicionarAgenda
                           variante="link"
                           evento={{
@@ -203,8 +212,8 @@ export default async function MeusAgendamentos() {
                             duracaoMin: duracaoTotal,
                           }}
                         />
-                      )}
-                    </div>
+                      </div>
+                    )}
                   </td>
                 </tr>
               );

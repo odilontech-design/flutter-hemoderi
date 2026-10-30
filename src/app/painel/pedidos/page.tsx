@@ -20,7 +20,8 @@ const AVISO_AUSENTE = "⚠ marcou ausência";
 import { AcoesPedido, EditarAjudaDeCusto } from "./AcoesPedido";
 import { CondicaoPagamento } from "./CondicaoPagamento";
 import { ConferenciaRelatorio } from "./ConferenciaRelatorio";
-import { FiltroPagamento } from "./FiltroPagamento";
+import { FiltrosEsteira } from "./FiltrosEsteira";
+import { consultaDosFiltros, lerFiltrosEsteira, ondeDosFiltros, temFiltro } from "@/lib/filtros-esteira";
 import { ValorServico } from "./ValorServico";
 import { perfilPermite } from "@/lib/papeis";
 import { AgendaDaEquipe } from "@/components/AgendaDaEquipe";
@@ -50,7 +51,7 @@ const STATUS_EDITAVEIS: StatusPedido[] = ["SOLICITADO", "CONFIRMADO", "ALOCADO"]
 export default async function Esteira({
   searchParams,
 }: {
-  searchParams: { filtro?: string; pagamento?: string };
+  searchParams: Record<string, string | undefined>;
 }) {
   const sessao = await exigirInterno();
 
@@ -61,13 +62,16 @@ export default async function Esteira({
   // não é sua pela URL cai na própria fila.
   const etapasVisiveis = etapasDoPerfil(sessao.perfil);
   const filtro = etapasVisiveis.find((e) => e.chave === searchParams.filtro) ?? minhaEtapa;
-  const pagamento = condicaoValida(searchParams.pagamento ?? "") ? searchParams.pagamento! : "";
+  const filtros = lerFiltrosEsteira(searchParams);
+  if (filtros.pagamento && !condicaoValida(filtros.pagamento)) filtros.pagamento = "";
+  const pagamento = filtros.pagamento;
+  const comFiltro = temFiltro(filtros);
+  // Busca e filtros (30/10) valem para a lista e para os números das abas.
+  const ondePagamento = ondeDosFiltros(filtros, hojeUTC());
 
-  const ondePagamento = pagamento ? { condicaoPagamento: pagamento } : {};
-
-  const [pedidos, profissionais, contagens] = await Promise.all([
+  const [pedidos, profissionais, contagens, familias] = await Promise.all([
     prisma.pedido.findMany({
-      where: { ...filtro.onde, ...ondePagamento },
+      where: { AND: [filtro.onde, ondePagamento] },
       orderBy: [{ data: "asc" }, { horaInicio: "asc" }],
       take: 200,
       include: {
@@ -88,8 +92,11 @@ export default async function Esteira({
     // cada etapa para descobrir — e é o que faz a separação por setor render:
     // a Joyce vê quantos esperam alocação enquanto trabalha a triagem.
     Promise.all(
-      etapasVisiveis.map((etapa) => prisma.pedido.count({ where: { ...etapa.onde, ...ondePagamento } }))
+      etapasVisiveis.map((etapa) => prisma.pedido.count({ where: { AND: [etapa.onde, ondePagamento] } }))
     ),
+    prisma.servico
+      .findMany({ where: { ativo: true, familia: { not: null } }, distinct: ["familia"], orderBy: { familia: "asc" }, select: { familia: true } })
+      .then((l) => l.map((x) => x.familia!).filter(Boolean)),
   ]);
 
   // Só quem está "Confirmado" mostra o seletor de alocar (ver AcoesPedido) —
@@ -159,7 +166,7 @@ export default async function Esteira({
           return (
             <Link
               key={etapa.chave}
-              href={`/painel/pedidos?filtro=${etapa.chave}${pagamento ? `&pagamento=${encodeURIComponent(pagamento)}` : ""}`}
+              href={`/painel/pedidos?${consultaDosFiltros(filtros, { filtro: etapa.chave })}`}
               title={etapa.descricao}
               className={`text-[11px] font-semibold px-3 py-2.5 sm:py-1.5 rounded-full border ${
                 selecionada
@@ -174,8 +181,15 @@ export default async function Esteira({
             </Link>
           );
         })}
-        <FiltroPagamento filtroStatus={filtro.chave} pagamento={pagamento} />
       </div>
+
+      <FiltrosEsteira
+        etapa={filtro.chave}
+        filtros={filtros}
+        profissionais={profissionais.map(({ id, nome }) => ({ id, nome }))}
+        familias={familias}
+        ativo={comFiltro}
+      />
 
       <div className="text-[11px] text-gray-500 mb-4">
         {filtro.descricao}
@@ -188,7 +202,7 @@ export default async function Esteira({
         <Cartao>
           <Vazio>
             Nada em {filtro.rotulo.toLowerCase()}
-            {pagamento ? ` com pagamento "${pagamento}"` : ""}.
+            {comFiltro ? " com essa busca e filtros" : ""}.
           </Vazio>
         </Cartao>
       ) : (
@@ -252,9 +266,12 @@ export default async function Esteira({
                   ✏️ Editar agendamento
                 </Link>
               )}
-              <div className="flex flex-wrap items-start justify-between gap-3">
+              <div>
                 <div className="min-w-0">
-                  <div className="flex items-center gap-2 mb-1">
+                  {/* Cabeçalho (30/10): código, estado e o VALOR lado a lado — no
+                      desktop o valor ficava no outro extremo do cartão, longe
+                      de tudo que ele descreve. */}
+                  <div className="flex flex-wrap items-center gap-x-2 gap-y-1 mb-1">
                     <Link
                       href={`/painel/pedidos/${pedido.id}`}
                       className="font-display font-bold text-bordo text-sm hover:underline"
@@ -269,43 +286,70 @@ export default async function Esteira({
                     {pedido.modalidade === "CURSO" && (
                       <span className="text-[9px] font-semibold uppercase tracking-wide text-bordo bg-bordo/10 rounded-full px-1.5 py-0.5">curso</span>
                     )}
+                    <span className="inline-flex items-baseline gap-2 rounded-lg bg-bege/70 px-2 py-0.5">
+                      {perfilPermite(sessao.perfil, "COMERCIAL") && pedido.status !== "CANCELADO" ? (
+                        <ValorServico pedidoId={pedido.id} valorCentavos={pedido.valorServicoCentavos} />
+                      ) : (
+                        <span className={`text-xs font-semibold ${pedido.valorServicoCentavos > 0 ? "text-bordo" : "text-amber-700"}`}>
+                          {formatarReais(pedido.valorServicoCentavos)}
+                        </span>
+                      )}
+                      {pedido.valorRepasseCentavos > 0 && (
+                        <span className="text-[10px] text-gray-500">repasse {formatarReais(pedido.valorRepasseCentavos)}</span>
+                      )}
+                      {pedido.ajudaCustoCentavos != null && (
+                        <span className="text-[10px] text-gray-500">ajuda {formatarReais(pedido.ajudaCustoCentavos)}</span>
+                      )}
+                    </span>
                   </div>
-                  <div className="text-xs text-gray-700">
+                  <div className="text-sm font-semibold text-gray-800">
                     {formatarDataCurta(pedido.data)} às {pedido.horaInicio} · {pedido.servico.nome}
-                    {pedido.quantidade > 1 && <span className="text-gray-400"> × {pedido.quantidade}</span>}
+                    {pedido.quantidade > 1 && <span className="text-gray-400 font-normal"> × {pedido.quantidade}</span>}
                   </div>
-                  {/* Atendimento fora do endereço principal da clínica: é a
-                      informação que a logística precisa antes de rotear. */}
-                  {pedido.endereco && (
-                    <div className="text-[11px] text-amber-700 mt-0.5">
-                      Local: <strong>{pedido.endereco.rotulo}</strong> — {resumoDoEndereco(pedido.endereco)}
-                      {pedido.endereco.observacoes && <span className="text-gray-500"> · Obs.: {pedido.endereco.observacoes}</span>}
+
+                  {/* Os dados em blocos com título, no lugar das linhas
+                      corridas separadas por "·" (30/10). */}
+                  <dl className="mt-2 grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-x-6 gap-y-2 text-[11px]">
+                    <div className="min-w-0">
+                      <dt className="text-[10px] font-semibold uppercase tracking-wide text-gray-400">Clínica e local</dt>
+                      <dd className="text-gray-700">
+                        {pedido.clinica.nome}
+                        {/* Atendimento fora do endereço principal: é o que a
+                            logística precisa antes de rotear. */}
+                        {pedido.endereco ? (
+                          <span className="block text-amber-700">
+                            <strong>{pedido.endereco.rotulo}</strong> — {resumoDoEndereco(pedido.endereco)}
+                            {pedido.endereco.observacoes && <span className="text-gray-500"> · Obs.: {pedido.endereco.observacoes}</span>}
+                          </span>
+                        ) : (
+                          <span className="block text-gray-500">{resumoDoEndereco(pedido.clinica) || "endereço não informado"}</span>
+                        )}
+                      </dd>
                     </div>
-                  )}
-                  {/* Realizado no endereço principal: o local também fica no
-                      resumo (pedido de 26/10) — conferir cobrança começa por "onde foi". */}
-                  {!pedido.endereco && (pedido.status === "REALIZADO" || pedido.status === "FALTOU") && (
-                    <div className="text-[11px] text-gray-500 mt-0.5">
-                      Local: {resumoDoEndereco(pedido.clinica) || "endereço não informado"}
+                    <div className="min-w-0">
+                      <dt className="text-[10px] font-semibold uppercase tracking-wide text-gray-400">Profissional</dt>
+                      <dd className="text-gray-700">
+                        {pedido.profissional ? pedido.profissional.nome : <span className="text-red-600 font-semibold">sem profissional</span>}
+                      </dd>
                     </div>
-                  )}
-                  <div className="text-[11px] text-gray-500 mt-0.5">
-                    {pedido.clinica.nome} ·{" "}
-                    {pedido.profissional ? (
-                      pedido.profissional.nome
-                    ) : (
-                      <span className="text-red-600 font-semibold">sem profissional</span>
-                    )}
-                    {pedido.doutorNome && <> · Dr(a). {pedido.doutorNome}</>}
-                    {pedido.pacienteNome && <> · paciente {pedido.pacienteNome}</>}
-                  </div>
-                  {(pedido.procedimentoPaciente || pedido.formaPagamento) && (
-                    <div className="text-[11px] text-gray-500 mt-0.5">
-                      {pedido.procedimentoPaciente && <>Procedimento: {pedido.procedimentoPaciente}</>}
-                      {pedido.procedimentoPaciente && pedido.formaPagamento && " · "}
-                      {pedido.formaPagamento && <>Pagamento: <strong>{pedido.formaPagamento}</strong></>}
+                    <div className="min-w-0">
+                      <dt className="text-[10px] font-semibold uppercase tracking-wide text-gray-400">Doutor(a) e paciente</dt>
+                      <dd className="text-gray-700">
+                        {pedido.doutorNome ? `Dr(a). ${pedido.doutorNome}` : <span className="text-gray-400">doutor não informado</span>}
+                        {pedido.pacienteNome && <span className="block text-gray-500">paciente {pedido.pacienteNome}</span>}
+                        {pedido.procedimentoPaciente && <span className="block text-gray-500">{pedido.procedimentoPaciente}</span>}
+                      </dd>
                     </div>
-                  )}
+                    <div className="min-w-0">
+                      <dt className="text-[10px] font-semibold uppercase tracking-wide text-gray-400">Pagamento</dt>
+                      <dd className="text-gray-700">
+                        {pedido.formaPagamento ? <strong>{pedido.formaPagamento}</strong> : <span className="text-gray-400">forma não informada</span>}
+                        <div className="mt-1">
+                          <CondicaoPagamento pedidoId={pedido.id} atual={pedido.condicaoPagamento} />
+                        </div>
+                      </dd>
+                    </div>
+                  </dl>
                   {/* Alocado não quer dizer que alguém assumiu: desde a ata
                       de 21/09 o profissional confirma, e a esteira precisa
                       mostrar quem ainda não respondeu — é o pedido que corre
@@ -363,9 +407,6 @@ export default async function Esteira({
                       )}
                     </div>
                   )}
-                  <div className="mt-1.5">
-                    <CondicaoPagamento pedidoId={pedido.id} atual={pedido.condicaoPagamento} />
-                  </div>
                   {pedido.observacoes && (
                     <div className="text-[11px] text-gray-400 mt-1">{pedido.observacoes}</div>
                   )}
@@ -503,29 +544,6 @@ export default async function Esteira({
                   )}
                 </div>
 
-                <div className="text-right shrink-0">
-                  {perfilPermite(sessao.perfil, "COMERCIAL") && pedido.status !== "CANCELADO" ? (
-                    <ValorServico pedidoId={pedido.id} valorCentavos={pedido.valorServicoCentavos} />
-                  ) : (
-                    <div
-                      className={`text-xs font-semibold ${
-                        pedido.valorServicoCentavos > 0 ? "text-bordo" : "text-amber-700"
-                      }`}
-                    >
-                      {formatarReais(pedido.valorServicoCentavos)}
-                    </div>
-                  )}
-                  {pedido.valorRepasseCentavos > 0 && (
-                    <div className="text-[10px] text-gray-400">
-                      repasse {formatarReais(pedido.valorRepasseCentavos)}
-                    </div>
-                  )}
-                  {pedido.ajudaCustoCentavos != null && (
-                    <div className="text-[10px] text-gray-400">
-                      ajuda de custo {formatarReais(pedido.ajudaCustoCentavos)}
-                    </div>
-                  )}
-                </div>
               </div>
 
               <AcoesPedido
