@@ -4,7 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { exigirInterno } from "@/lib/sessao";
 import { Cartao, SeloStatus, Titulo, Vazio } from "@/components/ui";
 import { competenciaDe, competenciaPorExtenso, dataDaURL, dataDeISO, formatarData, formatarDataCurta, gradeDoMes, hojeISO, hojeUTC, isoDeData, somarDias } from "@/lib/data";
-import { paraMinutos } from "@/lib/data";
+import { minutosAgora, paraHora, paraMinutos } from "@/lib/data";
 import { parametros } from "@/lib/alocacao";
 import { COR_STATUS, ROTULO_STATUS, STATUS_ATIVOS } from "@/lib/pedido";
 import { FiltrosAgenda } from "./FiltrosAgenda";
@@ -58,6 +58,7 @@ export default async function Agenda({
     status?: string;
     todos?: string;
     visao?: string;
+    agrupar?: string;
   };
 }) {
   await exigirInterno();
@@ -84,6 +85,7 @@ export default async function Agenda({
     status: searchParams.status ?? "",
     todos: searchParams.todos === "1" ? "1" : "",
     visao: mensal ? "mes" : "",
+    agrupar: searchParams.agrupar === "profissional" ? "profissional" : "",
   };
   const temFiltroAtivo = Boolean(
     valores.profissional || valores.clinica || valores.servico || valores.status
@@ -230,6 +232,8 @@ export default async function Agenda({
 
       {mensal ? (
         <CalendarioDoMes pedidos={pedidos} celulas={celulasDoMes} valores={valores} />
+      ) : umDiaSo && !valores.agrupar ? (
+        <LinhaDoTempoDoDia pedidos={pedidos} data={inicio} valores={valores} />
       ) : umDiaSo ? (
         <PorProfissional
           pedidos={pedidos}
@@ -258,6 +262,7 @@ type PedidoNaAgenda = {
   duracaoMin: number;
   status: StatusPedido;
   profissionalId: string | null;
+  doutorNome?: string | null;
   clinica: { nome: string };
   servico: { nome: string };
   profissional: { nome: string } | null;
@@ -300,6 +305,11 @@ function PorProfissional({
 
   return (
     <>
+      <div className="flex justify-end mb-2">
+        <Link href={urlAgenda(valores, { agrupar: "" })} className="text-[11px] text-bordo font-semibold">
+          Ver linha do tempo do dia
+        </Link>
+      </div>
       <div className="space-y-2">
         {visiveis.map(({ profissional, meus, janelas, ausente }) => (
           <Cartao key={profissional.id} className="!p-4">
@@ -568,5 +578,102 @@ function CalendarioDoMes({
         ))}
       </div>
     </Cartao>
+  );
+}
+
+
+const PONTO_DO_STATUS: Record<StatusPedido, string> = {
+  SOLICITADO: "bg-amber-400",
+  CONFIRMADO: "bg-sky-500",
+  ALOCADO: "bg-indigo-500",
+  REALIZADO: "bg-emerald-500",
+  FALTOU: "bg-rose-500",
+  CANCELADO: "bg-gray-300",
+};
+
+/**
+ * A agenda do dia como a equipe lê no Google Agenda (pedido do André, 30/10):
+ * uma lista só, em ordem de hora, uma linha por atendimento — "cirurgião ·
+ * serviço · profissional" — com a clínica embaixo e o estado na ponta. O que
+ * já passou esmaece e uma linha marca o "agora".
+ */
+function LinhaDoTempoDoDia({
+  pedidos,
+  data,
+  valores,
+}: {
+  pedidos: PedidoNaAgenda[];
+  data: Date;
+  valores: ValoresFiltro;
+}) {
+  const ordenados = [...pedidos].sort((a, b) => paraMinutos(a.horaInicio) - paraMinutos(b.horaInicio));
+  const ehHoje = isoDeData(data) === hojeISO();
+  const agora = ehHoje ? minutosAgora() : -1;
+  const fimDe = (p: PedidoNaAgenda) => paraMinutos(p.horaInicio) + p.duracaoMin;
+  // A linha do agora entra antes do primeiro atendimento que ainda não começou.
+  const indiceDoAgora = ehHoje ? ordenados.findIndex((p) => paraMinutos(p.horaInicio) > agora) : -1;
+
+  const alternar = (
+    <div className="flex justify-end mb-2">
+      <Link href={urlAgenda(valores, { agrupar: "profissional" })} className="text-[11px] text-bordo font-semibold">
+        Ver por profissional
+      </Link>
+    </div>
+  );
+
+  if (ordenados.length === 0) {
+    return (
+      <>
+        {alternar}
+        <Cartao>
+          <Vazio>Nenhum atendimento neste dia.</Vazio>
+        </Cartao>
+      </>
+    );
+  }
+
+  const linhaDoAgora = (
+    <div key="agora" className="flex items-center gap-2 px-4 py-0.5" aria-label="Agora">
+      <span className="w-2.5 h-2.5 rounded-full bg-red-500 shrink-0" />
+      <span className="h-px flex-1 bg-red-500" />
+      <span className="text-[10px] font-semibold text-red-600">{paraHora(agora)}</span>
+    </div>
+  );
+
+  const linhas: React.ReactNode[] = [];
+  ordenados.forEach((pedido, i) => {
+    if (i === indiceDoAgora) linhas.push(linhaDoAgora);
+    const passou = ehHoje && fimDe(pedido) <= agora;
+    const titulo = [pedido.doutorNome || pedido.clinica.nome, pedido.servico.nome, pedido.profissional?.nome]
+      .filter(Boolean)
+      .join(" · ");
+    linhas.push(
+      <Link
+        key={pedido.id}
+        href={`/painel/pedidos/${pedido.id}`}
+        className={`flex items-start gap-3 px-4 py-2.5 hover:bg-gray-50 ${passou ? "opacity-50" : ""}`}
+      >
+        <span className="w-[88px] shrink-0 text-xs tabular-nums text-gray-600 pt-0.5">
+          {pedido.horaInicio}–{paraHora(fimDe(pedido))}
+        </span>
+        <span className={`w-2.5 h-2.5 rounded-full mt-1.5 shrink-0 ${PONTO_DO_STATUS[pedido.status]}`} />
+        <span className="min-w-0 flex-1">
+          <span className="block text-sm font-semibold text-gray-900 break-words">{titulo}</span>
+          <span className="block text-[11px] text-gray-500">
+            {pedido.doutorNome ? `${pedido.clinica.nome} · ` : ""}
+            {pedido.profissional ? "" : <span className="text-red-600 font-semibold">sem profissional</span>}
+          </span>
+        </span>
+        <SeloStatus status={pedido.status} />
+      </Link>
+    );
+  });
+  if (indiceDoAgora === -1 && ehHoje) linhas.push(linhaDoAgora);
+
+  return (
+    <>
+      {alternar}
+      <Cartao className="!p-0 divide-y divide-gray-100 overflow-hidden">{linhas}</Cartao>
+    </>
   );
 }

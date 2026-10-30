@@ -21,6 +21,8 @@ export type ValoresFiltro = {
   todos?: string;
   /** "mes" = calendário do mês inteiro (reunião de 27/10). Vazio = por período. */
   visao?: string;
+  /** "profissional" = o dia agrupado por profissional; vazio = linha do tempo do dia. */
+  agrupar?: string;
 };
 
 /** Períodos oferecidos. Mais que quinzena vira relatório, não agenda. */
@@ -54,6 +56,7 @@ export function urlAgenda(valores: ValoresFiltro, troca: Partial<ValoresFiltro> 
   if (final.status) parametros.set("status", final.status);
   if (final.todos) parametros.set("todos", final.todos);
   if (final.visao) parametros.set("visao", final.visao);
+  if (final.agrupar) parametros.set("agrupar", final.agrupar);
   const consulta = parametros.toString();
   return consulta ? `/painel/agenda?${consulta}` : "/painel/agenda";
 }
