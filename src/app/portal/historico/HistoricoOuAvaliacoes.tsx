@@ -12,6 +12,8 @@ import { recebidoNoAto } from "@/lib/recebimento";
 import { SeloStatusCliente } from "@/components/SeloStatusCliente";
 import { AvaliarAtendimento } from "../AvaliarAtendimento";
 import { ResponderNps } from "../ResponderNps";
+import { PagarPendencias } from "./PagarPendencias";
+import { asaasConfigurado, tabelaDeJuros } from "@/lib/integracoes/asaas";
 
 /**
  * Histórico e avaliações (ata de 05/10): o que já aconteceu, numa página
@@ -69,6 +71,7 @@ export async function HistoricoOuAvaliacoes({ modo }: { modo: "historico" | "ava
         status: p.status,
         fatura: p.fatura,
         recebidoNoAto: recebidoNoAto(p.relatorio?.recebimento),
+        pagoOnline: Boolean(p.pixPagoEm || p.cartaoPagoEm),
       })
     );
     if (situacoes.every((s) => s === null)) return null;
@@ -110,23 +113,20 @@ export async function HistoricoOuAvaliacoes({ modo }: { modo: "historico" | "ava
       {modo === "historico" && comPagamentoPendente > 0 && (
         <Cartao className="mb-3 border-rose-200 bg-rose-50/40">
           <div className="font-display font-bold text-rose-700 text-sm mb-2">Pagamentos pendentes ({comPagamentoPendente})</div>
-          <ul className="divide-y divide-rose-100 text-xs">
-            {realizadas
+          <PagarPendencias
+            cartao={asaasConfigurado() ? { juros: tabelaDeJuros() } : null}
+            pendencias={realizadas
               .filter((v) => pagamentoDaVisita(v.itens) === "pendente")
-              .map(({ chave, itens }) => (
-                <li key={chave} className="py-2 flex flex-wrap items-center justify-between gap-2">
-                  <span className="text-gray-700">
-                    <strong>{formatarDataCurta(itens[0].data)}</strong> · {itens.map((p) => p.servico.nome).join(" + ")}
-                  </span>
-                  <span className="flex items-center gap-3">
-                    <strong className="text-bordo">{formatarReais(itens.reduce((t, p) => t + p.valorServicoCentavos, 0))}</strong>
-                    <Link href={`/portal/resumo/${itens[0].id}`} className="font-semibold text-bordo hover:underline">
-                      {itens[0].formaPagamento === "Pix" ? "Pagar com Pix" : "Ver resumo"}
-                    </Link>
-                  </span>
-                </li>
-              ))}
-          </ul>
+              .map(({ chave, itens }) => ({
+                chave,
+                data: formatarDataCurta(itens[0].data),
+                servicos: itens.map((p) => p.servico.nome).join(" + "),
+                valorCentavos: itens.reduce((t, p) => t + p.valorServicoCentavos, 0),
+                pedidoIds: itens.map((p) => p.id),
+                resumoId: itens[0].id,
+                naFatura: itens.some((p) => p.fatura),
+              }))}
+          />
         </Cartao>
       )}
 

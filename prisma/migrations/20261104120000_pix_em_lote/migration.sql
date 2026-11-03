@@ -1,0 +1,1 @@
+ALTER TABLE "CobrancaPix" ADD COLUMN "pedidoIds" TEXT[] DEFAULT ARRAY[]::TEXT[];

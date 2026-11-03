@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { pixDoAgendamento, type PixDoAgendamento } from "@/app/actions/cobrancas";
+import { pixDoAgendamento, pixEmLote, type PixDoAgendamento } from "@/app/actions/cobrancas";
 import { Aviso, Botao } from "@/components/ui";
 import { formatarReais } from "@/lib/dinheiro";
 
@@ -17,8 +17,11 @@ export function PagarComPix({
   pagoEm,
   disponivel,
   motivoIndisponivel,
+  pedidoIds,
 }: {
   pedidoId: string;
+  /** Pagamento em lote (03/11): os atendimentos cobrados juntos. */
+  pedidoIds?: string[];
   valorCentavos: number;
   pagoEm: string | null;
   disponivel: boolean;
@@ -35,7 +38,7 @@ export function PagarComPix({
   async function chamar(gerar: boolean) {
     setCarregando(true);
     try {
-      const resposta = await pixDoAgendamento(pedidoId, gerar);
+      const resposta = pedidoIds ? await pixEmLote(pedidoIds, gerar) : await pixDoAgendamento(pedidoId, gerar);
       setPix((atual) => (resposta.ok || !atual?.copiaECola ? resposta : atual));
       return resposta;
     } finally {
@@ -48,13 +51,14 @@ export function PagarComPix({
     inicio.current = Date.now();
     const intervalo = setInterval(async () => {
       if (Date.now() - inicio.current > 10 * 60 * 1000) return clearInterval(intervalo);
-      const r = await pixDoAgendamento(pedidoId, false);
+      const r = pedidoIds ? await pixEmLote(pedidoIds, false) : await pixDoAgendamento(pedidoId, false);
       if (r.ok && r.pago) {
         setPix(r);
         clearInterval(intervalo);
       }
     }, 15_000);
     return () => clearInterval(intervalo);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- a seleção do lote é fixa enquanto o QR está na tela.
   }, [mostrando, pedidoId]);
 
   async function copiar() {

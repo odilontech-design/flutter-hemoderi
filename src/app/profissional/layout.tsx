@@ -5,6 +5,7 @@ import { BotaoWhatsapp } from "@/components/BotaoWhatsapp";
 import { CentralDeAvisos } from "@/components/CentralDeAvisos";
 import {
   IconeAgenda,
+  IconeAjuda,
   IconeConfiguracoes,
   IconeDisponibilidade,
   IconeFinanceiro,
@@ -19,6 +20,7 @@ const ITENS = [
   { href: "/profissional/relatorios", icone: <IconeRelatorios />, rotulo: "Relatórios" },
   { href: "/profissional/ganhos", icone: <IconeFinanceiro />, rotulo: "Meus ganhos" },
   { href: "/profissional/meus-dados", icone: <IconeConfiguracoes />, rotulo: "Meus dados" },
+  { href: "/profissional/ajuda", icone: <IconeAjuda />, rotulo: "Ajuda" },
 ];
 
 export default async function LayoutProfissional({ children }: { children: React.ReactNode }) {

@@ -136,3 +136,12 @@ export function IconeEstrela({ className }: Props) {
     </svg>
   );
 }
+
+export function IconeAjuda({ className }: Props) {
+  return (
+    <svg {...BASE} className={className}>
+      <circle cx="12" cy="12" r="9" />
+      <path d="M9.5 9a2.5 2.5 0 1 1 3.5 2.3c-.7.3-1 .9-1 1.7v.5M12 17h.01" />
+    </svg>
+  );
+}

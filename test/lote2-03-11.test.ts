@@ -37,3 +37,14 @@ test("preço por paciente e por disparo nos pacotes", () => {
   assert.equal(opcaoCurta("AirFlow – GBT Machine (pacote 2 pacientes)"), "pacote 2 pacientes");
   assert.equal(opcaoCurta("LiteTouch – Frenectomia"), "Frenectomia");
 });
+
+import { tabelaDeJuros, totalComJuros } from "../src/lib/integracoes/asaas";
+test("cartão: tabela de juros por parcela e total com acréscimo", () => {
+  const t = tabelaDeJuros("0,4.5,5,lixo");
+  assert.equal(t.length, 12);
+  assert.deepEqual(t.slice(0, 4), [0, 4.5, 5, 0]);
+  assert.equal(totalComJuros(100000, 1, t), 100000);
+  assert.equal(totalComJuros(100000, 2, t), 104500);
+  assert.equal(totalComJuros(100000, 99, t), 100000);
+  assert.deepEqual(tabelaDeJuros(""), Array(12).fill(0));
+});

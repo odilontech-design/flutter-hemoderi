@@ -951,6 +951,8 @@ model Pedido {
   /// Pago pelo Pix do portal (QR Code gerado para o agendamento). Marcado em
   /// todos os serviços da visita quando o banco confirma.
   pixPagoEm    DateTime?
+  /// Pago com cartão pelo Asaas (ata de 03/11), à vista ou parcelado.
+  cartaoPagoEm DateTime?
   cobrancasPix CobrancaPix[] @relation("PixDoPedido")
 
   /// Quem vai atender. Em SOLICITADO é o profissional que a clínica pediu no
@@ -1695,6 +1697,8 @@ model CobrancaPix {
   pedidoId String?
   pedido   Pedido? @relation("PixDoPedido", fields: [pedidoId], references: [id], onDelete: SetNull)
   grupoId  String?
+  /// Pagamento em lote (ata de 03/11): vários atendimentos num Pix só.
+  pedidoIds String[] @default([])
 
   /// Identificador da cobrança no banco (txid). Único, gerado pelo
   /// sistema no formato que o BACEN exige (26-35 alfanuméricos).
@@ -1832,4 +1836,31 @@ model RegistroAuditoria {
 
   @@index([entidade, entidadeId])
   @@index([criadoEm])
+}
+
+/// Cobrança de cartão pelo Asaas (ata de 03/11): crédito à vista ou parcelado
+/// em até 12x, com os juros do parcelamento pagos pelo cliente. Cobre um ou
+/// vários atendimentos (pagamento em lote). O Pix continua pelo Bradesco.
+model CobrancaCartao {
+  id                 String    @id @default(cuid())
+  clinicaId          String
+  /// Id do pagamento no Asaas (o da 1ª parcela, quando parcelado).
+  asaasId            String    @unique
+  /// Id do parcelamento no Asaas, quando há mais de uma parcela.
+  parcelamentoId     String?
+  pedidoIds          String[]  @default([])
+  /// O valor dos atendimentos, sem juros.
+  valorCentavos      Int
+  /// O que o cliente paga, com os juros do parcelamento.
+  valorTotalCentavos Int
+  parcelas           Int       @default(1)
+  /// PENDENTE, PAGA ou CANCELADA.
+  status             String    @default("PENDENTE")
+  /// A página de pagamento do Asaas, onde o cliente digita o cartão.
+  linkPagamento      String?
+  criadaEm           DateTime  @default(now())
+  pagoEm             DateTime?
+
+  @@index([parcelamentoId])
+  @@index([clinicaId])
 }

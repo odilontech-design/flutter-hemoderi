@@ -8,6 +8,7 @@ import { agendamentoPublicoAtivo } from "@/lib/agendamento-publico";
 import {
   IconeAcessos,
   IconeAgenda,
+  IconeAjuda,
   IconeAgendamentos,
   IconeCatalogo,
   IconeClinicas,
@@ -34,6 +35,7 @@ const ITENS = [
   { href: "/painel/cupons", icone: <IconeCatalogo />, rotulo: "Cupons de desconto" },
   { href: "/painel/integracoes", icone: <IconeCatalogo />, rotulo: "Integrações" },
   { href: "/painel/acessos", icone: <IconeAcessos />, rotulo: "Acessos" },
+  { href: "/painel/ajuda", icone: <IconeAjuda />, rotulo: "Ajuda" },
 ];
 
 // As duas telas que expõem repasse por profissional e gestão de acesso —

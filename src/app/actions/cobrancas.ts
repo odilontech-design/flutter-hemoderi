@@ -1,5 +1,6 @@
 "use server";
 
+import { criarCobrancaCartao } from "@/lib/integracoes/asaas";
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { exigirInterno, registrarAuditoria } from "@/lib/sessao";
@@ -241,4 +242,103 @@ export async function pixDoAgendamento(pedidoId: string, gerar: boolean): Promis
     copiaECola,
     imagem: await QRCode.toDataURL(copiaECola, { margin: 1, width: 280 }),
   };
+}
+
+/**
+ * Pagamento em lote (ata de 03/11): a clínica escolhe várias pendências no
+ * histórico e paga tudo num Pix só. Entram só atendimentos dela, realizados
+ * ou confirmados, ainda não pagos e fora de fatura (a fatura tem o Pix dela).
+ * Cada visita entra inteira — os serviços do mesmo agendamento não se separam.
+ */
+export async function pixEmLote(pedidoIds: string[], gerar: boolean): Promise<PixDoAgendamento> {
+  const sessao = await exigirClinica();
+  const pedidos = [...new Set(pedidoIds)].slice(0, 100);
+  if (pedidos.length === 0) return { ok: false, erro: "Escolha ao menos um atendimento." };
+
+  const escolhidos = await prisma.pedido.findMany({
+    where: { id: { in: pedidos }, clinicaId: sessao.clinicaId },
+    select: { id: true, grupoId: true },
+  });
+  const grupos = escolhidos.map((p) => p.grupoId).filter((g): g is string => Boolean(g));
+  const membros = await prisma.pedido.findMany({
+    where: { clinicaId: sessao.clinicaId, OR: [{ id: { in: escolhidos.map((p) => p.id) } }, ...(grupos.length ? [{ grupoId: { in: grupos } }] : [])] },
+    select: { id: true, status: true, valorServicoCentavos: true, pixPagoEm: true, cartaoPagoEm: true, faturaId: true },
+    orderBy: { id: "asc" },
+  });
+  const cobraveis = membros.filter(
+    (m) => m.status !== "CANCELADO" && STATUS_QUE_PAGAM.includes(m.status) && !m.pixPagoEm && !m.cartaoPagoEm && !m.faturaId
+  );
+  if (cobraveis.length === 0) return { ok: true, pago: true, pagoEm: new Date().toISOString() };
+  const valorCentavos = cobraveis.reduce((soma, m) => soma + m.valorServicoCentavos, 0);
+  if (valorCentavos <= 0) return { ok: false, erro: "Há atendimento com valor sob consulta: a central informa o valor antes do pagamento." };
+
+  const ids = cobraveis.map((m) => m.id).sort();
+  // A mesma seleção reaproveita o Pix que já está aberto.
+  const abertas = await prisma.cobrancaPix.findMany({
+    where: { status: "ATIVA", pedidoIds: { hasEvery: ids } },
+    orderBy: { criadaEm: "desc" },
+    take: 5,
+  });
+  let cobranca = abertas.find((c) => c.pedidoIds.length === ids.length && c.valorCentavos === valorCentavos) ?? null;
+  if (cobranca) {
+    const consulta = await consultarCobranca(cobranca.txid);
+    if (consulta.ok && consulta.pago) return { ok: true, pago: true, pagoEm: new Date().toISOString() };
+  }
+
+  if (!cobranca) {
+    if (!gerar) return { ok: true, pago: false, valorCentavos };
+    const clinica = await prisma.clinica.findUnique({ where: { id: sessao.clinicaId }, select: { nome: true, cnpj: true } });
+    const criada = await criarCobrancaPix({
+      pedidoId: ids[0],
+      pedidoIds: ids,
+      valorCentavos,
+      vencimento: new Date(Date.now() + 3 * 24 * 3600 * 1000),
+      descricao: `Hemoderi - ${ids.length} atendimento(s) ${clinica?.nome ?? ""}`.trim(),
+      devedorNome: clinica?.nome ?? sessao.clinicaNome,
+      devedorCnpj: clinica?.cnpj ?? undefined,
+    });
+    if (!criada.ok || !criada.copiaECola) {
+      return { ok: false, erro: "Não foi possível gerar o Pix agora. Tente de novo em instantes ou fale com a central." };
+    }
+    return { ok: true, pago: false, valorCentavos, copiaECola: criada.copiaECola, imagem: await QRCode.toDataURL(criada.copiaECola, { margin: 1, width: 280 }) };
+  }
+
+  const copiaECola = cobranca.copiaECola ?? cobranca.qrCode;
+  if (!copiaECola) return { ok: false, erro: "O código Pix desta cobrança não está disponível. Fale com a central." };
+  return { ok: true, pago: false, valorCentavos, copiaECola, imagem: await QRCode.toDataURL(copiaECola, { margin: 1, width: 280 }) };
+}
+
+/**
+ * Cartão pelo Asaas (ata de 03/11): à vista ou em até 12x com os juros do
+ * parcelamento pagos pelo cliente. Vale para um agendamento ou para várias
+ * pendências juntas — as mesmas regras do Pix em lote. Devolve o link da
+ * página de pagamento do Asaas.
+ */
+export async function cartaoEmLote(pedidoIds: string[], parcelas: number): Promise<{ ok: boolean; link?: string; erro?: string }> {
+  const sessao = await exigirClinica();
+  const pedidos = [...new Set(pedidoIds)].slice(0, 100);
+  if (pedidos.length === 0) return { ok: false, erro: "Escolha ao menos um atendimento." };
+  const escolhidos = await prisma.pedido.findMany({
+    where: { id: { in: pedidos }, clinicaId: sessao.clinicaId },
+    select: { id: true, grupoId: true },
+  });
+  const grupos = escolhidos.map((p) => p.grupoId).filter((g): g is string => Boolean(g));
+  const membros = await prisma.pedido.findMany({
+    where: { clinicaId: sessao.clinicaId, OR: [{ id: { in: escolhidos.map((p) => p.id) } }, ...(grupos.length ? [{ grupoId: { in: grupos } }] : [])] },
+    select: { id: true, status: true, valorServicoCentavos: true, pixPagoEm: true, cartaoPagoEm: true, faturaId: true },
+  });
+  const cobraveis = membros.filter(
+    (m) => m.status !== "CANCELADO" && STATUS_QUE_PAGAM.includes(m.status) && !m.pixPagoEm && !m.cartaoPagoEm && !m.faturaId
+  );
+  if (cobraveis.length === 0) return { ok: false, erro: "Esses atendimentos já estão pagos ou estão na fatura do mês." };
+  const valorCentavos = cobraveis.reduce((soma, m) => soma + m.valorServicoCentavos, 0);
+  if (valorCentavos <= 0) return { ok: false, erro: "Há atendimento com valor sob consulta: a central informa o valor antes do pagamento." };
+  const resultado = await criarCobrancaCartao({
+    clinicaId: sessao.clinicaId,
+    pedidoIds: cobraveis.map((m) => m.id).sort(),
+    valorCentavos,
+    parcelas,
+    descricao: `Hemoderi - ${cobraveis.length} atendimento(s) - ${sessao.clinicaNome}`,
+  });
+  return resultado.ok ? { ok: true, link: resultado.link } : { ok: false, erro: resultado.erro };
 }

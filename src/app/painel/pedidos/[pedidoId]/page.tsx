@@ -228,6 +228,11 @@ export default async function DetalheDoPedido({
                     Pix pago em {formatarDataHora(pedido.pixPagoEm)}
                   </span>
                 )}
+                {pedido.cartaoPagoEm && (
+                  <span className="ml-2 text-[10px] font-semibold text-green-700">
+                    Cartão pago em {formatarDataHora(pedido.cartaoPagoEm)}
+                  </span>
+                )}
               </div>
             </div>
           )}

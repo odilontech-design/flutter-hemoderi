@@ -263,6 +263,8 @@ type DadosCobranca = {
   faturaId?: string;
   pedidoId?: string;
   grupoId?: string | null;
+  /** Pagamento em lote: todos os atendimentos cobrados neste Pix. */
+  pedidoIds?: string[];
   valorCentavos: number;
   vencimento: Date;
   descricao: string;
@@ -325,6 +327,7 @@ export async function criarCobrancaPix(dados: DadosCobranca): Promise<{
         faturaId: dados.faturaId ?? null,
         pedidoId: dados.pedidoId ?? null,
         grupoId: dados.grupoId ?? null,
+        pedidoIds: dados.pedidoIds ?? [],
         txid,
         valorCentavos: dados.valorCentavos,
         chavePix,
@@ -368,7 +371,7 @@ export async function consultarCobranca(txid: string): Promise<{
       const pagoEm = new Date(pagamento.horario);
       const cobranca = await prisma.cobrancaPix.findUnique({
         where: { txid },
-        select: { id: true, faturaId: true, pedidoId: true, grupoId: true, status: true },
+        select: { id: true, faturaId: true, pedidoId: true, grupoId: true, pedidoIds: true, status: true },
       });
       if (cobranca && cobranca.status !== "CONCLUIDA") {
         await prisma.cobrancaPix.update({ where: { txid }, data: { status: "CONCLUIDA", endToEndId: pagamento.endToEndId, pagoEm } });
@@ -376,7 +379,11 @@ export async function consultarCobranca(txid: string): Promise<{
           await prisma.fatura.update({ where: { id: cobranca.faturaId }, data: { status: "PAGA", pagaEm: pagoEm } });
         }
         // Pix do agendamento: todos os serviços da visita ficam como pagos.
-        if (cobranca.pedidoId) {
+        if (cobranca.pedidoIds.length > 0) {
+          // Pix em lote (03/11): baixa todos os atendimentos que ele cobria.
+          await prisma.pedido.updateMany({ where: { id: { in: cobranca.pedidoIds } }, data: { pixPagoEm: pagoEm } });
+          await preencherCondicaoPeloPix({ id: { in: cobranca.pedidoIds } }, pagoEm);
+        } else if (cobranca.pedidoId) {
           await prisma.pedido.updateMany({
             where: cobranca.grupoId ? { grupoId: cobranca.grupoId } : { id: cobranca.pedidoId },
             data: { pixPagoEm: pagoEm },

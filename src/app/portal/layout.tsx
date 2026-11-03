@@ -6,6 +6,7 @@ import { BotaoWhatsapp } from "@/components/BotaoWhatsapp";
 import { Aviso } from "@/components/ui";
 import {
   IconeAgendamentos,
+  IconeAjuda,
   IconeCatalogo,
   IconeClinicas,
   IconeConfiguracoes,
@@ -25,6 +26,7 @@ const ITENS = [
   { href: "/portal/avaliacoes", icone: <IconeEstrela />, rotulo: "Avaliações" },
   { href: "/portal/enderecos", icone: <IconeClinicas />, rotulo: "Meus endereços" },
   { href: "/portal/configuracoes", icone: <IconeConfiguracoes />, rotulo: "Configurações" },
+  { href: "/portal/ajuda", icone: <IconeAjuda />, rotulo: "Ajuda" },
 ];
 
 export default async function LayoutPortal({ children }: { children: React.ReactNode }) {

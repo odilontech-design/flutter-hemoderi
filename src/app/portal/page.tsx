@@ -167,7 +167,7 @@ export default async function MeusAgendamentos() {
                       o que fazer — pagar o Pix ou gerar o recibo. */}
                   <td className="py-2 pr-3 text-gray-600">
                     <div>{primeiro.formaPagamento ?? "—"}</div>
-                    {primeiro.pixPagoEm ? (
+                    {primeiro.pixPagoEm || primeiro.cartaoPagoEm ? (
                       <div className="mt-0.5 flex flex-wrap items-center gap-x-2">
                         <span className="text-[10px] font-semibold text-green-700">pago ✓</span>
                         <Link href={`/recibo/agendamento/${primeiro.id}`} className="text-[11px] font-semibold text-bordo hover:underline whitespace-nowrap">

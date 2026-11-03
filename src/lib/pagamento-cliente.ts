@@ -12,8 +12,10 @@ export function situacaoDoPagamento(pedido: {
   status: string;
   fatura: { status: string } | null;
   recebidoNoAto?: boolean;
+  /** Pago pelo portal (Pix do agendamento ou em lote). */
+  pagoOnline?: boolean;
 }): SituacaoDePagamento | null {
   if (pedido.status !== "REALIZADO") return null;
-  if (pedido.fatura?.status === "PAGA" || pedido.recebidoNoAto) return "pago";
+  if (pedido.fatura?.status === "PAGA" || pedido.recebidoNoAto || pedido.pagoOnline) return "pago";
   return "pendente";
 }

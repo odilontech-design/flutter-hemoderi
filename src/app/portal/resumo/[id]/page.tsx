@@ -10,6 +10,8 @@ import { AdicionarAgenda } from "@/components/AdicionarAgenda";
 import { ROTULO_STATUS_CLIENTE, STATUS_ATIVOS } from "@/lib/pedido";
 import { PagarComPix } from "../PagarComPix";
 import { configuradoBradesco } from "@/lib/integracoes/bradesco-pix";
+import { asaasConfigurado, tabelaDeJuros } from "@/lib/integracoes/asaas";
+import { PagarComCartao } from "../../PagarComCartao";
 
 export const dynamic = "force-dynamic";
 
@@ -178,6 +180,16 @@ export default async function ResumoDoAgendamento({ params }: { params: { id: st
             motivoIndisponivel={motivoPix}
           />
         </div>
+      )}
+
+      {/* Cartão de crédito pelo Asaas (ata de 03/11): à vista ou em até 12x. */}
+      {asaasConfigurado() && confirmado && totalCentavos > 0 && !pixPagoEm && !ativos.some((m) => m.cartaoPagoEm || m.faturaId) && (
+        <div className="max-w-2xl mt-3">
+          <PagarComCartao pedidoIds={ativos.map((m) => m.id)} valorCentavos={ativos.reduce((soma, m) => soma + m.valorServicoCentavos, 0)} juros={tabelaDeJuros()} />
+        </div>
+      )}
+      {ativos.some((m) => m.cartaoPagoEm) && (
+        <div className="max-w-2xl mt-3 text-xs font-semibold text-green-700">Pago com cartão ✓</div>
       )}
     </>
   );
