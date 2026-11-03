@@ -103,7 +103,13 @@ export async function locaisDaClinica(clinicaId: string): Promise<LocalDeAtendim
   return locais;
 }
 
-type IdentidadeDoLocal = { cep?: string | null; numero?: string | null; complemento?: string | null };
+type IdentidadeDoLocal = {
+  cep?: string | null;
+  numero?: string | null;
+  complemento?: string | null;
+  endereco?: string | null;
+  cidade?: string | null;
+};
 
 function normalizarParte(valor: string | null | undefined): string {
   return (valor ?? "")
@@ -121,6 +127,13 @@ function normalizarParte(valor: string | null | undefined): string {
  */
 export function mesmoLocal(a: IdentidadeDoLocal, b: IdentidadeDoLocal): boolean {
   const cepA = (a.cep ?? "").replace(/\D/g, "");
-  if (!cepA || cepA !== (b.cep ?? "").replace(/\D/g, "")) return false;
+  const cepB = (b.cep ?? "").replace(/\D/g, "");
+  // Sem CEP de um dos lados (endereço digitado à mão), compara rua e cidade.
+  if (!cepA || !cepB) {
+    const ruaA = normalizarParte(a.endereco);
+    if (!ruaA || ruaA !== normalizarParte(b.endereco) || normalizarParte(a.cidade) !== normalizarParte(b.cidade)) return false;
+  } else if (cepA !== cepB) {
+    return false;
+  }
   return normalizarParte(a.numero) === normalizarParte(b.numero) && normalizarParte(a.complemento) === normalizarParte(b.complemento);
 }

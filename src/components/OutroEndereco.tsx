@@ -55,7 +55,7 @@ export function OutroEndereco({ clinicaId, aoCriar }: { clinicaId?: string; aoCr
                   <Rotulo>Nome da clínica (onde será o atendimento)</Rotulo>
                   <Campo name="rotulo" required placeholder="Clínica Sorriso, Unidade Moema, consultório do Dr. Fulano…" />
                 </div>
-                <CamposEndereco />
+                <CamposEndereco cepObrigatorio={false} />
                 <div>
                   <Rotulo>Observações e referências (opcional)</Rotulo>
                   <Area name="observacoes" rows={2} maxLength={500} placeholder="Bloco B, sala 12, estacionamento no subsolo…" />

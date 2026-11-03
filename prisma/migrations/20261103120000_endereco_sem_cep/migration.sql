@@ -1,0 +1,1 @@
+ALTER TABLE "EnderecoClinica" ALTER COLUMN "cep" DROP NOT NULL;

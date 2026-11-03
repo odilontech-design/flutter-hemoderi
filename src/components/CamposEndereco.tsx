@@ -29,9 +29,12 @@ export function CamposEndereco({
   /** Avisa quando o endereço deixou de estar em branco — usado pelo
    *  agendamento público para só então pedir a identificação. */
   aoPreencher,
+  /** Falso nos endereços de atendimento da clínica: dá para digitar à mão, sem CEP (André, 03/11). */
+  cepObrigatorio = true,
 }: {
   inicial?: Endereco;
   aoPreencher?: (preenchido: boolean) => void;
+  cepObrigatorio?: boolean;
 }) {
   const [cep, setCep] = useState(formatarCep(inicial?.cep ?? ""));
   const [logradouro, setLogradouro] = useState(inicial?.endereco ?? "");
@@ -86,6 +89,18 @@ export function CamposEndereco({
     setManual(true);
     setEncontrado(true);
     setErro("");
+  }
+
+  // "Digitar o endereço à mão": quem não sabe o CEP (nos testes, mais de um
+  // dentista não sabia) escreve rua, bairro, cidade e estado direto.
+  function alternarManual() {
+    if (manual) {
+      setManual(false);
+      if (!consultado.current) setEncontrado(false);
+      return;
+    }
+    consultado.current = "";
+    preencherAMao();
   }
 
   async function buscar(valor: string) {
@@ -160,6 +175,7 @@ export function CamposEndereco({
 
   return (
     <>
+      {manual && <input type="hidden" name="manual" value="1" />}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
         <div>
           <Rotulo>CEP</Rotulo>
@@ -168,7 +184,7 @@ export function CamposEndereco({
               id={idDoCep}
               name="cep"
               inputMode="numeric"
-              required
+              required={cepObrigatorio || !manual}
               value={cep}
               maxLength={9}
               placeholder="01310-100"
@@ -191,6 +207,10 @@ export function CamposEndereco({
             {buscando ? "Buscando…" : "O endereço vem do CEP."}{" "}
             <button type="button" onClick={() => setProcurando((a) => !a)} className="font-semibold text-bordo hover:underline">
               Não sei o CEP
+            </button>
+            {" · "}
+            <button type="button" onClick={alternarManual} className="font-semibold text-bordo hover:underline">
+              {manual ? "Voltar a preencher pelo CEP" : "Digitar o endereço à mão"}
             </button>
           </div>
         </div>
@@ -269,6 +289,7 @@ export function CamposEndereco({
               name="cidade"
               value={cidade}
               readOnly={!manual}
+              required={manual}
               onChange={(e) => manual && setCidade(e.target.value)}
             />
           </div>
@@ -278,6 +299,7 @@ export function CamposEndereco({
               name="uf"
               value={uf}
               readOnly={!manual}
+              required={manual}
               maxLength={2}
               onChange={(e) => manual && setUf(e.target.value.toUpperCase())}
             />

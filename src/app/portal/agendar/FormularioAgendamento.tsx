@@ -190,35 +190,46 @@ function FormularioBase({
   }, [estado]);
   const enderecosHref = equipe?.enderecosHref ?? "/portal/enderecos";
 
-  const [localId, setLocalId] = useState(
+  // O local vem DEPOIS dos serviços e chega sem estar escolhido (André,
+  // 30/10: "primeiro o serviço, depois o endereço — o cara clica no endereço
+  // ou em adicionar outro"). Só nasce escolhido quando vem pronto da URL.
+  const localDeEntrada =
     equipe?.localInicialId && locais.some((l) => l.id === equipe.localInicialId)
       ? equipe.localInicialId
       : localInicialId !== null && locais.some((l) => l.id === localInicialId)
         ? localInicialId
-        : (locais[0]?.id ?? "")
-  );
+        : null;
+  const [localId, setLocalId] = useState<string | null>(localDeEntrada);
   // Endereço informado agora pela equipe: entra na lista quando a página
   // recarrega os locais, e já fica escolhido. Vai também para a URL, para a
   // escolha sobreviver se a página remontar o formulário ao recarregar.
   function escolherLocalNovo(id: string) {
     setLocalId(id);
-    setPasso(2);
+    setPasso(3);
     if (equipe) router.replace(`/painel/pedidos/novo?clinica=${equipe.clinicaId}&endereco=${id}`, { scroll: false });
   }
-  const local = locais.find((l) => l.id === localId) ?? locais[0];
-  const uf = (local?.uf ?? "").toUpperCase();
+  const local = localId === null ? undefined : locais.find((l) => l.id === localId);
+  // Antes de escolher o local, o preço mostrado é o do primeiro endereço; ao
+  // escolher, tudo se recalcula para a UF dele.
+  const uf = ((local ?? locais[0])?.uf ?? "").toUpperCase();
+  const ufsDosLocais = useMemo(() => locais.map((l) => (l.uf ?? "").toUpperCase()), [locais]);
 
-  // Só o que é atendido na UF do endereço escolhido. Some do seletor em vez de
-  // virar recusa no fim — a clínica não perde tempo montando o impossível.
+  // Serviço atendido em pelo menos um dos locais da clínica; o que não vale no
+  // local escolhido bloqueia ESSE local na etapa seguinte (ver abaixo), em vez
+  // de virar recusa no fim.
   const gruposVisiveis = useMemo(
     () =>
       grupos
         .map((g) => ({
           ...g,
-          servicos: g.servicos.filter((s) => !uf || !s.ufsIndisponiveis.map((u) => u.toUpperCase()).includes(uf)),
+          servicos: g.servicos.filter(
+            (s) =>
+              ufsDosLocais.length === 0 ||
+              ufsDosLocais.some((u) => !u || !s.ufsIndisponiveis.map((x) => x.toUpperCase()).includes(u))
+          ),
         }))
         .filter((g) => g.servicos.length > 0),
-    [grupos, uf]
+    [grupos, ufsDosLocais]
   );
   const porId = useMemo(
     () => new Map(gruposVisiveis.flatMap((g) => g.servicos).map((s) => [s.id, s])),
@@ -235,11 +246,9 @@ function FormularioBase({
     [gruposVisiveis]
   );
 
-  // Etapas: 1 local (só quando há mais de um), 2 serviços, 3 data e horário,
-  // 4 informações. Quem chega pelo catálogo com um serviço escolhido já começa
-  // nos serviços.
-  const temEtapaDeLocal = locais.length > 1;
-  const [passo, setPasso] = useState(() => (temEtapaDeLocal && !servicoInicialId && localInicialId === null ? 1 : 2));
+  // Etapas: 1 serviços, 2 local, 3 data e horário, 4 informações. Quem chega do
+  // catálogo com serviço (e local) escolhidos já começa adiante.
+  const [passo, setPasso] = useState(() => (servicoInicialId ? (localDeEntrada !== null ? 3 : 2) : 1));
   const [primeiraRenderizacao, setPrimeiraRenderizacao] = useState(true);
   useEffect(() => {
     if (primeiraRenderizacao) {
@@ -427,55 +436,10 @@ function FormularioBase({
         </div>
       )}
 
-      {/* O endereço em destaque (ata de 27/10): em texto pequeno passava
-          despercebido, e o agendamento saía com o local errado. */}
-      {!temEtapaDeLocal && local && (
-        <div className="rounded-2xl border-2 border-bordo/40 bg-white px-4 py-3">
-          <div className="text-[10px] font-semibold uppercase tracking-wide text-bordo">📍 Local do atendimento</div>
-          <div className="mt-1 text-sm font-semibold text-gray-800">{local.rotulo}</div>
-          {local.resumo && <div className="text-xs text-gray-600">{local.resumo}</div>}
-          <div className="mt-1.5 text-[11px] text-gray-500">
-            Não é este endereço?{" "}
-            <OutroEndereco clinicaId={equipe?.clinicaId} aoCriar={escolherLocalNovo} />
-          </div>
-        </div>
-      )}
-
-      {/* ── Local ─────────────────────────────────────────────────────────── */}
-      {temEtapaDeLocal && (
-        <Etapa numero={1} rotulo={1} passo={passo} irPara={setPasso} titulo="Onde será o atendimento" resumo={local ? `${local.rotulo}${local.resumo ? ` · ${local.resumo}` : ""}` : null}>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
-            {locais.map((l) => {
-              const escolhido = l.id === (local?.id ?? "");
-              return (
-                <button
-                  key={l.id || "principal"}
-                  type="button"
-                  onClick={() => {
-                    setLocalId(l.id);
-                    setPasso(2);
-                  }}
-                  aria-pressed={escolhido}
-                  className={`text-left rounded-xl border p-3 transition-colors ${
-                    escolhido ? "border-bordo bg-bordo text-white" : "border-gray-200 bg-white hover:border-bordo/40"
-                  }`}
-                >
-                  <div className="text-xs font-semibold">{l.rotulo}</div>
-                  <div className={`text-[10px] mt-1 ${escolhido ? "text-white/70" : "text-gray-400"}`}>{l.resumo || "—"}</div>
-                </button>
-              );
-            })}
-          </div>
-          <div className="mt-2">
-            <OutroEndereco clinicaId={equipe?.clinicaId} aoCriar={escolherLocalNovo} />
-          </div>
-        </Etapa>
-      )}
-
       {/* ── Equipamento e serviços ────────────────────────────────────────── */}
       <Etapa
-        numero={2}
-        rotulo={temEtapaDeLocal ? 2 : 1}
+        numero={1}
+        rotulo={1}
         passo={passo}
         irPara={setPasso}
         titulo="Equipamento e serviços"
@@ -668,12 +632,12 @@ function FormularioBase({
                   variante="secundario"
                   onClick={() => {
                     setFamiliaAberta(null);
-                    document.getElementById("passo-2")?.scrollIntoView({ behavior: "smooth", block: "start" });
+                    document.getElementById("passo-1")?.scrollIntoView({ behavior: "smooth", block: "start" });
                   }}
                 >
                   + Adicionar outro serviço
                 </Botao>
-                <Botao type="button" disabled={repetidoSemPaciente || perguntaPendente || faltaPacienteNaLinha} onClick={() => setPasso(3)}>
+                <Botao type="button" disabled={repetidoSemPaciente || perguntaPendente || faltaPacienteNaLinha} onClick={() => setPasso(local ? 3 : 2)}>
                   Continuar
                 </Botao>
               </div>
@@ -727,8 +691,56 @@ function FormularioBase({
         )}
       </Etapa>
 
+      {/* ── Local ─────────────────────────────────────────────────────────── */}
+      <Etapa
+        numero={2}
+        rotulo={2}
+        passo={passo}
+        irPara={setPasso}
+        titulo="Onde será o atendimento"
+        resumo={local ? `${local.rotulo}${local.resumo ? ` · ${local.resumo}` : ""}` : null}
+      >
+        <p className="text-[11px] text-gray-500 mb-3">Toque no endereço do atendimento ou cadastre outro — pode digitar à mão, sem o CEP.</p>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+          {locais.map((l) => {
+            const escolhido = local !== undefined && l.id === local.id;
+            const ufDoLocal = (l.uf ?? "").toUpperCase();
+            // Região que não atende algum dos serviços já escolhidos.
+            const naoAtende = linhas.filter((x) => ufDoLocal && x.servico.ufsIndisponiveis.map((u) => u.toUpperCase()).includes(ufDoLocal));
+            return (
+              <button
+                key={l.id || "principal"}
+                type="button"
+                disabled={naoAtende.length > 0}
+                onClick={() => {
+                  setLocalId(l.id);
+                  setPasso(3);
+                }}
+                aria-pressed={escolhido}
+                className={`text-left rounded-xl border p-3 transition-colors min-h-[64px] ${
+                  naoAtende.length > 0
+                    ? "border-gray-200 bg-gray-50 text-gray-400 cursor-not-allowed"
+                    : escolhido
+                      ? "border-bordo bg-bordo text-white"
+                      : "border-gray-300 bg-white hover:border-bordo hover:bg-bege/40"
+                }`}
+              >
+                <div className="text-xs font-semibold">{l.rotulo}</div>
+                <div className={`text-[11px] mt-1 ${escolhido ? "text-white/80" : "text-gray-500"}`}>{l.resumo || "—"}</div>
+                {naoAtende.length > 0 && (
+                  <div className="text-[10px] mt-1 text-amber-700">Não atendemos {naoAtende.map((x) => x.servico.nome).join(", ")} nessa região.</div>
+                )}
+              </button>
+            );
+          })}
+        </div>
+        <div className="mt-3">
+          <OutroEndereco clinicaId={equipe?.clinicaId} aoCriar={escolherLocalNovo} />
+        </div>
+      </Etapa>
+
       {/* ── Data e horário ────────────────────────────────────────────────── */}
-      <Etapa numero={3} rotulo={temEtapaDeLocal ? 3 : 2} passo={passo} irPara={setPasso} titulo="Data e horário" resumo={data && hora ? `${dataLegivel} às ${hora}` : null}>
+      <Etapa numero={3} rotulo={3} passo={passo} irPara={setPasso} titulo="Data e horário" resumo={data && hora ? `${dataLegivel} às ${hora}` : null}>
         <div className="space-y-4 max-w-xl">
           <div>
             <Rotulo>Data</Rotulo>
@@ -813,7 +825,7 @@ function FormularioBase({
       </Etapa>
 
       {/* ── Informações ───────────────────────────────────────────────────── */}
-      <Etapa numero={4} rotulo={temEtapaDeLocal ? 4 : 3} passo={passo} irPara={setPasso} titulo="Informações do atendimento">
+      <Etapa numero={4} rotulo={4} passo={passo} irPara={setPasso} titulo="Informações do atendimento">
         <div className="space-y-4 max-w-2xl">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
@@ -921,7 +933,7 @@ function FormularioBase({
             </Aviso>
           ) : null}
 
-          <BotaoDeEnvio desabilitado={!horaLivre || linhas.length === 0 || pacienteFaltando || (Boolean(equipe) && estado.ok)}>
+          <BotaoDeEnvio desabilitado={!local || !horaLivre || linhas.length === 0 || pacienteFaltando || (Boolean(equipe) && estado.ok)}>
             {equipe ? "Criar agendamento" : "Solicitar agendamento"}
           </BotaoDeEnvio>
           <div className="text-[10px] text-gray-400">

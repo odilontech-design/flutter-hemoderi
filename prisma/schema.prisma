@@ -531,7 +531,8 @@ model EnderecoClinica {
   /// Como a clínica chama o lugar: "Unidade Moema", "Consultório do Rio".
   rotulo String
 
-  cep         String
+  /// Opcional: quem não sabe o CEP digita o endereço à mão (03/11).
+  cep         String?
   endereco    String
   numero      String?
   complemento String?

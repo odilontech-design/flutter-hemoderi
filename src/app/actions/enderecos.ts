@@ -42,12 +42,18 @@ async function criarEnderecoDaClinica(clinicaId: string, dados: FormData): Promi
   const rotulo = String(dados.get("rotulo") ?? "").trim();
   if (!rotulo) return { ok: false, erro: "Informe o nome da clínica ou consultório (ex.: Unidade Moema)." };
 
-  const cep = String(dados.get("cep") ?? "").trim();
-  if (!cepValido(cep)) return { ok: false, erro: "Informe um CEP válido: é dele que sai o endereço do atendimento." };
+  // CEP é opcional: quem não sabe digita o endereço à mão (André, 03/11). Com
+  // CEP, ele tem de ser válido; sem, rua, cidade e estado são obrigatórios.
+  const cepDigitado = String(dados.get("cep") ?? "").trim();
+  if (cepDigitado && !cepValido(cepDigitado)) return { ok: false, erro: "Confira o CEP — ou apague-o e digite o endereço à mão." };
+  const cep = cepDigitado || null;
 
   const endereco = String(dados.get("endereco") ?? "").trim();
+  const cidade = String(dados.get("cidade") ?? "").trim();
   const uf = String(dados.get("uf") ?? "").trim().toUpperCase().slice(0, 2);
-  if (!endereco || uf.length !== 2) return { ok: false, erro: "Confira o CEP — não foi possível preencher o endereço." };
+  if (!endereco) return { ok: false, erro: cep ? "Confira o CEP — não foi possível preencher o endereço." : "Informe a rua ou avenida." };
+  if (!cep && (!cidade || uf.length !== 2)) return { ok: false, erro: "Sem o CEP, informe a cidade e o estado (2 letras)." };
+  if (uf.length !== 2) return { ok: false, erro: "Confira o CEP — não foi possível preencher o endereço." };
 
   const numero = String(dados.get("numero") ?? "").trim();
   if (!numero) return { ok: false, erro: "Informe o número." };
@@ -61,10 +67,12 @@ async function criarEnderecoDaClinica(clinicaId: string, dados: FormData): Promi
       cep: true,
       numero: true,
       complemento: true,
-      enderecos: { where: { ativo: true }, select: { rotulo: true, cep: true, numero: true, complemento: true } },
+      endereco: true,
+      cidade: true,
+      enderecos: { where: { ativo: true }, select: { rotulo: true, cep: true, numero: true, complemento: true, endereco: true, cidade: true } },
     },
   });
-  const novo = { cep, numero, complemento };
+  const novo = { cep, numero, complemento, endereco, cidade };
   if (clinica && mesmoLocal(novo, clinica)) {
     return { ok: false, erro: "Esse endereço já é o do cadastro principal da clínica." };
   }
@@ -82,7 +90,7 @@ async function criarEnderecoDaClinica(clinicaId: string, dados: FormData): Promi
       complemento,
       observacoes: String(dados.get("observacoes") ?? "").trim().slice(0, 500) || null,
       bairro: String(dados.get("bairro") ?? "").trim() || null,
-      cidade: String(dados.get("cidade") ?? "").trim() || null,
+      cidade: cidade || null,
       uf,
     },
   });

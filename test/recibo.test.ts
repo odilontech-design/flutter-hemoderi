@@ -63,3 +63,14 @@ test("discriminação: locação e o nome do equipamento", () => {
   assert.equal(discriminacaoDoServico({ nome: "I-PRF Day", tipoEquipamento: "Centrífuga PRF" }), "Locação de equipamento - Centrífuga PRF");
   assert.equal(discriminacaoDoServico({ nome: "Palestra", tipoEquipamento: null }), "Palestra");
 });
+
+import { mesmoLocal } from "../src/lib/endereco";
+test("endereço digitado à mão (sem CEP): duplicata por rua, número e cidade", () => {
+  const a = { cep: null, endereco: "Rua das Palmeiras", numero: "45", complemento: null, cidade: "Campinas" };
+  assert.equal(mesmoLocal(a, { ...a, endereco: "rua das palmeiras", cidade: "CAMPINAS" }), true);
+  assert.equal(mesmoLocal(a, { ...a, numero: "46" }), false);
+  assert.equal(mesmoLocal(a, { ...a, cidade: "Jundiaí" }), false);
+  // com CEP dos dois lados, só o CEP conta
+  assert.equal(mesmoLocal({ cep: "13025-000", numero: "1" }, { cep: "13025000", numero: "1" }), true);
+  assert.equal(mesmoLocal({ cep: "13025-000", numero: "1" }, { cep: "13026-000", numero: "1" }), false);
+});

@@ -37,7 +37,7 @@ export function NovoEndereco() {
           É como você vai reconhecer o lugar na hora de agendar.
         </div>
       </div>
-      <CamposEndereco />
+      <CamposEndereco cepObrigatorio={false} />
       <div>
         <Rotulo>Observações e referências (opcional)</Rotulo>
         <Area name="observacoes" rows={2} maxLength={500} placeholder="Ex.: bloco B, sala 12, estacionamento no subsolo, entrada pelos fundos" />
