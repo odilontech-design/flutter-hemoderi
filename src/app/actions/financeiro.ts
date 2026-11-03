@@ -1,5 +1,7 @@
 "use server";
 
+import { registrarNegocioAprovado } from "@/lib/integracoes/pipedrive";
+import { textoDoRelatorioDoPedido } from "@/lib/texto-relatorio-pedido";
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { exigirInterno, exigirResponsavel, registrarAuditoria } from "@/lib/sessao";
@@ -295,6 +297,8 @@ export async function aprovarRelatorio(pedidoId: string): Promise<Resultado> {
   });
 
   await registrarAuditoria(sessao.usuarioId, "Pedido", pedidoId, "aprovar-relatorio");
+  // Só agora o atendimento vira negócio GANHO no PipeDrive, com o relatório em texto (ata de 03/11).
+  await registrarNegocioAprovado(pedidoId, await textoDoRelatorioDoPedido(pedidoId));
 
   revalidatePath("/painel/financeiro");
   revalidatePath("/profissional/ganhos");

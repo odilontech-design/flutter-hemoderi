@@ -321,8 +321,7 @@ export async function vincularSolicitacao(
   );
   // Todo agendamento vira negócio no PipeDrive (ata de 21/10), inclusive o
   // que nasce de uma solicitação do site.
-  const { criarNegocio } = await import("@/lib/integracoes/pipedrive");
-  await criarNegocio(pedido.id);
+  // O negócio no PipeDrive só nasce na aprovação do relatório (ata de 03/11).
 
   revalidatePath("/painel/solicitacoes");
   revalidatePath("/painel/pedidos");

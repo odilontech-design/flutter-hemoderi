@@ -18,12 +18,15 @@ export function FiltrosEsteira({
   profissionais,
   familias,
   ativo,
+  manter = {},
 }: {
   etapa: string;
   filtros: Filtros;
   profissionais: { id: string; nome: string }[];
   familias: string[];
   ativo: boolean;
+  /** Parâmetros da tela que a busca não pode perder (visão em tabela, ordem). */
+  manter?: Record<string, string>;
 }) {
   const form = useRef<HTMLFormElement>(null);
   const [periodo, setPeriodo] = useState(filtros.periodo || (filtros.de || filtros.ate ? "intervalo" : ""));
@@ -32,6 +35,9 @@ export function FiltrosEsteira({
   return (
     <form ref={form} method="get" action="/painel/pedidos" className="mb-3 rounded-2xl border border-gray-200 bg-white p-3">
       <input type="hidden" name="filtro" value={etapa} />
+      {Object.entries(manter).map(([k, v]) => (
+        <input key={k} type="hidden" name={k} value={v} />
+      ))}
       <div className="flex flex-col sm:flex-row gap-2">
         <input
           type="search"

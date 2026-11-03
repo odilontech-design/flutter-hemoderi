@@ -2,11 +2,12 @@
  * PipeDrive.
  *
  * Por decisão do cliente (14/09), o PipeDrive continua sendo a fonte central
- * do histórico comercial. Na transição (ata de 21/10), todo agendamento vira
- * um negócio lá, com clínica e contato, para nada se perder. As
- * escritas são só estas: criar o negócio quando o pedido nasce (21/09,
- * "automatizar a criação de negócios entre as plataformas"), marcar como
- * GANHO quando o atendimento é realizado e PERDIDO quando é cancelado.
+ * do histórico comercial até a migração completa (1º/01). Desde a ata de
+ * 03/11 o negócio nasce SÓ depois que o pós-venda aprova o relatório, já como
+ * GANHO, com o relatório em texto numa nota e os campos que a Stephanie
+ * confere (paciente, profissional, procedimento, forma de pagamento e
+ * recebimento do profissional). Cancelado só marca PERDIDO o negócio que já
+ * existia (os criados antes dessa regra).
  *
  * O sistema só escreve; não lê de volta o que a equipe edita lá. Duas fontes
  * editáveis do mesmo dado divergem em semanas — a do agendamento é esta.
@@ -287,6 +288,9 @@ async function fecharNegocio(pedidoId: string, desfecho: "won" | "lost", motivo?
   });
   if (!pedido) return;
 
+  // Cancelado sem negócio não cria nada (ata de 03/11): o negócio só nasce
+  // na aprovação do relatório.
+  if (!pedido.pipedriveNegocioId && desfecho === "lost") return;
   if (!pedido.pipedriveNegocioId && configurado()) {
     await criarNegocio(pedido.id);
     pedido = await prisma.pedido.findUnique({
@@ -324,4 +328,128 @@ export async function marcarNegocioGanho(pedidoId: string): Promise<void> {
 
 export async function marcarNegocioPerdido(pedidoId: string, motivo?: string | null): Promise<void> {
   await fecharNegocio(pedidoId, "lost", motivo);
+}
+
+// ─── Negócio após a aprovação do relatório (ata de 03/11) ────────────────────
+
+/** Palavras que não entram no nome do negócio (ata de 03/11). */
+const FORA_DO_TITULO = /\b(instituto|light\s*touch|litetouch|remo[cç][aã]o de lentes)\b/gi;
+
+/**
+ * "2026 0073 Dra. Maria Gabriela DAIMED": ano, número, doutor e clínica — o
+ * padrão que a equipe lança à mão, sem "instituto" nem o nome do serviço.
+ * Quando a clínica tem o nome do próprio doutor, ele não se repete.
+ */
+export function tituloDoNegocio(d: { ano: number; numero: number; doutor: string | null; clinica: string }): string {
+  const limpar = (t: string) => t.replace(FORA_DO_TITULO, " ").replace(/\s+/g, " ").trim();
+  const doutor = limpar(d.doutor ?? "");
+  const clinica = limpar(d.clinica);
+  const normal = (t: string) =>
+    t
+      .normalize("NFD")
+      .replace(/[̀-ͯ]/g, "")
+      .replace(/^(dr|dra)\.?\s+/i, "")
+      .toLowerCase();
+  const partes = [String(d.ano), String(d.numero).padStart(4, "0"), doutor];
+  if (clinica && (!doutor || !normal(clinica).includes(normal(doutor)))) partes.push(clinica);
+  return partes.filter(Boolean).join(" ");
+}
+
+/** O que o profissional declarou ter recebido no atendimento, em texto. */
+export function situacaoDoRecebimento(recebimento: string | null | undefined, compareceu: boolean): string {
+  if (!compareceu) return "Paciente não compareceu";
+  if (recebimento === "TOTAL") return "Recebeu o valor total";
+  if (recebimento === "PARCIAL") return "Recebeu parte do valor";
+  if (recebimento) return "Não recebeu";
+  return "Não informado";
+}
+
+/**
+ * Cria (ou completa, se for de antes da regra nova) o negócio do atendimento
+ * aprovado: GANHO, com título no padrão, campos personalizados e o relatório
+ * em texto numa nota. Nunca lança.
+ */
+export async function registrarNegocioAprovado(pedidoId: string, textoDoRelatorio: string | null): Promise<void> {
+  const pedido = await prisma.pedido.findUnique({
+    where: { id: pedidoId },
+    select: {
+      id: true,
+      numero: true,
+      data: true,
+      valorServicoCentavos: true,
+      pipedriveNegocioId: true,
+      doutorNome: true,
+      pacienteNome: true,
+      procedimentoPaciente: true,
+      formaPagamento: true,
+      contatoClinica: true,
+      clinica: { select: { nome: true } },
+      profissional: { select: { nome: true } },
+      criadoPor: { select: { email: true } },
+      relatorio: { select: { compareceu: true, recebimento: true, pacienteNomeInformado: true, doutorNomeInformado: true } },
+    },
+  });
+  if (!pedido) return;
+  if (!configurado()) {
+    await registrarSincronizacao(pedido.id, "negocio-aprovado", false, undefined, "Integração não configurada.");
+    return;
+  }
+
+  const doutor = pedido.relatorio?.doutorNomeInformado ?? pedido.doutorNome;
+  const corpo: Record<string, unknown> = {
+    title: tituloDoNegocio({ ano: pedido.data.getUTCFullYear(), numero: pedido.numero, doutor, clinica: pedido.clinica.nome }),
+    value: pedido.valorServicoCentavos / 100,
+    currency: "BRL",
+    status: "won",
+    expected_close_date: isoDeData(pedido.data),
+  };
+  // Campos personalizados: a chave (hash) de cada um vem do ambiente; sem a
+  // chave, o dado continua no relatório da nota.
+  const campos: [string | undefined, string | null | undefined][] = [
+    [process.env.PIPEDRIVE_CAMPO_NUMERO_PEDIDO, String(pedido.numero)],
+    [process.env.PIPEDRIVE_CAMPO_PACIENTE, pedido.relatorio?.pacienteNomeInformado ?? pedido.pacienteNome],
+    [process.env.PIPEDRIVE_CAMPO_PROFISSIONAL, pedido.profissional?.nome],
+    [process.env.PIPEDRIVE_CAMPO_PROCEDIMENTO, pedido.procedimentoPaciente],
+    [process.env.PIPEDRIVE_CAMPO_FORMA_PAGAMENTO, pedido.formaPagamento],
+    [
+      process.env.PIPEDRIVE_CAMPO_STATUS_PAGAMENTO_PROFISSIONAL,
+      situacaoDoRecebimento(pedido.relatorio?.recebimento, pedido.relatorio?.compareceu ?? true),
+    ],
+  ];
+  for (const [chave, valor] of campos) if (chave?.trim() && valor) corpo[chave.trim()] = valor;
+
+  try {
+    let negocioId = pedido.pipedriveNegocioId;
+    if (negocioId) {
+      await chamar(`/deals/${negocioId}`, "PUT", corpo);
+    } else {
+      const funil = await resolverFunil();
+      Object.assign(corpo, { pipeline_id: funil.pipelineId, stage_id: funil.stageId });
+      try {
+        const orgId = await organizacaoDaClinica(pedido.clinica.nome);
+        corpo.org_id = orgId;
+        if (doutor?.trim()) corpo.person_id = await pessoaDeContato(doutor.trim(), orgId, pedido.contatoClinica);
+      } catch {
+        // Sem organização/pessoa o negócio ainda nasce — o título já traz a clínica.
+      }
+      try {
+        const dono = pedido.criadoPor?.email ? await usuarioPorEmail(pedido.criadoPor.email) : null;
+        if (dono) corpo.user_id = dono;
+      } catch {
+        // Sem dono, fica com o dono do token.
+      }
+      const json = (await chamar("/deals", "POST", corpo)) as { data?: { id?: number } } | null;
+      if (!json?.data?.id) throw new Error("Resposta do PipeDrive sem id do negócio.");
+      negocioId = String(json.data.id);
+      await prisma.pedido.update({ where: { id: pedido.id }, data: { pipedriveNegocioId: negocioId } });
+    }
+    if (textoDoRelatorio) {
+      // Nota em texto (ata de 03/11): quebra de linha vira <br>, que é o que o PipeDrive mostra.
+      const conteudo = textoDoRelatorio.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/\n/g, "<br>");
+      await chamar("/notes", "POST", { deal_id: Number(negocioId), content: conteudo });
+    }
+    await registrarSincronizacao(pedido.id, "negocio-aprovado", true, negocioId);
+  } catch (erro) {
+    await registrarSincronizacao(pedido.id, "negocio-aprovado", false, pedido.pipedriveNegocioId ?? undefined, descreverErroPipedrive(erro));
+  }
 }

@@ -3,42 +3,41 @@
  * rotina diária poder chamar sem sessão. Quem chama de tela é
  * actions/integracoes.ts, que confere o responsável antes.
  *
- * A ação certa é decidida pelo ESTADO do pedido, não pela ação que falhou: um
- * realizado precisa acabar como ganho, um cancelado como perdido (as duas
- * criam o negócio antes, se faltar), um em aberto só precisa do negócio.
+ * A ação certa é decidida pelo ESTADO do pedido, não pela ação que falhou:
+ * relatório aprovado vira negócio GANHO (ata de 03/11), cancelado com negócio
+ * vira PERDIDO, e o resto espera a aprovação.
  */
 
 import { prisma } from "@/lib/prisma";
 import { pendenciasDeSincronizacao } from "@/lib/sincronizacao";
-import { criarNegocio, marcarNegocioGanho, marcarNegocioPerdido, pipedriveConfigurado, testarConexao } from "./pipedrive";
+import { marcarNegocioPerdido, pipedriveConfigurado, registrarNegocioAprovado, testarConexao } from "./pipedrive";
+import { textoDoRelatorioDoPedido } from "@/lib/texto-relatorio-pedido";
 
 export async function reprocessarPedidoPipedrive(pedidoId: string): Promise<{ ok: boolean; erro?: string }> {
   const pedido = await prisma.pedido.findUnique({
     where: { id: pedidoId },
-    select: { id: true, status: true, pipedriveNegocioId: true, motivoCancelamento: true },
+    select: { id: true, status: true, pipedriveNegocioId: true, motivoCancelamento: true, relatorio: { select: { aprovadoEm: true } } },
   });
   if (!pedido) return { ok: false, erro: "Agendamento não encontrado." };
 
-  if (pedido.status === "REALIZADO") {
-    await marcarNegocioGanho(pedido.id);
-  } else if (pedido.status === "CANCELADO") {
+  // Desde a ata de 03/11 o negócio só nasce com o relatório aprovado.
+  if (pedido.relatorio?.aprovadoEm) {
+    await registrarNegocioAprovado(pedido.id, await textoDoRelatorioDoPedido(pedido.id));
+  } else if (pedido.status === "CANCELADO" && pedido.pipedriveNegocioId) {
     await marcarNegocioPerdido(pedido.id, pedido.motivoCancelamento);
-  } else if (pedido.pipedriveNegocioId) {
-    // O negócio já existe (criado por outra tentativa): criarNegocio sairia
-    // calado e a pendência antiga ficaria na lista para sempre. Registra o
-    // que já é fato.
+  } else {
+    // Nada a escrever agora (o negócio virá na aprovação): a pendência antiga
+    // de "criar negócio" sai da lista em vez de ficar para sempre.
     await prisma.sincronizacaoExterna.create({
       data: {
         sistema: "PIPEDRIVE",
         entidade: "Pedido",
         entidadeId: pedido.id,
-        acao: "criar-negocio",
+        acao: "aguardando-aprovacao",
         sucesso: true,
         referencia: pedido.pipedriveNegocioId,
       },
     });
-  } else {
-    await criarNegocio(pedido.id);
   }
 
   // Confere se a última tentativa passou a ser sucesso — o reprocessamento

@@ -21,7 +21,8 @@ import { AcoesPedido, EditarAjudaDeCusto } from "./AcoesPedido";
 import { CondicaoPagamento } from "./CondicaoPagamento";
 import { ConferenciaRelatorio } from "./ConferenciaRelatorio";
 import { FiltrosEsteira } from "./FiltrosEsteira";
-import { consultaDosFiltros, lerFiltrosEsteira, ondeDosFiltros, temFiltro } from "@/lib/filtros-esteira";
+import { consultaDosFiltros, lerFiltrosEsteira, lerOrdem, ondeDosFiltros, ordenarPedidos, temFiltro } from "@/lib/filtros-esteira";
+import { TabelaEsteira } from "./TabelaEsteira";
 import { ValorServico } from "./ValorServico";
 import { perfilPermite } from "@/lib/papeis";
 import { AgendaDaEquipe } from "@/components/AgendaDaEquipe";
@@ -73,6 +74,14 @@ export default async function Esteira({
   // pagamento (ata de 03/11): a ajuda é decidida em "Para alocar" e a condição
   // é classificação interna do comercial.
   const telaDeAlocados = filtro.chave === "alocados";
+  // Cartões (padrão) ou tabela ordenável (ata de 03/11).
+  const emTabela = searchParams.visao === "tabela";
+  const ordem = lerOrdem(searchParams.ordem);
+  const extras = (o: Record<string, string> = {}) => ({
+    ...(emTabela ? { visao: "tabela" } : {}),
+    ...(searchParams.ordem ? { ordem: searchParams.ordem } : {}),
+    ...o,
+  });
   // Busca e filtros (30/10) valem para a lista e para os números das abas.
   const ondePagamento = ondeDosFiltros(filtros, hojeUTC());
 
@@ -84,7 +93,7 @@ export default async function Esteira({
       include: {
         clinica: { select: { nome: true, telefone: true, endereco: true, numero: true, complemento: true, bairro: true, cidade: true, uf: true } },
         endereco: { select: { rotulo: true, endereco: true, numero: true, complemento: true, bairro: true, cidade: true, uf: true, observacoes: true } },
-        servico: { select: { nome: true } },
+        servico: { select: { nome: true, familia: true } },
         profissional: { select: { nome: true, telefone: true } },
         relatorio: { include: INCLUIR_ADICIONAIS },
       },
@@ -173,7 +182,7 @@ export default async function Esteira({
           return (
             <Link
               key={etapa.chave}
-              href={`/painel/pedidos?${consultaDosFiltros(filtros, { filtro: etapa.chave })}`}
+              href={`/painel/pedidos?${consultaDosFiltros(filtros, extras({ filtro: etapa.chave }))}`}
               title={etapa.descricao}
               className={`text-[11px] font-semibold px-3 py-2.5 sm:py-1.5 rounded-full border ${
                 selecionada
@@ -196,7 +205,24 @@ export default async function Esteira({
         profissionais={profissionais.map(({ id, nome }) => ({ id, nome }))}
         familias={familias}
         ativo={comFiltro}
+        manter={extras()}
       />
+
+      <div className="flex items-center gap-2 mb-3 text-[11px]">
+        <span className="text-gray-500">Ver em:</span>
+        {[
+          { rotulo: "Cartões", ativo: !emTabela, href: `/painel/pedidos?${consultaDosFiltros(filtros, { filtro: filtro.chave })}` },
+          { rotulo: "Tabela", ativo: emTabela, href: `/painel/pedidos?${consultaDosFiltros(filtros, { filtro: filtro.chave, visao: "tabela", ...(searchParams.ordem ? { ordem: searchParams.ordem } : {}) })}` },
+        ].map((v) => (
+          <Link
+            key={v.rotulo}
+            href={v.href}
+            className={`font-semibold px-3 py-1.5 rounded-full border ${v.ativo ? "bg-bordo text-white border-bordo" : "border-gray-300 text-gray-600 hover:bg-gray-50"}`}
+          >
+            {v.rotulo}
+          </Link>
+        ))}
+      </div>
 
       <div className="text-[11px] text-gray-500 mb-4">
         {filtro.descricao}
@@ -205,7 +231,13 @@ export default async function Esteira({
         )}
       </div>
 
-      {pedidos.length === 0 ? (
+      {emTabela && pedidos.length > 0 ? (
+        <TabelaEsteira
+          pedidos={ordenarPedidos(pedidos, ordem)}
+          ordem={ordem}
+          linkDaOrdem={(valor) => `/painel/pedidos?${consultaDosFiltros(filtros, { filtro: filtro.chave, visao: "tabela", ordem: valor })}`}
+        />
+      ) : pedidos.length === 0 ? (
         <Cartao>
           <Vazio>
             Nada em {filtro.rotulo.toLowerCase()}
@@ -629,7 +661,7 @@ type PedidoDaEsteira = {
     uf: string | null;
   };
   endereco: { rotulo: string; endereco: string; numero: string | null; complemento: string | null; bairro: string | null; cidade: string | null; uf: string; observacoes: string | null } | null;
-  servico: { nome: string };
+  servico: { nome: string; familia?: string | null };
   profissional: { nome: string } | null;
 };
 

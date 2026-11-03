@@ -124,3 +124,39 @@ export function duracaoEfetiva(
   }
   return servico.duracaoMin;
 }
+
+/**
+ * O valor por paciente ou por disparo de um pacote (ata de 03/11: mostrar o
+ * preço "por paciente / por disparo" em vez de só o total). "AirFlow (pacote
+ * 4 pacientes)" a R$ 1.540 → R$ 385 por paciente; sessão de 500 disparos →
+ * valor por disparo. Null quando o serviço já é cobrado por unidade.
+ */
+export function valorPorUnidadeDoPacote(servico: {
+  nome: string;
+  valorCentavos: number;
+  quantidadeIncluida?: number | null;
+}): { valorCentavos: number; unidade: string } | null {
+  if (servico.valorCentavos <= 0) return null;
+  const pacientes = /(\d+)\s*pacientes\b/i.exec(servico.nome);
+  if (pacientes && Number(pacientes[1]) > 1) {
+    return { valorCentavos: Math.round(servico.valorCentavos / Number(pacientes[1])), unidade: "por paciente" };
+  }
+  const disparos = /([\d.]+)\s*disparos\b/i.exec(servico.nome);
+  const quantos = disparos ? Number(disparos[1].replace(/\./g, "")) : servico.quantidadeIncluida ?? 0;
+  if (disparos && quantos > 1) {
+    return { valorCentavos: Math.round(servico.valorCentavos / quantos), unidade: "por disparo" };
+  }
+  return null;
+}
+
+/**
+ * As opções de uma família em texto curto (ata de 03/11: "textos descritivos
+ * dos tipos de pacotes"): "AirFlow – GBT Machine (pacote 2 pacientes)" vira
+ * "pacote 2 pacientes"; "LiteTouch – Frenectomia" vira "Frenectomia".
+ */
+export function opcaoCurta(nome: string): string {
+  const parenteses = /\(([^)]+)\)\s*$/.exec(nome);
+  if (parenteses) return parenteses[1].trim();
+  const partes = nome.split(" – ");
+  return (partes.length > 1 ? partes.slice(1).join(" – ") : nome).trim();
+}

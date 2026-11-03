@@ -107,3 +107,52 @@ export function consultaDosFiltros(f: FiltrosEsteira, extra: Record<string, stri
   for (const [chave, valor] of Object.entries(f)) if (valor) p.set(chave, valor);
   return p.toString();
 }
+
+/** Colunas pelas quais a tabela da esteira ordena (ata de 03/11). "-" na frente = decrescente. */
+export const ORDENS_ESTEIRA = ["data", "equipamento", "clinica", "profissional", "status", "valor"] as const;
+export type OrdemEsteira = (typeof ORDENS_ESTEIRA)[number];
+
+export function lerOrdem(valor: string | undefined): { coluna: OrdemEsteira; desc: boolean } {
+  const desc = (valor ?? "").startsWith("-");
+  const coluna = (valor ?? "").replace(/^-/, "") as OrdemEsteira;
+  return { coluna: ORDENS_ESTEIRA.includes(coluna) ? coluna : "data", desc };
+}
+
+type Ordenavel = {
+  data: Date;
+  horaInicio: string;
+  status: string;
+  valorServicoCentavos: number;
+  clinica: { nome: string };
+  servico: { nome: string; familia?: string | null };
+  profissional: { nome: string } | null;
+};
+
+/** Ordena em memória (a esteira traz até 200): data e hora desempatam sempre. */
+export function ordenarPedidos<T extends Ordenavel>(lista: T[], ordem: { coluna: OrdemEsteira; desc: boolean }): T[] {
+  const quando = (p: T) => `${p.data.toISOString().slice(0, 10)} ${p.horaInicio}`;
+  const chave = (p: T): string | number => {
+    switch (ordem.coluna) {
+      case "equipamento":
+        return (p.servico.familia || p.servico.nome).toLowerCase();
+      case "clinica":
+        return p.clinica.nome.toLowerCase();
+      case "profissional":
+        return (p.profissional?.nome ?? "~").toLowerCase();
+      case "status":
+        return p.status;
+      case "valor":
+        return p.valorServicoCentavos;
+      default:
+        return quando(p);
+    }
+  };
+  const sinal = ordem.desc ? -1 : 1;
+  return [...lista].sort((a, b) => {
+    const ka = chave(a);
+    const kb = chave(b);
+    if (ka < kb) return -sinal;
+    if (ka > kb) return sinal;
+    return quando(a) < quando(b) ? -1 : quando(a) > quando(b) ? 1 : 0;
+  });
+}

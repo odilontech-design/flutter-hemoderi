@@ -7,7 +7,7 @@ import { formatarReais } from "@/lib/dinheiro";
 import { precosDosServicos, tabelasDaClinica } from "@/lib/preco";
 import { locaisDaClinica } from "@/lib/endereco";
 import { servicoVisivel } from "@/lib/visibilidade";
-import { descricaoDoPreco } from "@/lib/cobranca";
+import { descricaoDoPreco, opcaoCurta, valorPorUnidadeDoPacote } from "@/lib/cobranca";
 import { descritivoDaFamilia } from "@/lib/catalogo-familias";
 import { NovoLocal } from "./NovoLocal";
 
@@ -236,7 +236,13 @@ export default async function CatalogoDaClinica({ searchParams }: { searchParams
               </div>
             )}
 
-            <h3 className="font-display font-bold text-bordo text-xs uppercase tracking-wide px-5 mb-2">Serviços disponíveis</h3>
+            <h3 className="font-display font-bold text-bordo text-xs uppercase tracking-wide px-5 mb-1">Serviços disponíveis</h3>
+            {/* Os pacotes em texto, antes dos cartões (ata de 03/11). */}
+            {grupo.servicos.length > 1 && (
+              <p className="px-5 mb-2 text-[11px] text-gray-600 leading-relaxed">
+                <strong className="text-gray-700">Opções:</strong> {grupo.servicos.map((sv) => opcaoCurta(sv.nome)).join(" · ")}
+              </p>
+            )}
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 px-5 pb-5">
               {grupo.servicos.map((servico) => {
                 const preco = precos.get(servico.id);
@@ -290,6 +296,15 @@ export default async function CatalogoDaClinica({ searchParams }: { searchParams
                             {descricaoDoPreco(valor, servico).replace(formatarReais(valor), "").trim()}
                           </span>
                         )}
+                        {(() => {
+                          // Por paciente / por disparo, além do total do pacote (ata de 03/11).
+                          const unidade = valorPorUnidadeDoPacote({ nome: servico.nome, valorCentavos: valor, quantidadeIncluida: servico.quantidadeIncluida });
+                          return unidade ? (
+                            <span className="block text-[11px] font-semibold text-gray-600">
+                              = {formatarReais(unidade.valorCentavos)} {unidade.unidade}
+                            </span>
+                          ) : null;
+                        })()}
                       </span>
                       {podeAgendar && (
                         <Link

@@ -29,7 +29,7 @@ import {
 } from "@/lib/data";
 import { enfileirarMensagem, reenviarMensagem } from "@/lib/integracoes/whatsapp";
 import { sincronizarEvento } from "@/lib/integracoes/google-agenda";
-import { criarNegocio, marcarNegocioGanho, marcarNegocioPerdido } from "@/lib/integracoes/pipedrive";
+import { marcarNegocioPerdido } from "@/lib/integracoes/pipedrive";
 import { condicaoValida, formaDePagamentoValida } from "@/lib/pagamento";
 import { procedimentoEscolhido } from "@/lib/procedimentos";
 import { camposFaltando } from "@/lib/cadastro-completo";
@@ -434,7 +434,7 @@ async function criarAgendamento(
       await enfileirarMensagem(pedido.id, "CONFIRMACAO");
       await sincronizarEvento(pedido.id);
     }
-    await criarNegocio(pedido.id);
+    // O negócio no PipeDrive só nasce na aprovação do relatório (ata de 03/11).
   }
   return { ok: true, id: resultado.criados[0].id, criados: resultado.criados, conflitos: [...new Set(conflitos)], simultaneo };
 }
@@ -1032,7 +1032,6 @@ export async function registrarResultado(
         status: "AGUARDANDO_APROVACAO",
       },
     });
-    await marcarNegocioGanho(pedido.id);
   }
 
   await registrarAuditoria(usuarioId, "Pedido", pedido.id, "resultado", destino);
