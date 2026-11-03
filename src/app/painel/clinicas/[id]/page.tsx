@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { exigirInterno } from "@/lib/sessao";
+import { perfilPermite } from "@/lib/papeis";
 import { Area, Campo, Cartao, Rotulo, Selecao, Titulo, Vazio } from "@/components/ui";
 import { FormularioAcao } from "@/components/FormularioAcao";
 import { CamposEndereco } from "@/components/CamposEndereco";
@@ -20,7 +21,7 @@ import { resumoDoEndereco } from "@/lib/endereco";
 export const dynamic = "force-dynamic";
 
 export default async function DetalheClinica({ params }: { params: { id: string } }) {
-  await exigirInterno();
+  const sessao = await exigirInterno();
 
   const [clinica, servicos, pesquisasNps, tabelas] = await Promise.all([
     prisma.clinica.findUnique({
@@ -147,6 +148,17 @@ export default async function DetalheClinica({ params }: { params: { id: string 
                   Uso interno da equipe — a clínica não vê isto no portal dela.
                 </div>
               </div>
+              {/* Conta de teste (ata de 03/11): recebe o WhatsApp automático mesmo com o envio pausado. */}
+              {perfilPermite(sessao.perfil, "RESPONSAVEL") && (
+                <label className="flex items-start gap-2 text-xs text-gray-700">
+                  <input type="hidden" name="contaDeTesteVisivel" value="1" />
+                  <input type="checkbox" name="contaDeTeste" defaultChecked={clinica.contaDeTeste} className="mt-0.5 accent-bordo" />
+                  <span>
+                    <strong>Conta de teste</strong>
+                    <span className="block text-[10px] text-gray-400">Recebe as mensagens automáticas do WhatsApp mesmo com o envio aos clientes pausado.</span>
+                  </span>
+                </label>
+              )}
               <CamposResponsavelFinanceiro
                 inicial={{
                   nome: clinica.financeiroNome,

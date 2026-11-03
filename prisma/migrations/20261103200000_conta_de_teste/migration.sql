@@ -1,0 +1,1 @@
+ALTER TABLE "Clinica" ADD COLUMN "contaDeTeste" BOOLEAN NOT NULL DEFAULT false;

@@ -697,10 +697,12 @@ function FormularioBase({
         rotulo={2}
         passo={passo}
         irPara={setPasso}
-        titulo="Onde será o atendimento"
+        titulo="Endereço"
         resumo={local ? `${local.rotulo}${local.resumo ? ` · ${local.resumo}` : ""}` : null}
       >
-        <p className="text-[11px] text-gray-500 mb-3">Toque no endereço do atendimento ou cadastre outro — pode digitar à mão, sem o CEP.</p>
+        {/* "Endereço", com subtítulo e indicador de seleção (ata de 03/11): nos
+            testes com cliente oculto, "Onde será o atendimento" confundia. */}
+        <p className="text-xs text-gray-600 mb-3">Onde será o atendimento? Toque no endereço para selecionar ou cadastre outro.</p>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
           {locais.map((l) => {
             const escolhido = local !== undefined && l.id === local.id;
@@ -725,8 +727,21 @@ function FormularioBase({
                       : "border-gray-300 bg-white hover:border-bordo hover:bg-bege/40"
                 }`}
               >
-                <div className="text-xs font-semibold">{l.rotulo}</div>
-                <div className={`text-[11px] mt-1 ${escolhido ? "text-white/80" : "text-gray-500"}`}>{l.resumo || "—"}</div>
+                <div className="flex items-start gap-2">
+                  <span
+                    aria-hidden
+                    className={`mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full border text-[10px] font-bold ${
+                      escolhido ? "border-white bg-white text-bordo" : "border-gray-400 bg-white"
+                    }`}
+                  >
+                    {escolhido ? "✓" : ""}
+                  </span>
+                  <span className="min-w-0">
+                    <span className="block text-xs font-semibold">{l.rotulo}</span>
+                    <span className={`block text-[11px] mt-1 ${escolhido ? "text-white/80" : "text-gray-500"}`}>{l.resumo || "—"}</span>
+                    {escolhido && <span className="block text-[10px] font-semibold mt-1">Selecionado</span>}
+                  </span>
+                </div>
                 {naoAtende.length > 0 && (
                   <div className="text-[10px] mt-1 text-amber-700">Não atendemos {naoAtende.map((x) => x.servico.nome).join(", ")} nessa região.</div>
                 )}

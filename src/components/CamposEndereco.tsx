@@ -176,9 +176,11 @@ export function CamposEndereco({
   return (
     <>
       {manual && <input type="hidden" name="manual" value="1" />}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-        <div>
-          <Rotulo>CEP</Rotulo>
+      {/* Ordem (ata de 03/11): CEP, a busca de quem não sabe o CEP logo
+          abaixo dele (acima do logradouro), o logradouro e, embaixo dele,
+          o botão de digitar o endereço à mão. */}
+      <div className="sm:max-w-xs">
+        <Rotulo>CEP</Rotulo>
           <div className="relative">
             <Campo
               id={idDoCep}
@@ -203,26 +205,11 @@ export function CamposEndereco({
               </button>
             )}
           </div>
-          <div className="text-[10px] text-gray-400 mt-1">
-            {buscando ? "Buscando…" : "O endereço vem do CEP."}{" "}
-            <button type="button" onClick={() => setProcurando((a) => !a)} className="font-semibold text-bordo hover:underline">
-              Não sei o CEP
-            </button>
-            {" · "}
-            <button type="button" onClick={alternarManual} className="font-semibold text-bordo hover:underline">
-              {manual ? "Voltar a preencher pelo CEP" : "Digitar o endereço à mão"}
-            </button>
-          </div>
-        </div>
-        <div className="sm:col-span-2">
-          <Rotulo>Logradouro</Rotulo>
-          <Campo
-            name="endereco"
-            value={logradouro}
-            readOnly={!manual}
-            required
-            onChange={(e) => manual && setLogradouro(e.target.value)}
-          />
+        <div className="text-[10px] text-gray-400 mt-1">
+          {buscando ? "Buscando…" : "O endereço vem do CEP."}{" "}
+          <button type="button" onClick={() => setProcurando((a) => !a)} className="font-semibold text-bordo hover:underline">
+            Não sei o CEP — buscar pelo endereço
+          </button>
         </div>
       </div>
 
@@ -252,6 +239,20 @@ export function CamposEndereco({
           )}
         </div>
       )}
+
+      <div>
+        <Rotulo>Logradouro</Rotulo>
+          <Campo
+          name="endereco"
+          value={logradouro}
+          readOnly={!manual}
+          required
+          onChange={(e) => manual && setLogradouro(e.target.value)}
+        />
+        <button type="button" onClick={alternarManual} className="mt-1 text-[11px] font-semibold text-bordo hover:underline">
+          {manual ? "Voltar a preencher pelo CEP" : "Não encontrou? Digitar o endereço à mão"}
+        </button>
+      </div>
 
       {erro && (
         <div className="text-[11px] text-amber-700">

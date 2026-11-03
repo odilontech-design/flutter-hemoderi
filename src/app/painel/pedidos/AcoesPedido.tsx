@@ -238,6 +238,7 @@ export function AcoesPedido({
   profissionais,
   profissionalSolicitadoId,
   ajudaCustoCentavos = null,
+  mostrarAjudaDeCusto = true,
 }: {
   pedidoId: string;
   status: StatusPedido;
@@ -247,6 +248,8 @@ export function AcoesPedido({
   profissionalSolicitadoId?: string | null;
   /** Ajuda de custo prevista já definida na alocação. */
   ajudaCustoCentavos?: number | null;
+  /** Falso na fila de Alocados (ata de 03/11): a ajuda de custo é da etapa "Para alocar". */
+  mostrarAjudaDeCusto?: boolean;
 }) {
   const [pendente, iniciar] = useTransition();
   const [mensagem, setMensagem] = useState<{ texto: string; erro: boolean } | null>(null);
@@ -324,7 +327,7 @@ export function AcoesPedido({
           >
             Registrar falta
           </Botao>
-          {podeAlocar && (
+          {podeAlocar && mostrarAjudaDeCusto && (
             <EditarAjudaDeCusto pedidoId={pedidoId} inicial={ajudaCustoCentavos} />
           )}
           {podeAlocar && (

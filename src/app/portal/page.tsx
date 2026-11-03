@@ -226,7 +226,7 @@ export default async function MeusAgendamentos() {
           Histórico e avaliações. Aqui fica só o chamado. */}
       {aAvaliar > 0 && (
         <Link
-          href="/portal/historico"
+          href="/portal/avaliacoes"
           className="block rounded-2xl border border-amber-200 bg-amber-50/60 px-5 py-4 text-xs text-bordo font-semibold hover:bg-amber-50"
         >
           Você tem {aAvaliar} atendimento{aAvaliar === 1 ? "" : "s"} para avaliar →

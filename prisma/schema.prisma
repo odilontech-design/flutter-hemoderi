@@ -201,6 +201,10 @@ model Clinica {
   /// a própria clínica — o sócio que paga, a empresa que fatura. A Hemoderi
   /// cobra a clínica, nunca o paciente; vazio = a própria clínica (CNPJ e
   /// telefone do cadastro). Preenchido, documento e telefone são obrigatórios.
+  /// Conta de teste (ata de 03/11, perfil do André): recebe as mensagens
+  /// automáticas do WhatsApp mesmo com o envio aos clientes pausado.
+  contaDeTeste Boolean @default(false)
+
   financeiroNome      String?
   financeiroDocumento String?
   financeiroTelefone  String?
@@ -1044,6 +1048,8 @@ model Pedido {
   /// com o id da agenda que o contém, e "some da minha agenda quando me
   /// tiram do caso" é o mínimo para alguém confiar no que vê ali.
   googleAgendaId     String?
+  /// O mesmo atendimento na agenda da equipe (GOOGLE_AGENDA_EQUIPE_ID), sincronizada sozinha (ata de 03/11).
+  googleEventoEquipeId String?
   pipedriveNegocioId String?
 
   /// Confirmação de que o agendamento foi posto no Google Agenda da equipe
@@ -1742,6 +1748,8 @@ enum TipoMensagem {
   RESUMO
   /// 15 min depois do horário, sem chegada registrada: lembra o profissional de marcar "cheguei" (30/10)
   LEMBRETE_CHEGADA
+  /// Aviso ao profissional que perdeu o atendimento ou teve o horário mudado (ata de 03/11)
+  AVISO_PROFISSIONAL
 }
 
 enum StatusMensagem {

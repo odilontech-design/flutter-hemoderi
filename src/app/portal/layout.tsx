@@ -9,6 +9,7 @@ import {
   IconeCatalogo,
   IconeClinicas,
   IconeConfiguracoes,
+  IconeEstrela,
   IconeRelatorios,
 } from "@/components/icones/MenuIcones";
 
@@ -20,7 +21,8 @@ export const dynamic = "force-dynamic";
 const ITENS = [
   { href: "/portal/catalogo", icone: <IconeCatalogo />, rotulo: "Catálogo" },
   { href: "/portal", icone: <IconeAgendamentos />, rotulo: "Meus agendamentos" },
-  { href: "/portal/historico", icone: <IconeRelatorios />, rotulo: "Histórico e avaliações" },
+  { href: "/portal/historico", icone: <IconeRelatorios />, rotulo: "Histórico e pagamentos" },
+  { href: "/portal/avaliacoes", icone: <IconeEstrela />, rotulo: "Avaliações" },
   { href: "/portal/enderecos", icone: <IconeClinicas />, rotulo: "Meus endereços" },
   { href: "/portal/configuracoes", icone: <IconeConfiguracoes />, rotulo: "Configurações" },
 ];

@@ -34,7 +34,7 @@ export async function slugLivre(base: string): Promise<string> {
 }
 
 export async function salvarClinica(_anterior: Resultado, dados: FormData): Promise<Resultado> {
-  await exigirInterno();
+  const sessao = await exigirInterno();
 
   const id = String(dados.get("id") ?? "");
   const nome = String(dados.get("nome") ?? "").trim();
@@ -80,7 +80,11 @@ export async function salvarClinica(_anterior: Resultado, dados: FormData): Prom
 
   let salvaId = id;
   if (id) {
-    await prisma.clinica.update({ where: { id }, data: comum });
+    // Conta de teste (03/11): só o responsável marca ou desmarca.
+    const contaDeTeste = perfilPermite(sessao.perfil, "RESPONSAVEL") && dados.has("contaDeTesteVisivel")
+      ? { contaDeTeste: dados.get("contaDeTeste") === "on" }
+      : {};
+    await prisma.clinica.update({ where: { id }, data: { ...comum, ...contaDeTeste } });
   } else {
     // O cadastro novo feito pela equipe já nasce com o perfil escolhido; na
     // edição os perfis têm tela própria (Perfil e tabelas de preço) e não são

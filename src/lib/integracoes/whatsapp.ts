@@ -38,6 +38,7 @@ type DadosPedido = {
   clinica: {
     nome: string;
     telefone: string | null;
+    contaDeTeste?: boolean;
     endereco?: string | null;
     numero?: string | null;
     complemento?: string | null;
@@ -72,7 +73,7 @@ const SELECAO_DO_PEDIDO = {
   formaPagamento: true,
   origem: true,
   criadoEm: true,
-  clinica: { select: { nome: true, telefone: true, endereco: true, numero: true, complemento: true, bairro: true, cidade: true, uf: true } },
+  clinica: { select: { nome: true, telefone: true, endereco: true, numero: true, complemento: true, bairro: true, cidade: true, uf: true, contaDeTeste: true } },
   endereco: { select: { endereco: true, numero: true, complemento: true, bairro: true, cidade: true, uf: true, rotulo: true } },
   servico: { select: { nome: true } },
   profissional: { select: { nome: true, telefone: true } },
@@ -90,7 +91,7 @@ export function envioAutomaticoLigado(): boolean {
 }
 
 /** Os tipos que vão para o profissional — não passam pela suspensão. */
-export const TIPOS_PARA_O_PROFISSIONAL: TipoMensagem[] = ["ALOCACAO", "COBRANCA_RELATORIO", "LEMBRETE_CHEGADA"];
+export const TIPOS_PARA_O_PROFISSIONAL: TipoMensagem[] = ["ALOCACAO", "COBRANCA_RELATORIO", "LEMBRETE_CHEGADA", "AVISO_PROFISSIONAL"];
 
 /**
  * Os textos. Ficam no código, e não no banco, enquanto forem poucos e
@@ -156,6 +157,9 @@ export function montarTexto(tipo: TipoMensagem, pedido: DadosPedido, horasRevela
         `Agendamento ${aberto ? codigo : codigo.split("-").slice(0, 2).join("-")}.`,
       ].join("\n");
     }
+    case "AVISO_PROFISSIONAL":
+      // O texto nasce em lib/aviso-profissional.ts, com o antes e o depois.
+      return "";
     case "LEMBRETE_CHEGADA":
       return `Olá, ${pedido.profissional?.nome?.split(" ")[0] ?? ""}! Já são ${pedido.horaInicio} e a sua chegada ao atendimento de ${pedido.servico.nome} ainda não foi registrada. Ao chegar, toque em "Cheguei" no app: ${urlBase()}/profissional. Se não puder comparecer, avise a logística. Agendamento ${codigo.split("-").slice(0, 2).join("-")}.`;
     case "LEMBRETE":
@@ -203,7 +207,8 @@ export async function enfileirarMensagem(
   if (!pedido) return;
   // Envio automático ao cliente suspenso: nem entra na fila, para não despejar
   // um acúmulo de mensagens de teste nos clientes quando for religado.
-  if (!envioAutomaticoLigado() && !TIPOS_PARA_O_PROFISSIONAL.includes(tipo)) return;
+  // A conta de teste (ata de 03/11) recebe mesmo com o envio pausado.
+  if (!envioAutomaticoLigado() && !TIPOS_PARA_O_PROFISSIONAL.includes(tipo) && !pedido.clinica.contaDeTeste) return;
 
   const destinatario = destinatarioDe(tipo, pedido);
   // Sem telefone não há o que enfileirar. Não é erro: cadastro incompleto é

@@ -1,5 +1,6 @@
 "use server";
 
+import { avisarProfissionaisAfetados, fotografar, ondeDaVisita } from "@/lib/aviso-profissional";
 import { condicaoInicial } from "@/lib/condicao-pagamento";
 import { revalidatePath } from "next/cache";
 import type { Prisma, StatusPedido } from "@prisma/client";
@@ -907,7 +908,7 @@ export async function cancelarGrupo(grupoId: string, motivo: string): Promise<Re
  * aceita, só ela pode tirá-lo do caso, nunca a própria pessoa profissional
  * de forma autônoma.
  */
-export async function desalocarPedido(pedidoId: string, motivo: string): Promise<Resultado> {
+async function desalocarPedidoSemAviso(pedidoId: string, motivo: string): Promise<Resultado> {
   const sessao = await exigirInterno();
   if (!perfilPermite(sessao.perfil, "LOGISTICA")) {
     return { ok: false, erro: "Só a logística desaloca um profissional." };
@@ -940,7 +941,7 @@ export async function desalocarPedido(pedidoId: string, motivo: string): Promise
 }
 
 /** Exclusivo do comercial (ata de 21/09) — é quem decide, com a clínica, se o atendimento cai. */
-export async function cancelarPedido(pedidoId: string, motivo: string): Promise<Resultado> {
+async function cancelarPedidoSemAviso(pedidoId: string, motivo: string): Promise<Resultado> {
   const sessao = await exigirInterno();
   // A logística também cancela e reagenda (pedido de 27/10, a Joyce fecha a agenda).
   if (!perfilPermite(sessao.perfil, "COMERCIAL", "LOGISTICA")) {
@@ -1196,7 +1197,7 @@ async function membrosAtivosDoAgendamento(pedido: { id: string; grupoId: string 
   return membros.length > 1 ? membros : null;
 }
 
-export async function reagendarPedido(_anterior: Resultado, dados: FormData): Promise<Resultado> {
+async function reagendarPedidoSemAviso(_anterior: Resultado, dados: FormData): Promise<Resultado> {
   const sessao = await exigirClinica();
 
   const pedidoId = String(dados.get("pedidoId") ?? "");
@@ -1442,7 +1443,7 @@ async function aplicarTrocaDeLocal(
  * portal de propósito: é o caminho que a central usa depois que o prazo do
  * site já fechou, ou quando quem pede é a própria clínica por telefone.
  */
-export async function reagendarPedidoInterno(pedidoId: string, dataISO: string, horaInicio: string, motivo = ""): Promise<Resultado> {
+async function reagendarPedidoInternoSemAviso(pedidoId: string, dataISO: string, horaInicio: string, motivo = ""): Promise<Resultado> {
   const sessao = await exigirInterno();
   if (!perfilPermite(sessao.perfil, "COMERCIAL", "LOGISTICA")) {
     return { ok: false, erro: "Só o comercial ou a logística reagenda um atendimento." };
@@ -1493,7 +1494,7 @@ export async function reagendarPedidoInterno(pedidoId: string, dataISO: string, 
  *
  * Só o comercial/atendente edita (é a mesa que conversa com a clínica).
  */
-export async function editarAgendamento(_anterior: Resultado, dados: FormData): Promise<Resultado> {
+async function editarAgendamentoSemAviso(_anterior: Resultado, dados: FormData): Promise<Resultado> {
   const sessao = await exigirInterno();
   // A logística também edita (Joyce, 29/10): é ela quem fecha a agenda.
   if (!perfilPermite(sessao.perfil, "COMERCIAL", "ATENDENTE", "POS_VENDA", "LOGISTICA")) {
@@ -1667,7 +1668,7 @@ export async function editarAgendamento(_anterior: Resultado, dados: FormData): 
   );
 
   if (critico && !reaprovar && pedido.profissionalId) {
-    avisos.push("O profissional continua alocado: avise-o da mudança pelo botão \"Enviar aviso ao profissional\".");
+    avisos.push("O profissional continua alocado e recebe o aviso da mudança automaticamente pelo WhatsApp.");
   }
   atualizarTelas();
   revalidatePath(`/painel/pedidos/${pedido.id}`);
@@ -1683,7 +1684,7 @@ export async function editarAgendamento(_anterior: Resultado, dados: FormData): 
  * Vale para o agendamento inteiro: os serviços de uma mesma visita partilham
  * esses dados.
  */
-export async function editarAgendamentoPeloPortal(_anterior: Resultado, dados: FormData): Promise<Resultado> {
+async function editarAgendamentoPeloPortalSemAviso(_anterior: Resultado, dados: FormData): Promise<Resultado> {
   const sessao = await exigirClinica();
 
   const pedido = await pedidoDaClinica(String(dados.get("pedidoId") ?? ""), sessao.clinicaId);
@@ -1737,7 +1738,7 @@ export async function editarAgendamentoPeloPortal(_anterior: Resultado, dados: F
  * Cancelamento pelo portal — até 30 minutos antes do atendimento (ata de
  * 21/09), desacoplado do prazo de reagendamento. Ver `dentroDoPrazoDeCancelamento`.
  */
-export async function cancelarPeloPortal(pedidoId: string, motivo: string): Promise<Resultado> {
+async function cancelarPeloPortalSemAviso(pedidoId: string, motivo: string): Promise<Resultado> {
   const sessao = await exigirClinica();
 
   const pedido = await pedidoDaClinica(pedidoId, sessao.clinicaId);
@@ -2096,7 +2097,7 @@ export async function marcarAgendaSalva(pedidoId: string): Promise<Resultado> {
  * visita já confirmada devolve tudo para a aprovação e libera profissional e
  * equipamento.
  */
-export async function editarVisita(_anterior: Resultado, dados: FormData): Promise<Resultado> {
+async function editarVisitaSemAviso(_anterior: Resultado, dados: FormData): Promise<Resultado> {
   const sessao = await exigirInterno();
   // A logística também edita (Joyce, 29/10): é ela quem fecha a agenda.
   if (!perfilPermite(sessao.perfil, "COMERCIAL", "ATENDENTE", "POS_VENDA", "LOGISTICA")) {
@@ -2222,7 +2223,7 @@ export async function editarVisita(_anterior: Resultado, dados: FormData): Promi
   atualizarTelas();
   for (const m of membros) revalidatePath(`/painel/pedidos/${m.id}`);
   if (critico && membros.some((m) => m.profissionalId)) {
-    avisos.push("O profissional continua alocado: avise-o da mudança pelo botão \"Enviar aviso ao profissional\".");
+    avisos.push("O profissional continua alocado e recebe o aviso da mudança automaticamente pelo WhatsApp.");
   }
   return { ok: true, avisos };
 }
@@ -2233,7 +2234,7 @@ export async function editarVisita(_anterior: Resultado, dados: FormData): Promi
  * para a visita inteira quando tem mais de um serviço. Não devolve para a
  * aprovação: quem alterou o endereço foi quem fecha a agenda.
  */
-export async function alterarLocalDoAgendamento(_anterior: Resultado, dados: FormData): Promise<Resultado> {
+async function alterarLocalDoAgendamentoSemAviso(_anterior: Resultado, dados: FormData): Promise<Resultado> {
   const sessao = await exigirInterno();
   if (!perfilPermite(sessao.perfil, "COMERCIAL", "ATENDENTE", "POS_VENDA", "LOGISTICA")) {
     return { ok: false, erro: "Sem permissão para alterar o local do agendamento." };
@@ -2303,4 +2304,51 @@ export async function enviarPelaCentral(
   await registrarAuditoria(sessao.usuarioId, "Pedido", pedidoId, `whatsapp-${tipo.toLowerCase()}`, r.ok ? "enviado" : r.erro);
   revalidatePath("/painel/integracoes");
   return r.ok ? { ok: true, avisos: [`${rotulo} enviado pela central`] } : { ok: false, erro: r.erro };
+}
+
+// ─── Aviso ao profissional anterior (ata de 03/11) ─────────────────────────
+// As ações que mexem no atendimento passam por aqui: foto antes, ação, aviso
+// a quem saiu do caso ou teve o horário mudado (lib/aviso-profissional.ts).
+
+async function comAvisoAoProfissional(onde: Prisma.PedidoWhereInput, acao: () => Promise<Resultado>): Promise<Resultado> {
+  const antes = await fotografar(onde);
+  const resultado = await acao();
+  if (resultado.ok) await avisarProfissionaisAfetados(antes);
+  return resultado;
+}
+
+export async function desalocarPedido(pedidoId: string, motivo: string): Promise<Resultado> {
+  return comAvisoAoProfissional({ id: pedidoId }, () => desalocarPedidoSemAviso(pedidoId, motivo));
+}
+
+export async function cancelarPedido(pedidoId: string, motivo: string): Promise<Resultado> {
+  return comAvisoAoProfissional({ id: pedidoId }, () => cancelarPedidoSemAviso(pedidoId, motivo));
+}
+
+export async function cancelarPeloPortal(pedidoId: string, motivo: string): Promise<Resultado> {
+  return comAvisoAoProfissional(await ondeDaVisita(pedidoId), () => cancelarPeloPortalSemAviso(pedidoId, motivo));
+}
+
+export async function reagendarPedido(_anterior: Resultado, dados: FormData): Promise<Resultado> {
+  return comAvisoAoProfissional(await ondeDaVisita(String(dados.get("pedidoId") ?? "")), () => reagendarPedidoSemAviso(_anterior, dados));
+}
+
+export async function reagendarPedidoInterno(pedidoId: string, dataISO: string, horaInicio: string, motivo = ""): Promise<Resultado> {
+  return comAvisoAoProfissional(await ondeDaVisita(pedidoId), () => reagendarPedidoInternoSemAviso(pedidoId, dataISO, horaInicio, motivo));
+}
+
+export async function editarAgendamento(_anterior: Resultado, dados: FormData): Promise<Resultado> {
+  return comAvisoAoProfissional(await ondeDaVisita(String(dados.get("pedidoId") ?? "")), () => editarAgendamentoSemAviso(_anterior, dados));
+}
+
+export async function editarAgendamentoPeloPortal(_anterior: Resultado, dados: FormData): Promise<Resultado> {
+  return comAvisoAoProfissional(await ondeDaVisita(String(dados.get("pedidoId") ?? "")), () => editarAgendamentoPeloPortalSemAviso(_anterior, dados));
+}
+
+export async function editarVisita(_anterior: Resultado, dados: FormData): Promise<Resultado> {
+  return comAvisoAoProfissional({ grupoId: String(dados.get("grupoId") ?? "") || "__nenhum__" }, () => editarVisitaSemAviso(_anterior, dados));
+}
+
+export async function alterarLocalDoAgendamento(_anterior: Resultado, dados: FormData): Promise<Resultado> {
+  return comAvisoAoProfissional(await ondeDaVisita(String(dados.get("pedidoId") ?? "")), () => alterarLocalDoAgendamentoSemAviso(_anterior, dados));
 }

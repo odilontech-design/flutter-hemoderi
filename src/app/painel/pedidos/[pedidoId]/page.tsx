@@ -6,6 +6,7 @@ import { perfilPermite } from "@/lib/papeis";
 import { STATUS_ATIVOS } from "@/lib/pedido";
 import { comEnderecoDoPedido, locaisDaClinica, resumoDoEndereco } from "@/lib/endereco";
 import { AgendaDaEquipe } from "@/components/AgendaDaEquipe";
+import { agendaDaEquipe } from "@/lib/integracoes/google-api";
 import { BotaoAcao } from "@/components/BotaoAcao";
 import { enviarAvisoAoProfissional, enviarConfirmacoesWhatsapp, enviarResumoWhatsapp } from "@/app/actions/pedidos";
 import { eventoParaEquipe } from "@/lib/evento-equipe";
@@ -43,6 +44,7 @@ export default async function DetalheDoPedido({
   searchParams: { editar?: string };
 }) {
   const sessao = await exigirInterno();
+  const agendaNativa = Boolean(agendaDaEquipe());
 
   const pedido = await prisma.pedido.findUnique({
     where: { id: params.pedidoId },
@@ -132,7 +134,10 @@ export default async function DetalheDoPedido({
           {/* Alocado, vai para a agenda de quem acompanha (pedido do André, 26/10). */}
           {pedido.status === "ALOCADO" && (
             <span className="ml-auto">
-              <AgendaDaEquipe
+              {agendaNativa ? (
+                <span className="text-[10px] font-semibold text-green-700">📅 na agenda da equipe</span>
+              ) : (
+<AgendaDaEquipe
                         pedidoId={pedido.id}
                         salvaEm={pedido.agendaSalvaEm}
                         salvaPor={pedido.agendaSalvaPor}
@@ -151,6 +156,7 @@ export default async function DetalheDoPedido({
                   local: resumoDoEndereco(comEnderecoDoPedido(pedido.clinica, pedido.endereco)),
                 })}
               />
+              )}
             </span>
           )}
         </div>

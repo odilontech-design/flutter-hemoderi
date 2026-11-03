@@ -32,6 +32,15 @@ export function agendaDaOperacao(): string | null {
   return process.env.GOOGLE_AGENDA_ID || null;
 }
 
+/**
+ * A agenda da equipe interna (ata de 03/11: integração nativa, sem o botão
+ * "confirmar que salvei"). Todo atendimento confirmado entra nela sozinho,
+ * além da agenda de quem atende. Sem a variável, a equipe segue com o botão.
+ */
+export function agendaDaEquipe(): string | null {
+  return process.env.GOOGLE_AGENDA_EQUIPE_ID?.trim() || null;
+}
+
 function base64url(dados: Buffer | string): string {
   return Buffer.from(dados)
     .toString("base64")

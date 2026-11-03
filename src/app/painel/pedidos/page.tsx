@@ -25,6 +25,7 @@ import { consultaDosFiltros, lerFiltrosEsteira, ondeDosFiltros, temFiltro } from
 import { ValorServico } from "./ValorServico";
 import { perfilPermite } from "@/lib/papeis";
 import { AgendaDaEquipe } from "@/components/AgendaDaEquipe";
+import { agendaDaEquipe } from "@/lib/integracoes/google-api";
 import { BotaoAcao } from "@/components/BotaoAcao";
 import { enviarAvisoAoProfissional, enviarConfirmacoesWhatsapp, enviarPelaCentral, enviarResumoWhatsapp } from "@/app/actions/pedidos";
 import { eventoParaEquipe } from "@/lib/evento-equipe";
@@ -54,6 +55,8 @@ export default async function Esteira({
   searchParams: Record<string, string | undefined>;
 }) {
   const sessao = await exigirInterno();
+  // Agenda da equipe sincronizada sozinha (03/11): sem botão manual.
+  const agendaNativa = Boolean(agendaDaEquipe());
 
   const minhaEtapa = etapaDoPerfil(sessao.perfil);
   // Quem edita o agendamento: o mesmo perfil da página de detalhe.
@@ -66,6 +69,10 @@ export default async function Esteira({
   if (filtros.pagamento && !condicaoValida(filtros.pagamento)) filtros.pagamento = "";
   const pagamento = filtros.pagamento;
   const comFiltro = temFiltro(filtros);
+  // Na fila de Alocados ficam de fora a ajuda de custo e a condição de
+  // pagamento (ata de 03/11): a ajuda é decidida em "Para alocar" e a condição
+  // é classificação interna do comercial.
+  const telaDeAlocados = filtro.chave === "alocados";
   // Busca e filtros (30/10) valem para a lista e para os números das abas.
   const ondePagamento = ondeDosFiltros(filtros, hojeUTC());
 
@@ -217,6 +224,7 @@ export default async function Esteira({
                   key={`grupo-${pedido.grupoId}`}
                   membros={membros}
                   perfil={sessao.perfil}
+                  telaDeAlocados={telaDeAlocados}
                   podeEditarValor={perfilPermite(sessao.perfil, "COMERCIAL")}
                   podeEditarAgendamento={podeEditarAgendamento}
                   profissionais={profissionais
@@ -297,7 +305,7 @@ export default async function Esteira({
                       {pedido.valorRepasseCentavos > 0 && (
                         <span className="text-[10px] text-gray-500">repasse {formatarReais(pedido.valorRepasseCentavos)}</span>
                       )}
-                      {pedido.ajudaCustoCentavos != null && (
+                      {pedido.ajudaCustoCentavos != null && !telaDeAlocados && (
                         <span className="text-[10px] text-gray-500">ajuda {formatarReais(pedido.ajudaCustoCentavos)}</span>
                       )}
                     </span>
@@ -344,9 +352,11 @@ export default async function Esteira({
                       <dt className="text-[10px] font-semibold uppercase tracking-wide text-gray-400">Pagamento</dt>
                       <dd className="text-gray-700">
                         {pedido.formaPagamento ? <strong>{pedido.formaPagamento}</strong> : <span className="text-gray-400">forma não informada</span>}
-                        <div className="mt-1">
-                          <CondicaoPagamento pedidoId={pedido.id} atual={pedido.condicaoPagamento} />
-                        </div>
+                        {!telaDeAlocados && (
+                          <div className="mt-1">
+                            <CondicaoPagamento pedidoId={pedido.id} atual={pedido.condicaoPagamento} />
+                          </div>
+                        )}
                       </dd>
                     </div>
                   </dl>
@@ -363,7 +373,10 @@ export default async function Esteira({
                       )}
                       {/* Depois de alocado, a equipe põe na própria agenda (pedido
                           do André, 26/10) — com local, profissional e contato. */}
-                      <AgendaDaEquipe
+                      {agendaNativa ? (
+                        <span className="text-[10px] font-semibold text-green-700">📅 na agenda da equipe</span>
+                      ) : (
+<AgendaDaEquipe
                         pedidoId={pedido.id}
                         salvaEm={pedido.agendaSalvaEm}
                         salvaPor={pedido.agendaSalvaPor}
@@ -383,6 +396,7 @@ export default async function Esteira({
                           local: resumoDoEndereco(comEnderecoDoPedido(pedido.clinica, pedido.endereco)),
                         })}
                       />
+                      )}
                       {pedido.checkinEm &&
                         (pedido.checkinLatitude != null && pedido.checkinLongitude != null ? (
                           <a
@@ -566,6 +580,7 @@ export default async function Esteira({
                   }))}
                 profissionalSolicitadoId={pedido.profissionalId}
                 ajudaCustoCentavos={pedido.ajudaCustoCentavos}
+                mostrarAjudaDeCusto={!telaDeAlocados}
               />
             </Cartao>
             );
@@ -630,15 +645,18 @@ function CartaoDoGrupo({
   podeEditarAgendamento,
   profissionais,
   profissionaisPorServico,
+  telaDeAlocados = false,
 }: {
   membros: PedidoDaEsteira[];
   perfil: PerfilInterno;
+  telaDeAlocados?: boolean;
   podeEditarValor: boolean;
   podeEditarAgendamento: boolean;
   profissionais: { id: string; nome: string }[];
   profissionaisPorServico: Record<string, { id: string; nome: string }[]>;
 }) {
   const primeiro = membros[0];
+  const agendaNativa = Boolean(agendaDaEquipe());
   const total = membros.reduce((soma, m) => soma + m.valorServicoCentavos, 0);
   const contar = (status: StatusPedido) => membros.filter((m) => m.status === status).length;
 
@@ -673,7 +691,10 @@ function CartaoDoGrupo({
           {/* A visita inteira alocada vira UM compromisso na agenda da equipe. */}
           {contar("ALOCADO") === membros.length && (
             <div className="mt-1">
-              <AgendaDaEquipe
+              {agendaNativa ? (
+                <span className="text-[10px] font-semibold text-green-700">📅 na agenda da equipe</span>
+              ) : (
+<AgendaDaEquipe
                         pedidoId={primeiro.id}
                         salvaEm={primeiro.agendaSalvaEm}
                         salvaPor={primeiro.agendaSalvaPor}
@@ -693,6 +714,7 @@ function CartaoDoGrupo({
                   local: resumoDoEndereco(comEnderecoDoPedido(primeiro.clinica, primeiro.endereco)),
                 })}
               />
+              )}
             </div>
           )}
         </div>
@@ -730,14 +752,14 @@ function CartaoDoGrupo({
               </div>
             </div>
             <SeloStatus status={m.status} />
-            {m.status === "ALOCADO" && perfilPermite(perfil, "LOGISTICA") ? (
+            {telaDeAlocados ? null : m.status === "ALOCADO" && perfilPermite(perfil, "LOGISTICA") ? (
               <EditarAjudaDeCusto pedidoId={m.id} inicial={m.ajudaCustoCentavos} />
             ) : (
               m.ajudaCustoCentavos != null && (
                 <span className="text-[10px] text-gray-400">ajuda de custo {formatarReais(m.ajudaCustoCentavos)}</span>
               )
             )}
-            <CondicaoPagamento pedidoId={m.id} atual={m.condicaoPagamento} />
+            {!telaDeAlocados && <CondicaoPagamento pedidoId={m.id} atual={m.condicaoPagamento} />}
             {podeEditarValor ? (
               <ValorServico pedidoId={m.id} valorCentavos={m.valorServicoCentavos} />
             ) : (

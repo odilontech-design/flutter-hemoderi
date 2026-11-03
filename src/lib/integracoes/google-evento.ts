@@ -133,3 +133,13 @@ export function montarEvento(pedido: PedidoParaAgenda): EventoGoogle {
     },
   };
 }
+
+/**
+ * O evento na agenda da equipe: o título no formato que a equipe já usava à
+ * mão ("Dr. Fulano · serviço · profissional"), sem lembrete — são dezenas por dia.
+ */
+export function montarEventoDaEquipe(pedido: PedidoParaAgenda & { doutorNome?: string | null }): EventoGoogle {
+  const evento = montarEvento(pedido);
+  const titulo = [pedido.doutorNome || pedido.clinica.nome, pedido.servico.nome, pedido.profissional?.nome ?? "a alocar"].join(" · ");
+  return { ...evento, summary: titulo, reminders: { useDefault: false, overrides: [] } };
+}

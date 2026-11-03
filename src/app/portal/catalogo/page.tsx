@@ -190,9 +190,8 @@ export default async function CatalogoDaClinica({ searchParams }: { searchParams
               )}
               <span className="min-w-0 flex-1">
                 <span className="block font-display font-bold text-bordo text-sm">{grupo.familia}</span>
-                <span className="block text-[10px] text-gray-400 mt-0.5">
-                  {grupo.servicos.length} procedimento{grupo.servicos.length === 1 ? "" : "s"}
-                </span>
+                {/* Chamada padrão no lugar da contagem de procedimentos (ata de 03/11). */}
+                <span className="block text-[11px] font-semibold text-bordo/70 mt-0.5 group-open:hidden">Clique aqui e conheça os pacotes</span>
               </span>
               <span aria-hidden className="text-bordo text-xs transition-transform group-open:rotate-180">
                 ▾

@@ -1,12 +1,13 @@
 import { prisma } from "@/lib/prisma";
 import { comEnderecoDoPedido } from "@/lib/endereco";
 import {
+  agendaDaEquipe,
   agendaDaOperacao,
   integracaoConfigurada,
   transporteGoogle,
   type TransporteAgenda,
 } from "./google-api";
-import { agendaAlvo, deveTerEvento, montarEvento, planejar } from "./google-evento";
+import { agendaAlvo, deveTerEvento, montarEvento, montarEventoDaEquipe, planejar } from "./google-evento";
 
 export * from "./google-evento";
 
@@ -35,6 +36,8 @@ const SELECAO = {
   observacoes: true,
   googleEventoId: true,
   googleAgendaId: true,
+  googleEventoEquipeId: true,
+  doutorNome: true,
   clinica: { select: { nome: true, endereco: true, cidade: true } },
   endereco: { select: { endereco: true, cidade: true } },
   servico: { select: { nome: true } },
@@ -74,6 +77,43 @@ export async function sincronizarEvento(
   pedidoId: string,
   transporte: TransporteAgenda = transporteGoogle,
   agendaPadrao: string | null = agendaDaOperacao()
+): Promise<void> {
+  await sincronizarEventoDoProfissional(pedidoId, transporte, agendaPadrao);
+  await sincronizarEventoDaEquipe(pedidoId, transporte);
+}
+
+/** A cópia do atendimento na agenda da equipe. Nunca lança, como a outra. */
+async function sincronizarEventoDaEquipe(pedidoId: string, transporte: TransporteAgenda): Promise<void> {
+  const agenda = agendaDaEquipe();
+  if (!agenda || !integracaoConfigurada()) return;
+  const encontrado = await prisma.pedido.findUnique({ where: { id: pedidoId }, select: SELECAO });
+  if (!encontrado) return;
+  const pedido = { ...encontrado, clinica: comEnderecoDoPedido(encontrado.clinica, encontrado.endereco) };
+  const plano = planejar(
+    { eventoId: pedido.googleEventoEquipeId, agendaId: pedido.googleEventoEquipeId ? agenda : null },
+    { agendaId: agenda, deveExistir: deveTerEvento(pedido.status) }
+  );
+  try {
+    if (plano.acao === "criar") {
+      const eventoId = await transporte.criar(agenda, montarEventoDaEquipe(pedido));
+      await prisma.pedido.update({ where: { id: pedido.id }, data: { googleEventoEquipeId: eventoId } });
+      await registrar(pedido.id, "criar-equipe", true, eventoId);
+    } else if (plano.acao === "atualizar") {
+      await transporte.atualizar(agenda, plano.eventoId, montarEventoDaEquipe(pedido));
+    } else if (plano.acao === "apagar") {
+      await transporte.apagar(agenda, plano.eventoId);
+      await prisma.pedido.update({ where: { id: pedido.id }, data: { googleEventoEquipeId: null } });
+      await registrar(pedido.id, "apagar-equipe", true, plano.eventoId);
+    }
+  } catch (erro) {
+    await registrar(pedido.id, `${plano.acao}-equipe`, false, null, erro instanceof Error ? erro.message : String(erro));
+  }
+}
+
+async function sincronizarEventoDoProfissional(
+  pedidoId: string,
+  transporte: TransporteAgenda,
+  agendaPadrao: string | null
 ): Promise<void> {
   const encontrado = await prisma.pedido.findUnique({ where: { id: pedidoId }, select: SELECAO });
   const pedido = encontrado && { ...encontrado, clinica: comEnderecoDoPedido(encontrado.clinica, encontrado.endereco) };
