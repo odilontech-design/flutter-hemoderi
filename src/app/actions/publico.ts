@@ -1,5 +1,6 @@
 "use server";
 
+import { condicaoInicial } from "@/lib/condicao-pagamento";
 import { revalidatePath } from "next/cache";
 import bcrypt from "bcryptjs";
 import { Prisma } from "@prisma/client";
@@ -263,7 +264,7 @@ export async function vincularSolicitacao(
 
   const clinica = await prisma.clinica.findFirst({
     where: { id: clinicaId, ativa: true },
-    select: { id: true },
+    select: { id: true, condicaoPagamento: true },
   });
   if (!clinica) return { ok: false, erro: "Clínica não encontrada ou desativada." };
 
@@ -292,6 +293,7 @@ export async function vincularSolicitacao(
         pacienteNome: solicitacao.pacienteNome,
         pacienteContato: solicitacao.telefone,
         observacoes: solicitacao.observacoes,
+        condicaoPagamento: condicaoInicial(clinica.condicaoPagamento),
         criadoPorId: sessao.usuarioId,
       },
     });

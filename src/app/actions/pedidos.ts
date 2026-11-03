@@ -1,5 +1,6 @@
 "use server";
 
+import { condicaoInicial } from "@/lib/condicao-pagamento";
 import { revalidatePath } from "next/cache";
 import type { Prisma, StatusPedido } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
@@ -367,6 +368,10 @@ async function criarAgendamento(
     ? Math.max(...itens.map((i) => i.duracaoMin))
     : itens.reduce((soma, i) => soma + i.duracaoMin, 0);
   const grupoId = crypto.randomUUID();
+  // A condição de pagamento já nasce a do cadastro da clínica (03/11).
+  const condicaoPagamento = condicaoInicial(
+    (await prisma.clinica.findUnique({ where: { id: quem.clinicaId }, select: { condicaoPagamento: true } }))?.condicaoPagamento
+  );
 
   const resultado = await prisma.$transaction(async (tx) => {
     // `travarRecursos` garante que essa checagem e a gravação são atômicas
@@ -410,6 +415,7 @@ async function criarAgendamento(
             doutorNome: String(dados.get("doutorNome") ?? "").trim() || null,
             procedimentoPaciente,
             formaPagamento,
+            condicaoPagamento,
             criadoPorId: quem.usuarioId,
           },
         })

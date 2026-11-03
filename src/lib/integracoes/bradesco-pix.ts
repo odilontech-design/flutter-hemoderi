@@ -34,6 +34,7 @@
  * operação segue — o mesmo padrão do PipeDrive.
  */
 
+import { preencherCondicaoPeloPix } from "@/lib/condicao-pagamento";
 import https from "node:https";
 import tls from "node:tls";
 import forge from "node-forge";
@@ -380,6 +381,8 @@ export async function consultarCobranca(txid: string): Promise<{
             where: cobranca.grupoId ? { grupoId: cobranca.grupoId } : { id: cobranca.pedidoId },
             data: { pixPagoEm: pagoEm },
           });
+          // Pix pago antes do atendimento: a condição de pagamento em branco vira "Antecipado".
+          await preencherCondicaoPeloPix(cobranca.grupoId ? { grupoId: cobranca.grupoId } : { id: cobranca.pedidoId }, pagoEm);
         }
         await registrarSincronizacao(cobranca.id, "pagamento-confirmado", true, pagamento.endToEndId, undefined, "CobrancaPix");
       }
