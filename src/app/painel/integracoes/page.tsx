@@ -12,6 +12,8 @@ import { reenviarFalhasWhatsapp, reprocessarPipedrive, reprocessarTodasPipedrive
 import { integracaoConfigurada as googleConfigurado, agendaDaOperacao } from "@/lib/integracoes/google-api";
 import { configuradoBradesco } from "@/lib/integracoes/bradesco-pix";
 import { pipedriveConfigurado } from "@/lib/integracoes/pipedrive";
+import { asaasConfigurado, ambienteAsaas } from "@/lib/integracoes/asaas";
+import { PagamentosCartao } from "./PagamentosCartao";
 
 export const dynamic = "force-dynamic";
 
@@ -67,7 +69,7 @@ export default async function Integracoes() {
   // não aparecia em tela nenhuma, e as três primeiras mensagens reais falharam
   // sem ninguém ver.
   const umDiaAtras = new Date(Date.now() - 24 * 60 * 60 * 1000);
-  const [porStatusWhatsapp, ultimaFalhaWhatsapp, ultimaEnviada, falhasGoogle, ultimoSucessoPipedrive] = await Promise.all([
+  const [porStatusWhatsapp, ultimaFalhaWhatsapp, ultimaEnviada, falhasGoogle, ultimoSucessoPipedrive, cartoesAbertos, cartoesComProblema] = await Promise.all([
     prisma.mensagemWhatsapp.groupBy({ by: ["status"], _count: { _all: true } }),
     prisma.mensagemWhatsapp.findFirst({
       where: { OR: [{ status: "FALHA" }, { status: "PENDENTE", erro: { not: null } }] },
@@ -81,6 +83,8 @@ export default async function Integracoes() {
       orderBy: { criadaEm: "desc" },
       select: { criadaEm: true },
     }),
+    prisma.cobrancaCartao.count({ where: { status: { in: ["PENDENTE", "VENCIDA", "RECUSADA"] } } }),
+    prisma.cobrancaCartao.count({ where: { OR: [{ duplicada: true }, { status: { in: ["CONTESTADA", "ESTORNADA"] } }] } }),
   ]);
   const whatsapp = Object.fromEntries(porStatusWhatsapp.map((g) => [g.status, g._count._all])) as Record<string, number>;
   const whatsappLigado = Boolean(process.env.WHATSAPP_API_URL);
@@ -110,6 +114,14 @@ export default async function Integracoes() {
       linhas: [`${falhasGoogle} falha(s) nas últimas 24h`],
     },
     {
+      nome: "Cartão Asaas",
+      ligado: asaasConfigurado(),
+      linhas: asaasConfigurado()
+        ? [`ambiente: ${ambienteAsaas()}`, `${cartoesAbertos} cobrança(s) em aberto`]
+        : ["pagamento com cartão ainda não ligado"],
+      alerta: cartoesComProblema > 0 ? `${cartoesComProblema} cobrança(s) pedem uma decisão — veja abaixo.` : null,
+    },
+    {
       nome: "Pix Bradesco",
       ligado: configuradoBradesco(),
       linhas: ["cobrança Pix dinâmica por fatura", process.env.BRADESCO_AMBIENTE === "producao" ? "ambiente: produção" : "ambiente: homologação (testes)"],
@@ -134,7 +146,7 @@ export default async function Integracoes() {
         </div>
       )}
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 mb-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-3 mb-4">
         {situacoes.map((i) => (
           <Cartao key={i.nome}>
             <div className="flex items-center justify-between gap-2 mb-1">
@@ -157,6 +169,8 @@ export default async function Integracoes() {
           </Cartao>
         ))}
       </div>
+
+      <PagamentosCartao />
 
       <div className="font-display font-bold text-bordo text-base mb-2">PipeDrive</div>
 

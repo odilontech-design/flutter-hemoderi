@@ -1,5 +1,7 @@
+import type { CobrancaCartao } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { isoDeData } from "@/lib/data";
+import { statusDoEvento, statusDoPagamento, transicaoPermitida, type StatusCartao } from "@/lib/asaas-status";
 
 /**
  * Cartão de crédito pelo Asaas (ata de 03/11): à vista ou parcelado em até
@@ -29,7 +31,7 @@ function base(): string {
   return (process.env.ASAAS_URL?.trim() || "https://api.asaas.com/v3").replace(/\/$/, "");
 }
 
-async function chamar<T>(caminho: string, metodo: "GET" | "POST", corpo?: unknown): Promise<T> {
+async function chamar<T>(caminho: string, metodo: "GET" | "POST" | "DELETE", corpo?: unknown): Promise<T> {
   const resposta = await fetch(`${base()}${caminho}`, {
     method: metodo,
     headers: {
@@ -101,6 +103,24 @@ export async function criarCobrancaCartao(d: {
   const parcelas = Math.min(Math.max(Math.trunc(d.parcelas), 1), 12);
   const total = totalComJuros(d.valorCentavos, parcelas, tabelaDeJuros());
 
+  // Clicar duas vezes (ou voltar e clicar de novo) não abre uma segunda
+  // cobrança dos mesmos atendimentos: reaproveita o link ainda válido. Duas
+  // cobranças abertas é como o cliente acaba pagando em duplicidade.
+  const chave = [...d.pedidoIds].sort().join(",");
+  const recentes = await prisma.cobrancaCartao.findMany({
+    where: {
+      clinicaId: clinica.id,
+      status: "PENDENTE",
+      parcelas,
+      valorTotalCentavos: total,
+      linkPagamento: { not: null },
+      criadaEm: { gte: new Date(Date.now() - 2 * 24 * 3600 * 1000) },
+    },
+    orderBy: { criadaEm: "desc" },
+  });
+  const igual = recentes.find((c) => [...c.pedidoIds].sort().join(",") === chave);
+  if (igual?.linkPagamento) return { ok: true, link: igual.linkPagamento };
+
   try {
     const cliente = await clienteAsaas({
       id: clinica.id,
@@ -137,18 +157,156 @@ export async function criarCobrancaCartao(d: {
   }
 }
 
-/** Eventos do Asaas que confirmam o pagamento (cartão aprovado). */
-export const EVENTOS_DE_PAGAMENTO = ["PAYMENT_CONFIRMED", "PAYMENT_RECEIVED"];
+/** Produção ou sandbox, pelo endereço configurado. */
+export function ambienteAsaas(): "produção" | "sandbox" {
+  return base().includes("sandbox") ? "sandbox" : "produção";
+}
 
-/** Baixa a cobrança e os atendimentos dela. Idempotente. */
-export async function confirmarPagamentoCartao(pagamento: { id?: string; installment?: string | null }, quando = new Date()): Promise<boolean> {
-  const cobranca = await prisma.cobrancaCartao.findFirst({
-    where: { OR: [...(pagamento.id ? [{ asaasId: pagamento.id }] : []), ...(pagamento.installment ? [{ parcelamentoId: pagamento.installment }] : [])] },
-  });
-  if (!cobranca) return false;
-  if (cobranca.status !== "PAGA") {
-    await prisma.cobrancaCartao.update({ where: { id: cobranca.id }, data: { status: "PAGA", pagoEm: quando } });
-    await prisma.pedido.updateMany({ where: { id: { in: cobranca.pedidoIds }, cartaoPagoEm: null }, data: { cartaoPagoEm: quando } });
+/** A chave e o endereço estão certos? Uma consulta que não mexe em nada. */
+export async function testarConexaoAsaas(): Promise<{ ok: true; ambiente: string } | { ok: false; erro: string }> {
+  if (!asaasConfigurado()) return { ok: false, erro: "A chave ASAAS_API_KEY não está configurada na Vercel." };
+  try {
+    await chamar("/customers?limit=1", "GET");
+    return { ok: true, ambiente: ambienteAsaas() };
+  } catch (erro) {
+    return { ok: false, erro: erro instanceof Error ? erro.message : "Falhou." };
   }
+}
+
+/**
+ * Põe a cobrança no estado novo, se a regra permitir. Pagar baixa os
+ * atendimentos; pagar duas vezes pelos mesmos atendimentos marca a duplicidade
+ * (dinheiro a devolver). Devolve se algo mudou.
+ */
+async function aplicarStatus(c: CobrancaCartao, novo: StatusCartao, origem: string, quando = new Date()): Promise<boolean> {
+  if (!transicaoPermitida(c.status, novo)) return false;
+  if (novo === "PAGA") {
+    const pedidos = await prisma.pedido.findMany({
+      where: { id: { in: c.pedidoIds } },
+      select: { pixPagoEm: true, cartaoPagoEm: true },
+    });
+    const jaEstavamPagos = pedidos.length > 0 && pedidos.every((p) => p.pixPagoEm || p.cartaoPagoEm);
+    await prisma.cobrancaCartao.update({
+      where: { id: c.id },
+      data: { status: "PAGA", pagoEm: quando, ultimoEvento: origem, duplicada: jaEstavamPagos },
+    });
+    await prisma.pedido.updateMany({ where: { id: { in: c.pedidoIds }, cartaoPagoEm: null }, data: { cartaoPagoEm: quando } });
+    return true;
+  }
+  await prisma.cobrancaCartao.update({ where: { id: c.id }, data: { status: novo, ultimoEvento: origem } });
   return true;
+}
+
+async function acharCobranca(pagamento: { id?: string; installment?: string | null }): Promise<CobrancaCartao | null> {
+  const ou = [
+    ...(pagamento.id ? [{ asaasId: pagamento.id }] : []),
+    ...(pagamento.installment ? [{ parcelamentoId: pagamento.installment }] : []),
+  ];
+  return ou.length ? prisma.cobrancaCartao.findFirst({ where: { OR: ou } }) : null;
+}
+
+/**
+ * Aplica um aviso do webhook. A conta do Asaas pode ter cobranças que não são
+ * do sistema, então aviso de cobrança desconhecida é ignorado sem registro. Os
+ * que são nossos ficam em EventoAsaas: o mesmo evento reenviado não é aplicado
+ * de novo e o resultado (ou o erro) aparece na tela de integrações.
+ */
+export async function aplicarEventoAsaas(corpo: {
+  id?: string;
+  event?: string;
+  payment?: { id?: string; installment?: string | null };
+}): Promise<{ resultado: string }> {
+  if (!corpo.event || !corpo.payment) return { resultado: "ignorado" };
+  const cobranca = await acharCobranca(corpo.payment);
+  if (!cobranca) return { resultado: "ignorado" };
+
+  let registro: { id: string } | null = null;
+  try {
+    registro = await prisma.eventoAsaas.create({
+      data: { eventoId: corpo.id ?? null, tipo: corpo.event, asaasId: corpo.payment.id ?? null, cobrancaId: cobranca.id, resultado: "recebido" },
+      select: { id: true },
+    });
+  } catch (erro) {
+    if ((erro as { code?: string }).code === "P2002") return { resultado: "repetido" };
+    throw erro;
+  }
+
+  let resultado = "sem efeito";
+  let falha: string | null = null;
+  try {
+    const novo = statusDoEvento(corpo.event);
+    if (novo && (await aplicarStatus(cobranca, novo, corpo.event))) resultado = novo;
+  } catch (erro) {
+    falha = erro instanceof Error ? erro.message.slice(0, 300) : "erro";
+    resultado = "erro";
+  }
+  await prisma.eventoAsaas.update({ where: { id: registro.id }, data: { resultado, erro: falha } });
+  if (falha) throw new Error(falha);
+  return { resultado };
+}
+
+/** Baixa a cobrança e os atendimentos dela. Idempotente. (Usada pelas conferências e testes.) */
+export async function confirmarPagamentoCartao(pagamento: { id?: string; installment?: string | null }, quando = new Date()): Promise<boolean> {
+  const cobranca = await acharCobranca(pagamento);
+  if (!cobranca) return false;
+  await aplicarStatus(cobranca, "PAGA", "conferência", quando);
+  return true;
+}
+
+/**
+ * Pergunta ao Asaas como a cobrança está e acerta o sistema. É o que cobre um
+ * webhook que não chegou (token errado, fora do ar na hora): a mesma regra
+ * dos eventos.
+ */
+export async function conferirCobrancaNoAsaas(
+  id: string
+): Promise<{ ok: true; status: string; mudou: boolean } | { ok: false; erro: string }> {
+  const cobranca = await prisma.cobrancaCartao.findUnique({ where: { id } });
+  if (!cobranca) return { ok: false, erro: "Cobrança não encontrada." };
+  if (!asaasConfigurado()) return { ok: false, erro: "A chave do Asaas não está configurada." };
+  try {
+    const pagamento = await chamar<{ status?: string; deleted?: boolean }>(`/payments/${cobranca.asaasId}`, "GET");
+    const novo = statusDoPagamento(pagamento);
+    const mudou = novo ? await aplicarStatus(cobranca, novo, "conferência") : false;
+    return { ok: true, status: novo ?? cobranca.status, mudou };
+  } catch (erro) {
+    return { ok: false, erro: erro instanceof Error ? erro.message : "Falhou." };
+  }
+}
+
+/** Confere até `limite` cobranças em aberto, as mais antigas primeiro. */
+export async function conferirEmAberto(limite = 30): Promise<{ conferidas: number; acertadas: number; falhas: string[] }> {
+  const abertas = await prisma.cobrancaCartao.findMany({
+    where: { status: { in: ["PENDENTE", "VENCIDA", "RECUSADA"] } },
+    orderBy: { atualizadaEm: "asc" },
+    take: limite,
+    select: { id: true },
+  });
+  let acertadas = 0;
+  const falhas: string[] = [];
+  for (const { id } of abertas) {
+    const r = await conferirCobrancaNoAsaas(id);
+    if (!r.ok) falhas.push(r.erro);
+    else if (r.mudou) acertadas++;
+    // Sem mudança, ainda assim marca a conferência: a fila anda para as próximas.
+    else await prisma.cobrancaCartao.update({ where: { id }, data: { atualizadaEm: new Date() } });
+  }
+  return { conferidas: abertas.length, acertadas, falhas };
+}
+
+/** Cancela no Asaas uma cobrança que ainda não foi paga, para o cliente não pagar um link velho. */
+export async function cancelarCobrancaNoAsaas(id: string): Promise<{ ok: true } | { ok: false; erro: string }> {
+  const cobranca = await prisma.cobrancaCartao.findUnique({ where: { id } });
+  if (!cobranca) return { ok: false, erro: "Cobrança não encontrada." };
+  if (!["PENDENTE", "VENCIDA", "RECUSADA"].includes(cobranca.status)) {
+    return { ok: false, erro: "Só dá para cancelar uma cobrança que ainda não foi paga." };
+  }
+  if (!asaasConfigurado()) return { ok: false, erro: "A chave do Asaas não está configurada." };
+  try {
+    await chamar(cobranca.parcelamentoId ? `/installments/${cobranca.parcelamentoId}` : `/payments/${cobranca.asaasId}`, "DELETE");
+  } catch (erro) {
+    return { ok: false, erro: erro instanceof Error ? erro.message : "Falhou." };
+  }
+  await aplicarStatus(cobranca, "CANCELADA", "cancelada pela equipe");
+  return { ok: true };
 }

@@ -1869,7 +1869,32 @@ model CobrancaCartao {
   linkPagamento      String?
   criadaEm           DateTime  @default(now())
   pagoEm             DateTime?
+  atualizadaEm       DateTime  @default(now()) @updatedAt
+
+  /// Pagou duas vezes pelos mesmos atendimentos (ex.: abriu dois links): é
+  /// dinheiro a devolver, e a tela de integrações avisa.
+  duplicada    Boolean @default(false)
+  /// O último evento do Asaas que mexeu nesta cobrança.
+  ultimoEvento String?
+  observacao   String?
 
   @@index([parcelamentoId])
   @@index([clinicaId])
+  @@index([status])
+}
+
+/// Cada aviso do Asaas que o webhook recebeu para uma cobrança do sistema:
+/// idempotência (o Asaas reenvia) e rastro de auditoria.
+model EventoAsaas {
+  id         String   @id @default(cuid())
+  /// O id do evento no Asaas; o mesmo evento reenviado não é aplicado duas vezes.
+  eventoId   String?  @unique
+  tipo       String
+  asaasId    String?
+  cobrancaId String?
+  resultado  String
+  erro       String?
+  recebidoEm DateTime @default(now())
+
+  @@index([recebidoEm])
 }
