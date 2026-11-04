@@ -439,3 +439,33 @@ export const DESCRITIVO_DAS_FAMILIAS: Record<string, DescritivoDaFamilia> = {
 export function descritivoDaFamilia(familia: string): DescritivoDaFamilia | null {
   return DESCRITIVO_DAS_FAMILIAS[familia] ?? null;
 }
+
+/**
+ * O resumo dos pacotes de cada equipamento, visível já no cartão fechado do
+ * catálogo (ata de 03/11: "descrições textuais explícitas para os pacotes —
+ * de 1 a 9 pacientes no AirFlow, regiões, opções de Piezo, cobertura de 4
+ * horas, disparos no ultrassom"). Sem preço: o valor muda com a tabela da
+ * clínica e a região do endereço, e aparece ao abrir o cartão.
+ */
+const RESUMO_DOS_PACOTES: Record<string, string> = {
+  "AirFlow GBT Machine":
+    "Pacotes de 1 a 8 pacientes no mesmo período, ou valor por paciente a partir de 9 pacientes — quanto mais pacientes, menor o valor de cada um.",
+  "LiteTouch™":
+    "Por paciente: remoção de lentes, facetas e coroas (até 2 elementos, com elemento adicional) ou arcada completa (FULL), dessensibilização, frenectomia, remoção de tecido cariado, tratamento para ronco e HOF.",
+  "Rotamix Sedação Consciente": "Por paciente, com valor conforme a região do atendimento: Grande São Paulo ou interior (até 150 km).",
+  "Piezosurgery Mectron Touch":
+    "Por paciente: Piezo avulso, combinado com Stickybone e membranas, combo completo com sedação, ou em ambiente hospitalar.",
+  "Cobertura Fotográfica": "Cobertura fotográfica odontológica por período de 4 horas.",
+  "Ultrassom Micro Focado":
+    "Por disparos: sessão de 500, meio período (4 h, 900 disparos), dia completo (8 h, 1.600) ou alto volume (8 h, 3.000) — ou avulso por disparo, a partir de 500. Disparo adicional cobrado à parte.",
+  "Laser Therapy EC": "Por paciente: sessão de Laser Therapy EC + ILIB, ou como adicional a outro serviço da mesma visita.",
+  "Laser CO2 Fracionado": "Períodos de 4, 6 ou 8 horas, nas modalidades Essencial ou Assistido, e valor por paciente para cursos.",
+  "Bisturi Elétrico": "Por cirurgia ou diária de 8 horas.",
+  "Motor de Implante": "Por cirurgia ou diária de 8 horas.",
+  "PRF – Coleta e Produção":
+    "Por paciente: membranas de PRF, PRF para harmonização ou para medicina, Stickybone + membranas — ou diária I-PRF Day. Disponibilidade conforme a região.",
+};
+
+export function resumoDosPacotes(familia: string): string | null {
+  return RESUMO_DOS_PACOTES[familia] ?? null;
+}

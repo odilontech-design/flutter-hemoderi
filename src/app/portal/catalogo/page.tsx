@@ -8,7 +8,7 @@ import { precosDosServicos, tabelasDaClinica } from "@/lib/preco";
 import { locaisDaClinica } from "@/lib/endereco";
 import { servicoVisivel } from "@/lib/visibilidade";
 import { descricaoDoPreco, opcaoCurta, valorPorUnidadeDoPacote } from "@/lib/cobranca";
-import { descritivoDaFamilia } from "@/lib/catalogo-familias";
+import { descritivoDaFamilia, resumoDosPacotes } from "@/lib/catalogo-familias";
 import { NovoLocal } from "./NovoLocal";
 
 export const dynamic = "force-dynamic";
@@ -190,7 +190,11 @@ export default async function CatalogoDaClinica({ searchParams }: { searchParams
               )}
               <span className="min-w-0 flex-1">
                 <span className="block font-display font-bold text-bordo text-sm">{grupo.familia}</span>
-                {/* Chamada padrão no lugar da contagem de procedimentos (ata de 03/11). */}
+                {/* Resumo dos pacotes em texto, já no cartão fechado, e a chamada
+                    padrão no lugar da contagem de procedimentos (ata de 03/11). */}
+                {resumoDosPacotes(grupo.familia) && (
+                  <span className="block text-[11px] text-gray-600 mt-0.5 leading-snug">{resumoDosPacotes(grupo.familia)}</span>
+                )}
                 <span className="block text-[11px] font-semibold text-bordo/70 mt-0.5 group-open:hidden">Clique aqui e conheça os pacotes</span>
               </span>
               <span aria-hidden className="text-bordo text-xs transition-transform group-open:rotate-180">
