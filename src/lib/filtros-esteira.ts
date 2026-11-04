@@ -53,7 +53,7 @@ export function temFiltro(f: FiltrosEsteira): boolean {
  * atendimento, quando a busca é um código. Null quando é texto.
  */
 export function numeroDaBusca(q: string): number | null {
-  const codigo = /^(?:\d{4}-)?0*(\d{1,6})(?:-[a-z0-9]*)?$/i.exec(q.trim());
+  const codigo = /^(?:\d{4}-)?0*(\d{1,6})(?:\s*-\s*.*)?$/i.exec(q.trim());
   return codigo ? Number(codigo[1]) : null;
 }
 

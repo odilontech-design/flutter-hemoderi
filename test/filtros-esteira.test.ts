@@ -6,6 +6,7 @@ test("busca por código acha o número do atendimento", () => {
   assert.equal(numeroDaBusca("2026-0051"), 51);
   assert.equal(numeroDaBusca("2026-0051-DRERICMOTA"), 51);
   assert.equal(numeroDaBusca("51"), 51);
+  assert.equal(numeroDaBusca("2026-0055 - Andre Miguel"), 55);
   assert.equal(numeroDaBusca("Dr Eric"), null);
 });
 

@@ -14,7 +14,7 @@ import { prisma } from "@/lib/prisma";
 import { formatarData, formatarDataCurta, instanteDoAtendimento } from "@/lib/data";
 import { mensagemDeAtraso, mensagemDeFeedback } from "@/lib/whatsapp-link";
 import { corpoParaDilonZap, descreverErroDeRede, interpretarResposta, mensagemVencida, urlDoDilonZap } from "@/lib/integracoes/dilon-zap";
-import { codigoDoPedido } from "@/lib/numeracao";
+import { codigoDoPedido, numeroDoPedido } from "@/lib/numeracao";
 import { comEnderecoDoPedido, resumoDoEndereco } from "@/lib/endereco";
 import { normalizarTelefone } from "@/lib/slug";
 import { LOCAL_FECHADO, localVisivel } from "@/lib/sigilo";
@@ -154,14 +154,14 @@ export function montarTexto(tipo: TipoMensagem, pedido: DadosPedido, horasRevela
         "",
         `Para aceitar ou recusar, acesse o app: ${urlBase()}/profissional`,
         // O sufixo do código é a clínica (ou o doutor): fechado, vai só ano e número.
-        `Agendamento ${aberto ? codigo : codigo.split("-").slice(0, 2).join("-")}.`,
+        `Agendamento ${aberto ? codigo : numeroDoPedido(pedido.numero, pedido.data)}.`,
       ].join("\n");
     }
     case "AVISO_PROFISSIONAL":
       // O texto nasce em lib/aviso-profissional.ts, com o antes e o depois.
       return "";
     case "LEMBRETE_CHEGADA":
-      return `Olá, ${pedido.profissional?.nome?.split(" ")[0] ?? ""}! Já são ${pedido.horaInicio} e a sua chegada ao atendimento de ${pedido.servico.nome} ainda não foi registrada. Ao chegar, toque em "Cheguei" no app: ${urlBase()}/profissional. Se não puder comparecer, avise a logística. Agendamento ${codigo.split("-").slice(0, 2).join("-")}.`;
+      return `Olá, ${pedido.profissional?.nome?.split(" ")[0] ?? ""}! Já são ${pedido.horaInicio} e a sua chegada ao atendimento de ${pedido.servico.nome} ainda não foi registrada. Ao chegar, toque em "Cheguei" no app: ${urlBase()}/profissional. Se não puder comparecer, avise a logística. Agendamento ${numeroDoPedido(pedido.numero, pedido.data)}.`;
     case "LEMBRETE":
       return `Lembrete: ${pedido.servico.nome} na ${pedido.clinica.nome} amanhã, ${quando}. Agendamento ${codigo}.`;
     case "RESULTADO":

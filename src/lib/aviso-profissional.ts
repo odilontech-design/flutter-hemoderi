@@ -1,7 +1,7 @@
 import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { formatarData } from "@/lib/data";
-import { codigoDoPedido } from "@/lib/numeracao";
+import { numeroDoPedido } from "@/lib/numeracao";
 import { normalizarTelefone } from "@/lib/slug";
 import { urlBase } from "@/lib/divulgacao";
 import { despacharPendentes } from "@/lib/integracoes/whatsapp";
@@ -85,7 +85,7 @@ export async function avisarProfissionaisAfetados(antes: FotoDoPedido[]): Promis
       ]);
       const destinatario = normalizarTelefone(profissional?.telefone);
       if (!profissional || !pedido || !destinatario) continue;
-      const codigo = codigoDoPedido(pedido.numero, pedido.clinica.nome, pedido.data).split("-").slice(0, 2).join("-");
+      const codigo = numeroDoPedido(pedido.numero, pedido.data);
       const texto = textoDoAviso(mudanca, {
         nome: profissional.nome,
         servico: pedido.servico.nome,

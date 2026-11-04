@@ -336,7 +336,7 @@ export async function marcarNegocioPerdido(pedidoId: string, motivo?: string | n
 const FORA_DO_TITULO = /\b(instituto|light\s*touch|litetouch|remo[cç][aã]o de lentes)\b/gi;
 
 /**
- * "2026 0073 Dra. Maria Gabriela DAIMED": ano, número, doutor e clínica — o
+ * "2026-0073 - Dra. Maria Gabriela - Daimed": ano, número, doutor e clínica — o
  * padrão que a equipe lança à mão, sem "instituto" nem o nome do serviço.
  * Quando a clínica tem o nome do próprio doutor, ele não se repete.
  */
@@ -350,9 +350,10 @@ export function tituloDoNegocio(d: { ano: number; numero: number; doutor: string
       .replace(/[̀-ͯ]/g, "")
       .replace(/^(dr|dra)\.?\s+/i, "")
       .toLowerCase();
-  const partes = [String(d.ano), String(d.numero).padStart(4, "0"), doutor];
+  // Mesmo padrão do código na tela (04/11): "2026-0055 - Doutor - Clínica".
+  const partes = [`${d.ano}-${String(d.numero).padStart(4, "0")}`, doutor];
   if (clinica && (!doutor || !normal(clinica).includes(normal(doutor)))) partes.push(clinica);
-  return partes.filter(Boolean).join(" ");
+  return partes.filter(Boolean).join(" - ");
 }
 
 /** O que o profissional declarou ter recebido no atendimento, em texto. */

@@ -66,8 +66,28 @@ export function siglaDaClinica(nome: string): string {
   return base.slice(0, LARGURA_SIGLA) || "CLINICA";
 }
 
+/**
+ * O nome da clínica como as pessoas leem (pedido de 04/11: "organizado e com
+ * os espaços"): sem o "Clínica", "Instituto", "Dr." da frente e só as duas
+ * primeiras palavras que identificam — "Clínica Santa Helena Odontologia"
+ * vira "Santa Helena"; "Andre Miguel Sant Anna de Assis", "Andre Miguel".
+ */
+export function nomeCurtoDaClinica(nome: string): string {
+  const palavras = (nome ?? "").split(/\s+/).filter((p) => /[\p{L}\p{N}]/u.test(p));
+  const chave = (p: string) => semAcento(p).toLowerCase().replace(/[^a-z0-9]/g, "");
+  let inicio = 0;
+  while (inicio < palavras.length - 1 && (GENERICAS.has(chave(palavras[inicio])) || ["dr", "dra"].includes(chave(palavras[inicio])))) inicio++;
+  const escolhidas = palavras.slice(inicio, inicio + 2);
+  while (escolhidas.length > 1 && ["de", "da", "do", "das", "dos", "e"].includes(chave(escolhidas[escolhidas.length - 1]))) escolhidas.pop();
+  return escolhidas.join(" ") || (nome ?? "").trim() || "Clínica";
+}
+
+/** "2026-0055": ano e sequencial, sem a clínica — para onde a clínica não pode aparecer. */
+export function numeroDoPedido(numero: number, data: Date): string {
+  return `${data.getUTCFullYear()}-${String(numero).padStart(LARGURA_SEQUENCIAL, "0")}`;
+}
+
+/** "2026-0055 - Andre Miguel": ano, sequencial e o nome da clínica legível (04/11). */
 export function codigoDoPedido(numero: number, nomeClinica: string, data: Date): string {
-  const ano = data.getUTCFullYear();
-  const sequencial = String(numero).padStart(LARGURA_SEQUENCIAL, "0");
-  return `${ano}-${sequencial}-${siglaDaClinica(nomeClinica)}`;
+  return `${numeroDoPedido(numero, data)} - ${nomeCurtoDaClinica(nomeClinica)}`;
 }

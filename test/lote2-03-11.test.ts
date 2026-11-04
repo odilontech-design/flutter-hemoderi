@@ -5,11 +5,11 @@ import { lerOrdem, ordenarPedidos } from "../src/lib/filtros-esteira";
 import { opcaoCurta, valorPorUnidadeDoPacote } from "../src/lib/cobranca";
 
 test("nome do negócio: ano, número, doutor e clínica, sem instituto nem serviço", () => {
-  assert.equal(tituloDoNegocio({ ano: 2026, numero: 73, doutor: "Dra. Maria Gabriela", clinica: "Instituto Daimed" }), "2026 0073 Dra. Maria Gabriela Daimed");
+  assert.equal(tituloDoNegocio({ ano: 2026, numero: 73, doutor: "Dra. Maria Gabriela", clinica: "Instituto Daimed" }), "2026-0073 - Dra. Maria Gabriela - Daimed");
   // clínica com o nome do próprio doutor: não repete
-  assert.equal(tituloDoNegocio({ ano: 2026, numero: 55, doutor: "André Miguel", clinica: "Andre Miguel Sant Anna de Assis" }), "2026 0055 André Miguel");
-  assert.equal(tituloDoNegocio({ ano: 2026, numero: 9, doutor: null, clinica: "Clínica Sorriso" }), "2026 0009 Clínica Sorriso");
-  assert.equal(tituloDoNegocio({ ano: 2026, numero: 9, doutor: "Dr. Rui", clinica: "LiteTouch Remoção de Lentes Center" }), "2026 0009 Dr. Rui Center");
+  assert.equal(tituloDoNegocio({ ano: 2026, numero: 55, doutor: "André Miguel", clinica: "Andre Miguel Sant Anna de Assis" }), "2026-0055 - André Miguel");
+  assert.equal(tituloDoNegocio({ ano: 2026, numero: 9, doutor: null, clinica: "Clínica Sorriso" }), "2026-0009 - Clínica Sorriso");
+  assert.equal(tituloDoNegocio({ ano: 2026, numero: 9, doutor: "Dr. Rui", clinica: "LiteTouch Remoção de Lentes Center" }), "2026-0009 - Dr. Rui - Center");
 });
 
 test("recebimento do profissional em texto", () => {

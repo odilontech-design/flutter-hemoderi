@@ -1,16 +1,16 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { codigoDoPedido, siglaDaClinica } from "../src/lib/numeracao";
+import { codigoDoPedido, nomeCurtoDaClinica, numeroDoPedido, siglaDaClinica } from "../src/lib/numeracao";
 
 const DATA = new Date("2026-09-14T00:00:00.000Z");
 
 test("o código traz ano, sequencial e clínica", () => {
-  assert.equal(codigoDoPedido(412, "Clínica Santa Rita", DATA), "2026-0412-SANTARITA");
+  assert.equal(codigoDoPedido(412, "Clínica Santa Rita", DATA), "2026-0412 - Santa Rita");
 });
 
 test("o sequencial é preenchido com zeros para ordenar e ditar", () => {
-  assert.equal(codigoDoPedido(7, "Santa Rita", DATA), "2026-0007-SANTARITA");
-  assert.equal(codigoDoPedido(12345, "Santa Rita", DATA), "2026-12345-SANTARITA");
+  assert.equal(codigoDoPedido(7, "Santa Rita", DATA), "2026-0007 - Santa Rita");
+  assert.equal(codigoDoPedido(12345, "Santa Rita", DATA), "2026-12345 - Santa Rita");
 });
 
 test("palavras que toda clínica tem no nome não entram na sigla", () => {
@@ -29,5 +29,15 @@ test("nome inteiro genérico usa o nome mesmo, em vez de devolver vazio", () => 
 });
 
 test("o ano vem da data do atendimento, não do relógio de hoje", () => {
-  assert.equal(codigoDoPedido(1, "Santa Rita", new Date("2027-01-02T00:00:00.000Z")), "2027-0001-SANTARITA");
+  assert.equal(codigoDoPedido(1, "Santa Rita", new Date("2027-01-02T00:00:00.000Z")), "2027-0001 - Santa Rita");
+});
+
+test("nome da clínica legível no código (04/11)", () => {
+  assert.equal(nomeCurtoDaClinica("Andre Miguel Sant Anna de Assis"), "Andre Miguel");
+  assert.equal(nomeCurtoDaClinica("Clínica Santa Helena Odontologia"), "Santa Helena");
+  assert.equal(nomeCurtoDaClinica("Instituto Bonfim Saúde Integrada"), "Bonfim Saúde");
+  assert.equal(nomeCurtoDaClinica("Dr. Rodrigo Nahas"), "Rodrigo Nahas");
+  assert.equal(nomeCurtoDaClinica("Centro de Odontologia Aurora"), "Aurora");
+  assert.equal(nomeCurtoDaClinica("Clínica"), "Clínica");
+  assert.equal(numeroDoPedido(55, DATA), "2026-0055");
 });
