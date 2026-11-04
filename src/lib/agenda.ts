@@ -109,13 +109,31 @@ export function horariosLivres({
   return livres;
 }
 
-/** Janelas declaradas pelo profissional para um dia da semana. */
-export function janelasDoDia(
-  disponibilidades: { diaSemana: number; horaInicio: string; horaFim: string }[],
-  diaSemana: number
-): Intervalo[] {
+export type JanelaDeclarada = {
+  diaSemana: number;
+  horaInicio: string;
+  horaFim: string;
+  /** Período em que a janela vale (ata de 04/11). Vazio = sem limite. */
+  dataInicio?: Date | null;
+  dataFim?: Date | null;
+};
+
+/** A janela vale nesta data? Datas comparadas pelo dia (UTC, como `Pedido.data`). */
+export function janelaValeNaData(j: JanelaDeclarada, data: Date): boolean {
+  if (j.diaSemana !== data.getUTCDay()) return false;
+  const dia = Date.UTC(data.getUTCFullYear(), data.getUTCMonth(), data.getUTCDate());
+  if (j.dataInicio && dia < j.dataInicio.getTime()) return false;
+  if (j.dataFim && dia > j.dataFim.getTime()) return false;
+  return true;
+}
+
+/**
+ * Janelas declaradas pelo profissional para uma data (respeitando o período
+ * de cada janela) ou, com um número, para um dia da semana qualquer.
+ */
+export function janelasDoDia(disponibilidades: JanelaDeclarada[], dia: Date | number): Intervalo[] {
   return disponibilidades
-    .filter((d) => d.diaSemana === diaSemana)
+    .filter((d) => (typeof dia === "number" ? d.diaSemana === dia : janelaValeNaData(d, dia)))
     .map((d) => ({ inicio: paraMinutos(d.horaInicio), fim: paraMinutos(d.horaFim) }));
 }
 

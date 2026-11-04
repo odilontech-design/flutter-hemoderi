@@ -881,6 +881,11 @@ model Disponibilidade {
   horaInicio String // "08:00"
   horaFim    String // "12:00"
 
+  /// Período em que a janela vale (ata de 04/11: "tem que conter a data").
+  /// Vazio = vale toda semana, sem fim. Datas à meia-noite UTC, como Pedido.data.
+  dataInicio DateTime?
+  dataFim    DateTime?
+
   criadaEm DateTime @default(now())
 
   @@index([profissionalId, diaSemana])

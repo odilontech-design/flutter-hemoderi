@@ -214,7 +214,7 @@ export async function verificarAlocacao(
       });
     }
 
-    const janelas = janelasDoDia(disponibilidades, data.getUTCDay());
+    const janelas = janelasDoDia(disponibilidades, data);
     if (janelas.length === 0 || !cabeEmAlgumaJanela(alvo, janelas)) {
       impedimentos.push({
         tipo: "DISPONIBILIDADE",
@@ -311,7 +311,7 @@ export async function horariosDisponiveis({
   };
   // Sem profissional escolhido, a janela é o expediente inteiro.
   const declaradas = profissionalId
-    ? janelasDoDia(disponibilidades, data.getUTCDay())
+    ? janelasDoDia(disponibilidades, data)
     : [expediente];
   const dentroDoExpediente = mesclarIntervalos(declaradas)
     .map((j) => ({ inicio: Math.max(j.inicio, expediente.inicio), fim: Math.min(j.fim, expediente.fim) }))

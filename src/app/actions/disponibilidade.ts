@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { exigirProfissional } from "@/lib/sessao";
-import { dataDeISO, diasDoIntervalo, paraMinutos } from "@/lib/data";
+import { dataDeISO, diasDoIntervalo, hojeUTC, paraMinutos } from "@/lib/data";
 import { turnoPorChave } from "@/lib/turnos";
 import type { Resultado } from "./pedidos";
 
@@ -26,21 +26,43 @@ export async function adicionarDisponibilidade(_anterior: Resultado, dados: Form
   }
   if (turnos.length === 0 || turnos.some((t) => !t)) return { ok: false, erro: "Marque pelo menos um turno." };
 
+  // Período (ata de 04/11): "de 10/11 até 30/11". Sem "até", vale dali em
+  // diante; sem nenhum dos dois, toda semana.
+  const deISO = String(dados.get("dataInicio") ?? "").trim();
+  const ateISO = String(dados.get("dataFim") ?? "").trim();
+  const dataInicio = /^\d{4}-\d{2}-\d{2}$/.test(deISO) ? dataDeISO(deISO) : null;
+  const dataFim = /^\d{4}-\d{2}-\d{2}$/.test(ateISO) ? dataDeISO(ateISO) : null;
+  if (dataInicio && dataFim && dataFim < dataInicio) {
+    return { ok: false, erro: "Confira o período: o \"até\" precisa ser depois do \"de\"." };
+  }
+  if (dataFim && dataFim.getTime() < hojeUTC().getTime()) {
+    return { ok: false, erro: "O período já terminou. Confira a data \"até\"." };
+  }
+
   // Declarar o mesmo turno duas vezes não é erro do usuário — é o clique
   // repetido de quem não tem certeza se salvou. Guardar duplicado só suja a
   // lista e não muda a agenda.
   const existentes = await prisma.disponibilidade.findMany({
     where: { profissionalId: sessao.profissionalId, diaSemana: { in: dias } },
-    select: { diaSemana: true, horaInicio: true, horaFim: true },
+    select: { diaSemana: true, horaInicio: true, horaFim: true, dataInicio: true, dataFim: true },
   });
-  const jaTem = new Set(existentes.map((e) => `${e.diaSemana}|${e.horaInicio}|${e.horaFim}`));
+  const chave = (d: number, ini: string, fim: string, de: Date | null, ate: Date | null) =>
+    `${d}|${ini}|${fim}|${de?.getTime() ?? ""}|${ate?.getTime() ?? ""}`;
+  const jaTem = new Set(existentes.map((e) => chave(e.diaSemana, e.horaInicio, e.horaFim, e.dataInicio, e.dataFim)));
 
   const novas = dias.flatMap((diaSemana) =>
     turnos
       .filter((t): t is NonNullable<typeof t> => Boolean(t))
       .filter((t) => paraMinutos(t.horaFim) > paraMinutos(t.horaInicio))
-      .filter((t) => !jaTem.has(`${diaSemana}|${t.horaInicio}|${t.horaFim}`))
-      .map((t) => ({ profissionalId: sessao.profissionalId, diaSemana, horaInicio: t.horaInicio, horaFim: t.horaFim }))
+      .filter((t) => !jaTem.has(chave(diaSemana, t.horaInicio, t.horaFim, dataInicio, dataFim)))
+      .map((t) => ({
+        profissionalId: sessao.profissionalId,
+        diaSemana,
+        horaInicio: t.horaInicio,
+        horaFim: t.horaFim,
+        dataInicio,
+        dataFim,
+      }))
   );
   if (novas.length > 0) await prisma.disponibilidade.createMany({ data: novas });
 

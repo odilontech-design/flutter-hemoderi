@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/prisma";
-import { haSobreposicao, intervaloDe, type Intervalo } from "@/lib/agenda";
+import { haSobreposicao, intervaloDe, janelaValeNaData, type Intervalo } from "@/lib/agenda";
 import { paraMinutos } from "@/lib/data";
 import { STATUS_ATIVOS } from "@/lib/pedido";
 import { TURNOS, type ChaveTurno } from "@/lib/turnos";
@@ -83,7 +83,7 @@ export async function disponibilidadeDaEquipe(dias: Date[]): Promise<LinhaDaEqui
       select: { id: true, nome: true },
     }),
     prisma.disponibilidade.findMany({
-      select: { profissionalId: true, diaSemana: true, horaInicio: true, horaFim: true },
+      select: { profissionalId: true, diaSemana: true, horaInicio: true, horaFim: true, dataInicio: true, dataFim: true },
     }),
     prisma.bloqueio.findMany({
       where: { data: { gte: inicio, lt: fimExclusivo } },
@@ -123,7 +123,7 @@ export async function disponibilidadeDaEquipe(dias: Date[]): Promise<LinhaDaEqui
         if (ausente) return { turno: turno.chave, estado: "ausente", atendimentos: 0 };
 
         const declarou = minhasJanelas.some(
-          (j) => j.diaSemana === diaSemana && haSobreposicao(faixa, { inicio: paraMinutos(j.horaInicio), fim: paraMinutos(j.horaFim) })
+          (j) => janelaValeNaData(j, dia) && haSobreposicao(faixa, { inicio: paraMinutos(j.horaInicio), fim: paraMinutos(j.horaFim) })
         );
 
         const atendimentos = meusPedidos.filter(

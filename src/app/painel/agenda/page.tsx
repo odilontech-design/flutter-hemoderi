@@ -8,6 +8,7 @@ import { minutosAgora, paraHora, paraMinutos } from "@/lib/data";
 import { parametros } from "@/lib/alocacao";
 import { COR_STATUS, ROTULO_STATUS, STATUS_ATIVOS } from "@/lib/pedido";
 import { familiaDoNome } from "@/lib/familia";
+import { janelaValeNaData, type JanelaDeclarada } from "@/lib/agenda";
 import { FiltrosAgenda } from "./FiltrosAgenda";
 import { urlAgenda, type ValoresFiltro } from "./filtros";
 
@@ -462,7 +463,7 @@ function PorProfissional({
   profissionais: {
     id: string;
     nome: string;
-    disponibilidades: { diaSemana: number; horaInicio: string; horaFim: string }[];
+    disponibilidades: JanelaDeclarada[];
     bloqueios: unknown[];
   }[];
   data: Date;
@@ -477,7 +478,7 @@ function PorProfissional({
     const meus = pedidos
       .filter((p) => p.profissionalId === profissional.id)
       .sort((a, b) => paraMinutos(a.horaInicio) - paraMinutos(b.horaInicio));
-    const janelas = profissional.disponibilidades.filter((d) => d.diaSemana === data.getUTCDay());
+    const janelas = profissional.disponibilidades.filter((d) => janelaValeNaData(d, data));
     const ausente = profissional.bloqueios.length > 0;
     return { profissional, meus, janelas, ausente, relevante: meus.length > 0 || janelas.length > 0 || ausente };
   });

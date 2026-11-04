@@ -15,12 +15,16 @@ import {
   competenciaAtual,
   competenciaPorExtenso,
   formatarData,
+  formatarDataCurta,
   formatarDiaEData,
   gradeDoMes,
+  hojeISO,
+  hojeUTC,
   isoDeData,
   proximosDias,
 } from "@/lib/data";
 import { rotuloDaJanela, TURNOS } from "@/lib/turnos";
+import { janelaValeNaData } from "@/lib/agenda";
 
 export const dynamic = "force-dynamic";
 
@@ -45,8 +49,9 @@ export default async function Disponibilidade({
 
   const [janelas, ausencias, bloqueiosDoMes, eu] = await Promise.all([
     prisma.disponibilidade.findMany({
-      where: { profissionalId: sessao.profissionalId },
-      orderBy: [{ diaSemana: "asc" }, { horaInicio: "asc" }],
+      // As de período já encerrado saem da tela: não valem mais para nada.
+      where: { profissionalId: sessao.profissionalId, OR: [{ dataFim: null }, { dataFim: { gte: hojeUTC() } }] },
+      orderBy: [{ diaSemana: "asc" }, { horaInicio: "asc" }, { dataInicio: "asc" }],
     }),
     prisma.bloqueio.findMany({
       where: { profissionalId: sessao.profissionalId, data: { gte: new Date(Date.now() - 86400000) } },
@@ -68,8 +73,10 @@ export default async function Disponibilidade({
   // — é a "Minha Semana" que a ata de 21/09 pediu: nome do dia e data reais,
   // não mais "Segunda-feira" solta sem dizer qual segunda.
   const semana = proximosDias(7).map((dia) => {
-    const diaSemana = dia.getUTCDay();
-    const janelasDoDia = janelas.filter((j) => j.diaSemana === diaSemana);
+    // Uma janela de período igual a uma semanal aparece uma vez só.
+    const janelasDoDia = janelas
+      .filter((j) => janelaValeNaData(j, dia))
+      .filter((j, i, lista) => lista.findIndex((o) => o.horaInicio === j.horaInicio && o.horaFim === j.horaFim) === i);
     const bloqueiosDesteDia = ausencias.filter((a) => isoDeData(a.data) === isoDeData(dia));
     const diaTodoBloqueado = bloqueiosDesteDia.some((b) => !b.horaInicio);
     return { dia, janelasDoDia, bloqueiosDesteDia, diaTodoBloqueado };
@@ -81,7 +88,14 @@ export default async function Disponibilidade({
     const atual = bloqueiosPorDia.get(chave);
     if (!atual || !atual.diaTodo) bloqueiosPorDia.set(chave, { diaTodo: !b.horaInicio || Boolean(atual?.diaTodo) });
   }
-  const diasDaSemanaComJanela = new Set(janelas.map((j) => j.diaSemana));
+  const periodo = (j: { dataInicio: Date | null; dataFim: Date | null }) =>
+    j.dataInicio && j.dataFim
+      ? `de ${formatarDataCurta(j.dataInicio)} a ${formatarDataCurta(j.dataFim)}`
+      : j.dataFim
+        ? `até ${formatarDataCurta(j.dataFim)}`
+        : j.dataInicio
+          ? `a partir de ${formatarDataCurta(j.dataInicio)}`
+          : "toda semana";
 
   return (
     <>
@@ -90,7 +104,7 @@ export default async function Disponibilidade({
       <Cartao className="mb-3">
         <div className="font-display font-bold text-bordo text-sm mb-1">Minha semana</div>
         <div className="text-[11px] text-gray-500 mb-3">
-          Os próximos 7 dias — o padrão de baixo cruzado com suas ausências específicas.
+          Os próximos 7 dias — a disponibilidade de baixo cruzada com suas ausências.
         </div>
 
         <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-2">
@@ -126,8 +140,8 @@ export default async function Disponibilidade({
           })}
         </div>
         <div className="text-[10px] text-gray-400 mt-2">
-          Clique num dia para marcar ausência nele. A central só oferece você em horários dentro
-          das janelas do padrão semanal.
+          Clique num dia para marcar ausência nele. A central só oferece você nos horários da sua
+          disponibilidade.
         </div>
       </Cartao>
 
@@ -151,7 +165,7 @@ export default async function Disponibilidade({
           </div>
         </div>
         <div className="text-[11px] text-gray-500 mb-3">
-          Verde é disponível (janela no padrão semanal), vermelho é ausente e cinza é não declarado.
+          Verde é disponível, vermelho é ausente e cinza é não declarado.
         </div>
 
         <div className="grid grid-cols-7 gap-1 text-center text-[10px] text-gray-400 mb-1">
@@ -164,7 +178,7 @@ export default async function Disponibilidade({
             if (!dia) return <div key={indice} />;
             const chave = isoDeData(dia);
             const ausente = bloqueiosPorDia.get(chave)?.diaTodo ?? false;
-            const temJanela = diasDaSemanaComJanela.has(dia.getUTCDay());
+            const temJanela = janelas.some((j) => janelaValeNaData(j, dia));
             return (
               <div
                 key={chave}
@@ -186,9 +200,9 @@ export default async function Disponibilidade({
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
         <Cartao>
-          <div className="font-display font-bold text-bordo text-sm mb-1">Padrão semanal</div>
+          <div className="font-display font-bold text-bordo text-sm mb-1">Minha disponibilidade</div>
           <div className="text-[11px] text-gray-500 mb-3">
-            A central só oferece você em horários dentro dessas janelas, toda semana.
+            A central só oferece você nos dias, turnos e períodos marcados aqui.
           </div>
 
           {janelas.length === 0 ? (
@@ -199,7 +213,8 @@ export default async function Disponibilidade({
                 <div key={janela.id} className="flex items-center justify-between gap-2 text-xs border-b border-gray-100 pb-1.5 last:border-0">
                   <span>
                     <strong className="text-bordo">{DIAS[janela.diaSemana]}</strong> ·{" "}
-                    {rotuloDaJanela(janela.horaInicio, janela.horaFim)}
+                    {rotuloDaJanela(janela.horaInicio, janela.horaFim)}{" "}
+                    <span className="text-gray-500">· {periodo(janela)}</span>
                   </span>
                   <BotaoAcao acao={removerDisponibilidade.bind(null, janela.id)} variante="perigo">
                     Remover
@@ -209,7 +224,17 @@ export default async function Disponibilidade({
             </div>
           )}
 
-          <FormularioAcao acao={adicionarDisponibilidade} botao="Adicionar ao padrão">
+          <FormularioAcao acao={adicionarDisponibilidade} botao="Adicionar disponibilidade">
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <Rotulo>De</Rotulo>
+                <Campo name="dataInicio" type="date" defaultValue={hojeISO()} />
+              </div>
+              <div>
+                <Rotulo>Até (vazio = sem data para acabar)</Rotulo>
+                <Campo name="dataFim" type="date" />
+              </div>
+            </div>
             <div>
               <Rotulo>Dias da semana (marque quantos quiser)</Rotulo>
               <div className="flex flex-wrap gap-1.5">
@@ -239,14 +264,15 @@ export default async function Disponibilidade({
               </div>
             </div>
             <div className="text-[10px] text-gray-400">
-              Ex.: marque Seg a Sex e Manhã + Tarde para declarar a semana toda de uma vez. Vale
-              toda semana; para férias ou um período fora, use Ausências.
+              Ex.: de 10/11 até 30/11, Seg a Sex, Manhã + Tarde — declara o período inteiro de uma
+              vez. Sem a data &quot;Até&quot;, vale toda semana dali em diante. Para férias ou um dia
+              fora, use Ausências.
             </div>
           </FormularioAcao>
           {janelas.length > 0 && (
             <div className="mt-3 text-right">
-              <BotaoAcao acao={limparDisponibilidade} variante="perigo" confirmar="Apagar todas as janelas do seu padrão semanal?">
-                Apagar o padrão inteiro
+              <BotaoAcao acao={limparDisponibilidade} variante="perigo" confirmar="Apagar toda a sua disponibilidade declarada?">
+                Apagar toda a disponibilidade
               </BotaoAcao>
             </div>
           )}

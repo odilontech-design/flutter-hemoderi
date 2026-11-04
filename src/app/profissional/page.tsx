@@ -1,3 +1,4 @@
+import { janelaValeNaData } from "@/lib/agenda";
 import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 import { exigirProfissional } from "@/lib/sessao";
@@ -146,7 +147,7 @@ export default async function MinhaAgenda() {
     // disponibilidade" (ata de 13/10).
     prisma.disponibilidade.findMany({
       where: { profissionalId: sessao.profissionalId },
-      select: { diaSemana: true, horaInicio: true, horaFim: true },
+      select: { diaSemana: true, horaInicio: true, horaFim: true, dataInicio: true, dataFim: true },
       orderBy: { horaInicio: "asc" },
     }),
     prisma.bloqueio.findMany({
@@ -372,7 +373,7 @@ export default async function MinhaAgenda() {
           {semana.map((dia) => {
             const doDia = daSemana.filter((p) => p.data.getTime() === dia.getTime());
             const situacao = situacaoDoDia(
-              janelas.filter((j) => j.diaSemana === dia.getUTCDay()),
+              janelas.filter((j) => janelaValeNaData(j, dia)),
               bloqueios.filter((b) => isoDeData(b.data) === isoDeData(dia))
             );
             const cor =
