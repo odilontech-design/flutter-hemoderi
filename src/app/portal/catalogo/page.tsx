@@ -9,7 +9,6 @@ import { locaisDaClinica } from "@/lib/endereco";
 import { servicoVisivel } from "@/lib/visibilidade";
 import { descricaoDoPreco, opcaoCurta, valorPorUnidadeDoPacote } from "@/lib/cobranca";
 import { descritivoDaFamilia, resumoDosPacotes } from "@/lib/catalogo-familias";
-import { NovoLocal } from "./NovoLocal";
 
 export const dynamic = "force-dynamic";
 
@@ -32,7 +31,7 @@ export const dynamic = "force-dynamic";
  *     padrão, nessa ordem (lib/preco.ts). A clínica que atende em mais de um
  *     lugar escolhe o local e o catálogo se ajusta a ele.
  */
-export default async function CatalogoDaClinica({ searchParams }: { searchParams: { local?: string } }) {
+export default async function CatalogoDaClinica() {
   const sessao = await exigirClinica();
 
   const [clinica, locais, tabelaIds] = await Promise.all([
@@ -47,14 +46,9 @@ export default async function CatalogoDaClinica({ searchParams }: { searchParams
   // O local é a primeira escolha (pedido do André, 30/10): com mais de um, os
   // serviços e valores só aparecem depois de confirmar onde será o
   // atendimento. O endereço principal vai na URL como "principal" (id vazio).
-  const pedido = searchParams.local ?? "";
-  const localEscolhido =
-    locais.length === 1
-      ? locais[0]
-      : pedido
-        ? locais.find((l) => l.id === (pedido === "principal" ? "" : pedido))
-        : undefined;
-  const idNaUrl = (id: string) => id || "principal";
+  // O endereço sai do catálogo (André, 04/11): fica só no agendamento. Os
+  // valores mostrados são os do endereço principal da clínica.
+  const localEscolhido = locais[0] as (typeof locais)[number] | undefined;
   const uf = localEscolhido?.uf ?? clinica?.uf ?? null;
 
   // Cadastro em análise ainda não tem perfil aprovado: o catálogo já aparece,
@@ -88,7 +82,6 @@ export default async function CatalogoDaClinica({ searchParams }: { searchParams
   const precos = localEscolhido
     ? await precosDosServicos(prisma, { clinicaId: sessao.clinicaId, uf, servicos, tabelaIds })
     : new Map<string, { valorCentavos: number }>();
-  const parametroLocal = localEscolhido ? `local=${idNaUrl(localEscolhido.id)}` : "";
 
   const grupos = agruparPorFamilia(servicos, { fundirSolitarias: false, ordemDoCatalogo: true });
   const podeAgendar = clinica?.statusCadastro === "APROVADO";
@@ -110,7 +103,7 @@ export default async function CatalogoDaClinica({ searchParams }: { searchParams
             </a>
             {podeAgendar ? (
             <Link
-              href={parametroLocal ? `/portal/agendar?${parametroLocal}` : "/portal/agendar"}
+              href="/portal/agendar"
               className="bg-bordo text-white text-xs font-semibold px-3 py-2 min-h-[40px] sm:min-h-0 inline-flex items-center rounded-lg hover:bg-bordoEscuro"
             >
               + Agendar atendimento
@@ -122,49 +115,7 @@ export default async function CatalogoDaClinica({ searchParams }: { searchParams
         Catálogo
       </Titulo>
 
-      {/* Etapa 1: onde será o atendimento. Em destaque, para ficar claro para
-          qual lugar se está olhando e, depois, agendando. */}
-      {localEscolhido ? (
-        <div className="mb-4 rounded-2xl border-2 border-bordo/40 bg-white px-4 py-3">
-          <div className="text-[10px] font-semibold uppercase tracking-wide text-bordo">📍 Local do atendimento</div>
-          <div className="mt-1 text-sm font-semibold text-gray-800">{localEscolhido.rotulo}</div>
-          {localEscolhido.resumo && <div className="text-xs text-gray-600">{localEscolhido.resumo}</div>}
-          <div className="mt-1.5 flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] text-gray-500">
-            {locais.length > 1 && (
-              <Link href="/portal/catalogo" className="font-semibold text-bordo hover:underline">
-                Trocar local
-              </Link>
-            )}
-            <span>
-              Não é este endereço? <NovoLocal />
-            </span>
-          </div>
-        </div>
-      ) : (
-        <div className="mb-4 rounded-2xl border-2 border-bordo/40 bg-white px-4 py-4">
-          <div className="text-[10px] font-semibold uppercase tracking-wide text-bordo">Passo 1 · Onde será o atendimento?</div>
-          <p className="text-[11px] text-gray-500 mt-1 mb-3">
-            Escolha o local para ver os serviços e valores dele — o preço e a disponibilidade mudam de lugar para lugar.
-          </p>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
-            {locais.map((local) => (
-              <Link
-                key={local.id || "principal"}
-                href={`/portal/catalogo?local=${idNaUrl(local.id)}`}
-                className="text-left rounded-xl border border-gray-200 bg-white p-3 hover:border-bordo/60 transition-colors"
-              >
-                <div className="text-xs font-semibold text-bordo">{local.rotulo}</div>
-                <div className="text-[10px] mt-1 text-gray-400">{local.resumo || "—"}</div>
-              </Link>
-            ))}
-          </div>
-          <div className="mt-3">
-            <NovoLocal />
-          </div>
-        </div>
-      )}
-
-      {!localEscolhido ? null : servicos.length === 0 ? (
+      {servicos.length === 0 ? (
         <Cartao>
           <Vazio>Nenhum serviço disponível no momento para o seu cadastro.</Vazio>
         </Cartao>
@@ -312,7 +263,7 @@ export default async function CatalogoDaClinica({ searchParams }: { searchParams
                       </span>
                       {podeAgendar && (
                         <Link
-                          href={`/portal/agendar?servico=${servico.id}&${parametroLocal}`}
+                          href={`/portal/agendar?servico=${servico.id}`}
                           className="text-[11px] font-semibold text-bordo hover:underline whitespace-nowrap"
                         >
                           agendar →
@@ -329,7 +280,7 @@ export default async function CatalogoDaClinica({ searchParams }: { searchParams
       )}
 
       <div className="text-[10px] text-gray-400 leading-relaxed">
-        {localEscolhido ? `Valores para o seu cadastro e o local escolhido (${localEscolhido.rotulo}).` : ""} Para
+        Valores para o endereço principal da clínica; no agendamento, o valor se ajusta ao endereço escolhido. Para
         procedimentos sob consulta, ou qualquer dúvida sobre o que está incluído, fale com a central.
       </div>
     </>

@@ -193,12 +193,10 @@ function FormularioBase({
   // O local vem DEPOIS dos serviços e chega sem estar escolhido (André,
   // 30/10: "primeiro o serviço, depois o endereço — o cara clica no endereço
   // ou em adicionar outro"). Só nasce escolhido quando vem pronto da URL.
+  // A clínica sempre escolhe o endereço, mesmo tendo um só (André, 04/11:
+  // "avançou automaticamente"). Só a equipe chega com o local pronto da URL.
   const localDeEntrada =
-    equipe?.localInicialId && locais.some((l) => l.id === equipe.localInicialId)
-      ? equipe.localInicialId
-      : localInicialId !== null && locais.some((l) => l.id === localInicialId)
-        ? localInicialId
-        : null;
+    equipe?.localInicialId && locais.some((l) => l.id === equipe.localInicialId) ? equipe.localInicialId : null;
   const [localId, setLocalId] = useState<string | null>(localDeEntrada);
   // Endereço informado agora pela equipe: entra na lista quando a página
   // recarrega os locais, e já fica escolhido. Vai também para a URL, para a
