@@ -10,10 +10,12 @@ import {
   marcarAusencia,
   removerAusencia,
   removerDisponibilidade,
+  salvarDiaDoCalendario,
 } from "@/app/actions/disponibilidade";
 import {
   competenciaAtual,
   competenciaPorExtenso,
+  dataDeISO,
   formatarData,
   formatarDataCurta,
   formatarDiaEData,
@@ -25,6 +27,7 @@ import {
 } from "@/lib/data";
 import { rotuloDaJanela, TURNOS } from "@/lib/turnos";
 import { janelaValeNaData } from "@/lib/agenda";
+import { turnosDisponiveis, TURNOS_DO_DIA } from "@/lib/disponibilidade-dia";
 
 export const dynamic = "force-dynamic";
 
@@ -39,13 +42,19 @@ function mesVizinho(competencia: string, passo: number): string {
 export default async function Disponibilidade({
   searchParams,
 }: {
-  searchParams: { ausenciaData?: string; mes?: string };
+  searchParams: { ausenciaData?: string; mes?: string; dia?: string };
 }) {
   const sessao = await exigirProfissional();
   const mes = searchParams.mes ?? competenciaAtual();
   const [anoMes, mesMes] = mes.split("-").map(Number);
   const inicioMes = new Date(Date.UTC(anoMes, mesMes - 1, 1));
   const fimMes = new Date(Date.UTC(anoMes, mesMes, 0));
+
+  // O dia aberto para edição no calendário (pedido de 04/11). Só de hoje em diante.
+  const diaEditado =
+    searchParams.dia && /^\d{4}-\d{2}-\d{2}$/.test(searchParams.dia) && dataDeISO(searchParams.dia) >= hojeUTC()
+      ? dataDeISO(searchParams.dia)
+      : null;
 
   const [janelas, ausencias, bloqueiosDoMes, eu] = await Promise.all([
     prisma.disponibilidade.findMany({
@@ -59,7 +68,7 @@ export default async function Disponibilidade({
     }),
     prisma.bloqueio.findMany({
       where: { profissionalId: sessao.profissionalId, data: { gte: inicioMes, lte: fimMes } },
-      select: { data: true, horaInicio: true },
+      select: { data: true, horaInicio: true, horaFim: true, motivo: true },
     }),
     prisma.profissional.findUnique({
       where: { id: sessao.profissionalId },
@@ -89,7 +98,9 @@ export default async function Disponibilidade({
     if (!atual || !atual.diaTodo) bloqueiosPorDia.set(chave, { diaTodo: !b.horaInicio || Boolean(atual?.diaTodo) });
   }
   const periodo = (j: { dataInicio: Date | null; dataFim: Date | null }) =>
-    j.dataInicio && j.dataFim
+    j.dataInicio && j.dataFim && j.dataInicio.getTime() === j.dataFim.getTime()
+      ? `só em ${formatarDataCurta(j.dataInicio)}`
+      : j.dataInicio && j.dataFim
       ? `de ${formatarDataCurta(j.dataInicio)} a ${formatarDataCurta(j.dataFim)}`
       : j.dataFim
         ? `até ${formatarDataCurta(j.dataFim)}`
@@ -177,25 +188,97 @@ export default async function Disponibilidade({
           {gradeDoMes(mes).map((dia, indice) => {
             if (!dia) return <div key={indice} />;
             const chave = isoDeData(dia);
-            const ausente = bloqueiosPorDia.get(chave)?.diaTodo ?? false;
-            const temJanela = janelas.some((j) => janelaValeNaData(j, dia));
-            return (
-              <div
-                key={chave}
-                title={ausente ? "Ausente" : temJanela ? "Disponível" : "Não declarado"}
-                className={`aspect-square rounded-lg flex items-center justify-center text-[11px] font-semibold ${
-                  ausente
-                    ? "bg-red-100 text-red-700"
-                    : temJanela
-                      ? "bg-emerald-50 text-emerald-700"
-                      : "bg-gray-50 text-gray-400"
-                }`}
-              >
+            const turnosDoDia = turnosDisponiveis(janelas, bloqueiosDoMes.filter((b) => isoDeData(b.data) === chave), dia);
+            const ausente = (bloqueiosPorDia.get(chave)?.diaTodo ?? false) || (turnosDoDia.length === 0 && bloqueiosPorDia.has(chave));
+            const temJanela = turnosDoDia.length > 0;
+            const passado = dia < hojeUTC();
+            const selecionado = diaEditado && isoDeData(diaEditado) === chave;
+            const classe = `aspect-square rounded-lg flex flex-col items-center justify-center text-[11px] font-semibold ${
+              ausente
+                ? "bg-red-100 text-red-700"
+                : temJanela
+                  ? "bg-emerald-50 text-emerald-700"
+                  : "bg-gray-50 text-gray-400"
+            } ${selecionado ? "ring-2 ring-bordo" : ""}`;
+            const conteudo = (
+              <>
                 {dia.getUTCDate()}
+                {temJanela && turnosDoDia.length < TURNOS_DO_DIA.length && (
+                  <span className="text-[8px] font-normal leading-none mt-0.5">
+                    {turnosDoDia.includes("MANHA") ? "manhã" : "tarde"}
+                  </span>
+                )}
+              </>
+            );
+            const titulo = ausente ? "Ausente" : temJanela ? "Disponível" : "Não declarado";
+            return passado ? (
+              <div key={chave} title={titulo} className={`${classe} opacity-50`}>
+                {conteudo}
               </div>
+            ) : (
+              <Link
+                key={chave}
+                href={`/profissional/disponibilidade?mes=${mes}&dia=${chave}#editar-dia`}
+                scroll={false}
+                title={`${titulo} — clique para editar`}
+                className={`${classe} hover:ring-2 hover:ring-bordo/40`}
+              >
+                {conteudo}
+              </Link>
             );
           })}
         </div>
+        <div className="text-[10px] text-gray-400 mt-2">Clique num dia para editar a sua disponibilidade nele.</div>
+
+        {diaEditado && (
+          <div id="editar-dia" className="mt-4 rounded-xl border border-bordo/30 bg-bege/40 p-3">
+            <div className="flex items-baseline justify-between gap-2 mb-2">
+              <div className="font-display font-bold text-bordo text-sm">{formatarDiaEData(diaEditado)}</div>
+              <Link href={`/profissional/disponibilidade?mes=${mes}`} scroll={false} className="text-[11px] text-gray-500">
+                fechar
+              </Link>
+            </div>
+            <FormularioAcao
+              key={isoDeData(diaEditado)}
+              acao={salvarDiaDoCalendario}
+              botao="Salvar este dia"
+              limparAoSalvar={false}
+            >
+              <input type="hidden" name="data" value={isoDeData(diaEditado)} />
+              <div>
+                <Rotulo>Disponível neste dia (desmarque tudo para ficar ausente)</Rotulo>
+                <div className="flex flex-wrap gap-1.5">
+                  {TURNOS_DO_DIA.map((turno) => (
+                    <label
+                      key={turno.chave}
+                      className="inline-flex items-center gap-1.5 rounded-full border border-gray-300 bg-white px-3 py-2 text-xs cursor-pointer has-[:checked]:bg-bordo has-[:checked]:text-white has-[:checked]:border-bordo"
+                    >
+                      <input
+                        type="checkbox"
+                        name="turno"
+                        value={turno.chave}
+                        defaultChecked={turnosDisponiveis(
+                          janelas,
+                          bloqueiosDoMes.filter((b) => isoDeData(b.data) === isoDeData(diaEditado)),
+                          diaEditado
+                        ).includes(turno.chave)}
+                        className="sr-only"
+                      />
+                      {turno.rotulo} ({turno.horaInicio}–{turno.horaFim})
+                    </label>
+                  ))}
+                </div>
+              </div>
+              <div>
+                <Rotulo>Motivo, se não puder (opcional)</Rotulo>
+                <Campo name="motivo" placeholder="Consulta médica, viagem…" />
+              </div>
+              <div className="text-[10px] text-gray-400">
+                Vale só para este dia — o resto da sua disponibilidade não muda.
+              </div>
+            </FormularioAcao>
+          </div>
+        )}
       </Cartao>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">

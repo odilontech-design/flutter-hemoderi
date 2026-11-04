@@ -4,7 +4,8 @@ import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { exigirProfissional } from "@/lib/sessao";
 import { dataDeISO, diasDoIntervalo, hojeUTC, paraMinutos } from "@/lib/data";
-import { turnoPorChave } from "@/lib/turnos";
+import { turnoPorChave, type ChaveTurno } from "@/lib/turnos";
+import { planoDoDia, TURNOS_DO_DIA } from "@/lib/disponibilidade-dia";
 import type { Resultado } from "./pedidos";
 
 /**
@@ -186,4 +187,79 @@ export async function salvarAgendaDoGoogle(_anterior: Resultado, dados: FormData
 
   revalidatePath("/profissional/disponibilidade");
   return { ok: true };
+}
+
+/**
+ * Salva um dia do calendário (pedido de 04/11). Refaz as janelas de um dia só
+ * e as ausências daquela data conforme os turnos marcados — o padrão semanal
+ * e os períodos continuam intactos.
+ */
+export async function salvarDiaDoCalendario(_anterior: Resultado, dados: FormData): Promise<Resultado> {
+  const sessao = await exigirProfissional();
+  const iso = String(dados.get("data") ?? "");
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(iso)) return { ok: false, erro: "Data inválida." };
+  const data = dataDeISO(iso);
+  if (data.getTime() < hojeUTC().getTime()) return { ok: false, erro: "Esse dia já passou." };
+
+  const desejados = dados
+    .getAll("turno")
+    .map(String)
+    .filter((c): c is ChaveTurno => Boolean(turnoPorChave(c)));
+  const motivo = String(dados.get("motivo") ?? "").trim() || null;
+
+  const todas = await prisma.disponibilidade.findMany({ where: { profissionalId: sessao.profissionalId } });
+  const doDia = todas.filter(
+    (j) => j.dataInicio && j.dataFim && j.dataInicio.getTime() === data.getTime() && j.dataFim.getTime() === data.getTime()
+  );
+  const outras = todas.filter((j) => !doDia.includes(j));
+  const plano = planoDoDia(outras, data, desejados);
+
+  await prisma.$transaction([
+    prisma.disponibilidade.deleteMany({ where: { id: { in: doDia.map((j) => j.id) } } }),
+    prisma.bloqueio.deleteMany({ where: { profissionalId: sessao.profissionalId, data } }),
+    ...(plano.abrir.length
+      ? [
+          prisma.disponibilidade.createMany({
+            data: plano.abrir.map((t) => ({
+              profissionalId: sessao.profissionalId,
+              diaSemana: data.getUTCDay(),
+              horaInicio: t.horaInicio,
+              horaFim: t.horaFim,
+              dataInicio: data,
+              dataFim: data,
+            })),
+          }),
+        ]
+      : []),
+    ...(plano.fechar.length
+      ? [
+          prisma.bloqueio.createMany({
+            data:
+              plano.fechar.length === TURNOS_DO_DIA.length
+                ? [{ profissionalId: sessao.profissionalId, data, motivo }]
+                : plano.fechar.map((t) => ({
+                    profissionalId: sessao.profissionalId,
+                    data,
+                    horaInicio: t.horaInicio,
+                    horaFim: t.horaFim,
+                    motivo,
+                  })),
+          }),
+        ]
+      : []),
+  ]);
+
+  const jaAlocado =
+    plano.fechar.length > 0
+      ? await prisma.pedido.count({ where: { profissionalId: sessao.profissionalId, data, status: "ALOCADO" } })
+      : 0;
+
+  revalidatePath("/profissional/disponibilidade");
+  revalidatePath("/profissional");
+  return {
+    ok: true,
+    avisos: jaAlocado
+      ? [`Você tem ${jaAlocado} atendimento(s) alocado(s) nesse dia. Avise a central — eles continuam na sua agenda.`]
+      : [],
+  };
 }
