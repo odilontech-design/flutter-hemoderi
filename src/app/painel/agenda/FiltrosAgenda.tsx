@@ -16,12 +16,16 @@ export function FiltrosAgenda({
   profissionais,
   clinicas,
   servicos,
+  familias,
+  equipamentos,
   temFiltroAtivo,
 }: {
   valores: ValoresFiltro;
   profissionais: { id: string; nome: string }[];
   clinicas: { id: string; nome: string }[];
   servicos: { id: string; nome: string }[];
+  familias: string[];
+  equipamentos: string[];
   temFiltroAtivo: boolean;
 }) {
   const router = useRouter();
@@ -81,6 +85,28 @@ export function FiltrosAgenda({
           </Selecao>
         </div>
         <div>
+          <Rotulo>Grupo de serviço</Rotulo>
+          <Selecao value={valores.familia ?? ""} onChange={(e) => trocar("familia", e.target.value)}>
+            <option value="">Todos</option>
+            {familias.map((f) => (
+              <option key={f} value={f}>
+                {f}
+              </option>
+            ))}
+          </Selecao>
+        </div>
+        <div>
+          <Rotulo>Equipamento</Rotulo>
+          <Selecao value={valores.equipamento ?? ""} onChange={(e) => trocar("equipamento", e.target.value)}>
+            <option value="">Todos</option>
+            {equipamentos.map((t) => (
+              <option key={t} value={t}>
+                {t}
+              </option>
+            ))}
+          </Selecao>
+        </div>
+        <div>
           <Rotulo>Status</Rotulo>
           <Selecao value={valores.status} onChange={(e) => trocar("status", e.target.value)}>
             {OPCOES_STATUS.map((o) => (
@@ -95,7 +121,7 @@ export function FiltrosAgenda({
       {temFiltroAtivo && (
         <div className="mt-3">
           <Link
-            href={urlAgenda({ ...valores, profissional: "", clinica: "", servico: "", status: "" })}
+            href={urlAgenda({ ...valores, profissional: "", clinica: "", servico: "", familia: "", equipamento: "", status: "" })}
             className="text-[11px] font-semibold text-bordo hover:underline"
           >
             Limpar filtros

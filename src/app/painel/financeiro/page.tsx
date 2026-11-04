@@ -85,7 +85,7 @@ export default async function Financeiro({ searchParams }: { searchParams: { com
   });
   const profissionais = await prisma.profissional.findMany({
     where: { id: { in: Array.from(new Set(repasses.map((r) => r.profissionalId))) } },
-    select: { id: true, nome: true, chavePix: true },
+    select: { id: true, nome: true, chavePix: true, chavePixAlteradaEm: true },
   });
 
   const faturado = realizados._sum.valorServicoCentavos ?? 0;
@@ -274,6 +274,12 @@ export default async function Financeiro({ searchParams }: { searchParams: { com
                   <td className="py-2 pr-3">
                     <div className="font-semibold text-bordo">{profissional.nome}</div>
                     <div className="text-[10px] text-gray-400">{profissional.chavePix ?? "sem chave PIX"}</div>
+                    {profissional.chavePixAlteradaEm &&
+                      Date.now() - profissional.chavePixAlteradaEm.getTime() < 30 * 86400000 && (
+                        <div className="text-[10px] font-semibold text-amber-700">
+                          Chave trocada pelo profissional em {formatarData(profissional.chavePixAlteradaEm)} — confira antes de pagar
+                        </div>
+                      )}
                   </td>
                   <td className={`py-2 pr-3 whitespace-nowrap ${OCULTO_MOVEL}`}>
                     {profissional.aguardandoCentavos > 0 ? (

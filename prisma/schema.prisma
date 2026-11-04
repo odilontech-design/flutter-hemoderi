@@ -728,6 +728,10 @@ model Profissional {
   /// Chave PIX para o repasse. É o único dado bancário guardado — evita
   /// manter agência e conta sem necessidade.
   chavePix String?
+  /// Quando o próprio profissional trocou a chave pelo portal (ata de 04/11).
+  /// O financeiro vê o aviso antes de pagar: troca recente é o primeiro sinal
+  /// de um desvio de repasse.
+  chavePixAlteradaEm DateTime?
 
   /// Agenda do Google onde os atendimentos dele são publicados — normalmente
   /// o e-mail da conta Google, depois que ele compartilha a própria agenda

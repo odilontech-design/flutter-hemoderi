@@ -16,10 +16,15 @@ export type ValoresFiltro = {
   profissional: string;
   clinica: string;
   servico: string;
+  /** Grande grupo de serviços (Airflow, PRF, Ultrassom…), ata de 04/11. */
+  familia?: string;
+  /** Tipo de equipamento que o serviço usa, ata de 04/11. */
+  equipamento?: string;
   status: string;
   /** Mostrar também quem não tem nada no dia. Não é filtro, é exibição. */
   todos?: string;
-  /** "mes" = calendário do mês inteiro (reunião de 27/10). Vazio = por período. */
+  /** "mes" = calendário do mês inteiro (reunião de 27/10); "equipamentos" = os
+   * próximos 30 dias por equipamento (ata de 04/11). Vazio = por período. */
   visao?: string;
   /** "profissional" = o dia agrupado por profissional; vazio = linha do tempo do dia. */
   agrupar?: string;
@@ -53,6 +58,8 @@ export function urlAgenda(valores: ValoresFiltro, troca: Partial<ValoresFiltro> 
   if (final.profissional) parametros.set("profissional", final.profissional);
   if (final.clinica) parametros.set("clinica", final.clinica);
   if (final.servico) parametros.set("servico", final.servico);
+  if (final.familia) parametros.set("familia", final.familia);
+  if (final.equipamento) parametros.set("equipamento", final.equipamento);
   if (final.status) parametros.set("status", final.status);
   if (final.todos) parametros.set("todos", final.todos);
   if (final.visao) parametros.set("visao", final.visao);

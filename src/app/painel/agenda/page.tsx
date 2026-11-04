@@ -7,6 +7,7 @@ import { competenciaDe, competenciaPorExtenso, dataDaURL, dataDeISO, formatarDat
 import { minutosAgora, paraHora, paraMinutos } from "@/lib/data";
 import { parametros } from "@/lib/alocacao";
 import { COR_STATUS, ROTULO_STATUS, STATUS_ATIVOS } from "@/lib/pedido";
+import { familiaDoNome } from "@/lib/familia";
 import { FiltrosAgenda } from "./FiltrosAgenda";
 import { urlAgenda, type ValoresFiltro } from "./filtros";
 
@@ -55,6 +56,8 @@ export default async function Agenda({
     profissional?: string;
     clinica?: string;
     servico?: string;
+    familia?: string;
+    equipamento?: string;
     status?: string;
     todos?: string;
     visao?: string;
@@ -66,14 +69,19 @@ export default async function Agenda({
   const dataISO = dataDaURL(searchParams.data);
   // Calendário do mês (reunião de 27/10): o mês inteiro do dia escolhido.
   const mensal = searchParams.visao === "mes";
+  const porEquipamento = searchParams.visao === "equipamentos";
   const diaEscolhido = dataDeISO(dataISO);
   const competencia = competenciaDe(diaEscolhido);
   const celulasDoMes = mensal ? gradeDoMes(competencia) : [];
   const diasDoMes = celulasDoMes.filter((d): d is Date => d !== null);
   const inicio = mensal ? diasDoMes[0] : diaEscolhido;
-  const dias = mensal ? diasDoMes.length : Math.min(Math.max(Number(searchParams.dias) || 1, 1), 15);
+  const dias = mensal
+    ? diasDoMes.length
+    : porEquipamento
+      ? 30
+      : Math.min(Math.max(Number(searchParams.dias) || 1, 1), 15);
   const fim = somarDias(inicio, dias - 1);
-  const umDiaSo = !mensal && dias === 1;
+  const umDiaSo = !mensal && !porEquipamento && dias === 1;
   const mostrarTodos = searchParams.todos === "1";
 
   const valores: ValoresFiltro = {
@@ -82,29 +90,59 @@ export default async function Agenda({
     profissional: searchParams.profissional ?? "",
     clinica: searchParams.clinica ?? "",
     servico: searchParams.servico ?? "",
+    familia: searchParams.familia ?? "",
+    equipamento: searchParams.equipamento ?? "",
     status: searchParams.status ?? "",
     todos: searchParams.todos === "1" ? "1" : "",
-    visao: mensal ? "mes" : "",
+    visao: mensal ? "mes" : porEquipamento ? "equipamentos" : "",
     agrupar: searchParams.agrupar === "profissional" ? "profissional" : "",
   };
   const temFiltroAtivo = Boolean(
-    valores.profissional || valores.clinica || valores.servico || valores.status
+    valores.profissional || valores.clinica || valores.servico || valores.familia || valores.equipamento || valores.status
   );
 
-  const [pedidos, profissionais, clinicas, servicos, config] = await Promise.all([
+  // Grupo e equipamento vêm do cadastro do serviço: viram uma lista de
+  // serviços para o filtro do banco.
+  const todosServicos = await prisma.servico.findMany({
+    where: { ativo: true },
+    orderBy: { nome: "asc" },
+    select: { id: true, nome: true, familia: true, tipoEquipamento: true, exigeEquipamento: true },
+  });
+  const familiaDe = (s: { nome: string; familia: string | null }) => s.familia?.trim() || familiaDoNome(s.nome);
+  const familias = Array.from(new Set(todosServicos.map(familiaDe))).sort((a, b) => a.localeCompare(b, "pt-BR"));
+  const equipamentos = Array.from(
+    new Set(todosServicos.map((s) => s.tipoEquipamento?.trim()).filter((t): t is string => Boolean(t)))
+  ).sort((a, b) => a.localeCompare(b, "pt-BR"));
+  const servicosDoRecorte =
+    valores.familia || valores.equipamento
+      ? todosServicos
+          .filter((s) => !valores.familia || familiaDe(s) === valores.familia)
+          .filter((s) => !valores.equipamento || s.tipoEquipamento?.trim() === valores.equipamento)
+          .map((s) => s.id)
+      : null;
+
+  const servicos = todosServicos.map(({ id, nome }) => ({ id, nome }));
+  const [pedidos, profissionais, clinicas, unidadesPorTipo, config] = await Promise.all([
     prisma.pedido.findMany({
       where: {
         data: { gte: inicio, lte: fim },
         ...filtroDeStatus(valores.status),
         ...(valores.profissional ? { profissionalId: valores.profissional } : {}),
         ...(valores.clinica ? { clinicaId: valores.clinica } : {}),
-        ...(valores.servico ? { servicoId: valores.servico } : {}),
+        ...(valores.servico
+          ? { servicoId: valores.servico }
+          : servicosDoRecorte
+            ? { servicoId: { in: servicosDoRecorte } }
+            : {}),
       },
       orderBy: [{ data: "asc" }, { horaInicio: "asc" }],
       include: {
         clinica: { select: { nome: true } },
-        servico: { select: { nome: true } },
+        servico: { select: { nome: true, familia: true, tipoEquipamento: true } },
         profissional: { select: { nome: true } },
+        equipamento: { select: { nome: true } },
+        endereco: { select: { rotulo: true, endereco: true, numero: true, bairro: true, cidade: true, uf: true } },
+        relatorio: { select: { id: true } },
       },
     }),
     prisma.profissional.findMany({
@@ -116,7 +154,7 @@ export default async function Agenda({
       },
     }),
     prisma.clinica.findMany({ where: { ativa: true }, orderBy: { nome: "asc" }, select: { id: true, nome: true } }),
-    prisma.servico.findMany({ where: { ativo: true }, orderBy: { nome: "asc" }, select: { id: true, nome: true } }),
+    prisma.equipamento.groupBy({ by: ["tipo"], where: { status: { not: "INATIVO" } }, _count: { _all: true } }),
     parametros(),
   ]);
 
@@ -133,7 +171,9 @@ export default async function Agenda({
 
   const semProfissional = pedidos.filter((p) => !p.profissionalId);
 
-  const cabecalho = mensal
+  const cabecalho = porEquipamento
+    ? `Equipamentos · ${formatarDataCurta(inicio)} a ${formatarDataCurta(fim)}`
+    : mensal
     ? `Agenda · ${competenciaPorExtenso(competencia)}`
     : umDiaSo
       ? `Agenda · ${formatarData(inicio)}`
@@ -176,8 +216,9 @@ export default async function Agenda({
       <div className="flex flex-wrap gap-2 mb-3">
         {[
           { rotulo: "Dia", href: urlAgenda(valores, { dias: "1", visao: "" }), ativo: umDiaSo },
-          { rotulo: "Lista (7 dias)", href: urlAgenda(valores, { dias: "7", visao: "" }), ativo: !mensal && !umDiaSo },
+          { rotulo: "Lista (7 dias)", href: urlAgenda(valores, { dias: "7", visao: "" }), ativo: !mensal && !umDiaSo && !porEquipamento },
           { rotulo: "Calendário do mês", href: urlAgenda(valores, { visao: "mes" }), ativo: mensal },
+          { rotulo: "Equipamentos (30 dias)", href: urlAgenda(valores, { visao: "equipamentos" }), ativo: porEquipamento },
         ].map((v) => (
           <Link
             key={v.rotulo}
@@ -196,12 +237,15 @@ export default async function Agenda({
         profissionais={profissionaisDoSeletor}
         clinicas={clinicas}
         servicos={servicos}
+        familias={familias}
+        equipamentos={equipamentos}
         temFiltroAtivo={temFiltroAtivo}
       />
 
       <div className="text-[11px] text-gray-500 mb-3">
         <strong className="text-bordo">{pedidos.length}</strong> atendimento(s)
         {umDiaSo ? " neste dia" : ` em ${dias} dias`}
+        {porEquipamento && " (a partir da data escolhida)"}
         {temFiltroAtivo && " · com filtro aplicado"}
         {semProfissional.length > 0 && (
           <>
@@ -211,7 +255,7 @@ export default async function Agenda({
         )}
       </div>
 
-      {semProfissional.length > 0 && (
+      {semProfissional.length > 0 && !porEquipamento && (
         <Cartao className="mb-3 border-red-200">
           <div className="font-display font-bold text-red-600 text-sm mb-2">
             {semProfissional.length} atendimento(s) sem profissional
@@ -230,7 +274,14 @@ export default async function Agenda({
         </Cartao>
       )}
 
-      {mensal ? (
+      {porEquipamento ? (
+        <EquipamentosDoPeriodo
+          pedidos={pedidos}
+          inicio={inicio}
+          unidades={new Map(unidadesPorTipo.map((u) => [u.tipo ?? "", u._count._all]))}
+          valores={valores}
+        />
+      ) : mensal ? (
         <CalendarioDoMes pedidos={pedidos} celulas={celulasDoMes} valores={valores} />
       ) : umDiaSo && !valores.agrupar ? (
         <LinhaDoTempoDoDia pedidos={pedidos} data={inicio} valores={valores} />
@@ -263,10 +314,141 @@ type PedidoNaAgenda = {
   status: StatusPedido;
   profissionalId: string | null;
   doutorNome?: string | null;
+  checkinEm?: Date | null;
   clinica: { nome: string };
-  servico: { nome: string };
+  servico: { nome: string; familia?: string | null; tipoEquipamento?: string | null };
   profissional: { nome: string } | null;
+  equipamento?: { nome: string } | null;
+  endereco?: { rotulo: string | null; endereco: string; numero: string | null; bairro: string | null; cidade: string | null; uf: string } | null;
+  relatorio?: { id: string } | null;
 };
+
+/** "Rua X, 120 · Bairro, Cidade/UF" — o suficiente para decidir quem chega lá. */
+function enderecoCurto(e: NonNullable<PedidoNaAgenda["endereco"]>): string {
+  const rua = [e.endereco, e.numero].filter(Boolean).join(", ");
+  const lugar = [e.bairro, e.cidade ? `${e.cidade}/${e.uf}` : e.uf].filter(Boolean).join(", ");
+  return [rua, lugar].filter(Boolean).join(" · ");
+}
+
+/**
+ * Os próximos 30 dias por grupo de serviço e equipamento (ata de 04/11): a
+ * visão macro para a logística antecipar gente e material — quantos
+ * atendimentos de cada grupo vêm por semana, quantos ainda sem profissional e
+ * qual o dia mais cheio contra as unidades de equipamento cadastradas.
+ */
+function EquipamentosDoPeriodo({
+  pedidos,
+  inicio,
+  unidades,
+  valores,
+}: {
+  pedidos: PedidoNaAgenda[];
+  inicio: Date;
+  unidades: Map<string, number>;
+  valores: ValoresFiltro;
+}) {
+  const ativos = pedidos.filter((p) => p.status !== "CANCELADO");
+  const semanas = [0, 1, 2, 3, 4].map((i) => ({
+    de: somarDias(inicio, i * 7),
+    ate: somarDias(inicio, Math.min(i * 7 + 6, 29)),
+  }));
+  const grupos = new Map<string, PedidoNaAgenda[]>();
+  for (const p of ativos) {
+    const chave = p.servico.familia?.trim() || familiaDoNome(p.servico.nome);
+    grupos.set(chave, [...(grupos.get(chave) ?? []), p]);
+  }
+  const linhas = Array.from(grupos.entries())
+    .map(([grupo, lista]) => {
+      const tipos = Array.from(new Set(lista.map((p) => p.servico.tipoEquipamento?.trim()).filter((t): t is string => Boolean(t))));
+      const porDia = new Map<string, number>();
+      for (const p of lista) porDia.set(isoDeData(p.data), (porDia.get(isoDeData(p.data)) ?? 0) + 1);
+      const [diaPico, qtdPico] = Array.from(porDia.entries()).sort((a, b) => b[1] - a[1])[0] ?? ["", 0];
+      const unidadesDoGrupo = tipos.length ? tipos.reduce((soma, t) => soma + (unidades.get(t) ?? 0), 0) : null;
+      return {
+        grupo,
+        tipos,
+        total: lista.length,
+        semProfissional: lista.filter((p) => !p.profissionalId).length,
+        porSemana: semanas.map((s) => lista.filter((p) => p.data >= s.de && p.data <= s.ate).length),
+        diaPico,
+        qtdPico,
+        unidadesDoGrupo,
+      };
+    })
+    .sort((a, b) => b.total - a.total);
+
+  if (linhas.length === 0) {
+    return (
+      <Cartao>
+        <Vazio>Nenhum atendimento nos próximos 30 dias com esses filtros.</Vazio>
+      </Cartao>
+    );
+  }
+
+  return (
+    <Cartao className="!p-0 overflow-x-auto">
+      <table className="min-w-full text-xs">
+        <thead className="bg-gray-50 text-gray-500 border-b border-gray-200">
+          <tr>
+            <th className="py-2 pl-4 pr-3 text-left font-semibold">Grupo / equipamento</th>
+            <th className="py-2 pr-3 text-right font-semibold">Atendimentos</th>
+            <th className="py-2 pr-3 text-right font-semibold">Sem profissional</th>
+            {semanas.map((s) => (
+              <th key={s.de.toISOString()} className="py-2 pr-3 text-right font-semibold whitespace-nowrap">
+                {formatarDataCurta(s.de)}
+              </th>
+            ))}
+            <th className="py-2 pr-4 text-left font-semibold">Dia mais cheio</th>
+          </tr>
+        </thead>
+        <tbody>
+          {linhas.map((l) => (
+            <tr key={l.grupo} className="border-b border-gray-100 last:border-0">
+              <td className="py-2 pl-4 pr-3">
+                <Link
+                  href={urlAgenda({ ...valores, familia: l.grupo, visao: "mes" })}
+                  className="font-semibold text-bordo hover:underline"
+                >
+                  {l.grupo}
+                </Link>
+                {l.tipos.length > 0 && (
+                  <div className="text-[10px] text-gray-500">
+                    {l.tipos.join(", ")}
+                    {l.unidadesDoGrupo !== null && ` · ${l.unidadesDoGrupo} unidade(s) cadastrada(s)`}
+                  </div>
+                )}
+              </td>
+              <td className="py-2 pr-3 text-right font-semibold tabular-nums">{l.total}</td>
+              <td className={`py-2 pr-3 text-right tabular-nums ${l.semProfissional ? "text-red-600 font-semibold" : "text-gray-400"}`}>
+                {l.semProfissional}
+              </td>
+              {l.porSemana.map((n, i) => (
+                <td key={i} className={`py-2 pr-3 text-right tabular-nums ${n ? "" : "text-gray-300"}`}>
+                  {n}
+                </td>
+              ))}
+              <td className="py-2 pr-4 whitespace-nowrap">
+                {l.diaPico ? (
+                  <Link href={urlAgenda({ ...valores, familia: l.grupo, data: l.diaPico, dias: "1", visao: "" })} className="hover:underline">
+                    {formatarDataCurta(dataDeISO(l.diaPico))} · {l.qtdPico}
+                  </Link>
+                ) : (
+                  "—"
+                )}
+                {l.unidadesDoGrupo !== null && l.qtdPico > l.unidadesDoGrupo && (
+                  <div className="text-[10px] font-semibold text-amber-700">mais que as unidades — confira horários</div>
+                )}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      <div className="px-4 py-2 text-[10px] text-gray-400 border-t border-gray-100">
+        Colunas de datas = semanas a partir do dia indicado. Clique no grupo para ver o mês dele, ou no dia mais cheio para abrir o dia.
+      </div>
+    </Cartao>
+  );
+}
 
 /** Visão de um dia, agrupada por profissional. */
 function PorProfissional({
@@ -659,9 +841,26 @@ function LinhaDoTempoDoDia({
         <span className={`w-2.5 h-2.5 rounded-full mt-1.5 shrink-0 ${PONTO_DO_STATUS[pedido.status]}`} />
         <span className="min-w-0 flex-1">
           <span className="block text-sm font-semibold text-gray-900 break-words">{titulo}</span>
-          <span className="block text-[11px] text-gray-500">
-            {pedido.doutorNome ? `${pedido.clinica.nome} · ` : ""}
-            {pedido.profissional ? "" : <span className="text-red-600 font-semibold">sem profissional</span>}
+          <span className="block text-[11px] text-gray-600 break-words">
+            {pedido.doutorNome ? `${pedido.clinica.nome}` : ""}
+            {pedido.endereco ? `${pedido.doutorNome ? " · " : ""}${enderecoCurto(pedido.endereco)}` : ""}
+          </span>
+          {pedido.equipamento && <span className="block text-[10px] text-gray-400">Equipamento: {pedido.equipamento.nome}</span>}
+          <span className="mt-1 flex flex-wrap gap-1 text-[10px] font-semibold">
+            {!pedido.profissional ? (
+              <span className="rounded-full bg-red-50 px-2 py-0.5 text-red-600">sem profissional</span>
+            ) : pedido.checkinEm ? (
+              <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-emerald-700">
+                chegou {pedido.checkinEm.toLocaleTimeString("pt-BR", { timeZone: "America/Sao_Paulo", hour: "2-digit", minute: "2-digit" })}
+              </span>
+            ) : ["ALOCADO"].includes(pedido.status) ? (
+              <span className="rounded-full bg-gray-100 px-2 py-0.5 text-gray-500">ainda não chegou</span>
+            ) : null}
+            {pedido.relatorio ? (
+              <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-emerald-700">relatório enviado</span>
+            ) : pedido.checkinEm ? (
+              <span className="rounded-full bg-amber-50 px-2 py-0.5 text-amber-700">relatório pendente</span>
+            ) : null}
           </span>
         </span>
         <SeloStatus status={pedido.status} />

@@ -15,10 +15,10 @@ const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
  * identificam quem atende e para onde vai o pagamento, e trocar a chave Pix
  * sozinho seria o atalho de quem quer desviar um repasse.
  *
- * Exceção (revisão de 25/10): a chave Pix VAZIA o próprio profissional
- * informa, uma vez. Nenhum dos 47 cadastros tinha chave, e coletar uma a uma
- * pela central atrasaria o primeiro repasse de todo mundo. Preenchida, trava
- * — trocar continua sendo com a central, que é o que impede o desvio.
+ * Chave Pix (ata de 04/11): o próprio profissional informa e troca, sem
+ * depender da central. Para não virar atalho de desvio, a troca exige digitar
+ * a chave nova duas vezes, fica na auditoria (antiga → nova) e marca
+ * `chavePixAlteradaEm`, que o financeiro vê ao pagar o repasse.
  */
 export async function salvarMeusDados(_anterior: Resultado, dados: FormData): Promise<Resultado> {
   const sessao = await exigirProfissional();
@@ -43,11 +43,15 @@ export async function salvarMeusDados(_anterior: Resultado, dados: FormData): Pr
   }
 
   const chavePix = String(dados.get("chavePix") ?? "").trim();
+  const confirmacaoPix = String(dados.get("chavePixConfirmacao") ?? "").trim();
   if (chavePix.length > 140) return { ok: false, erro: "Chave Pix longa demais." };
 
   const antes = await prisma.usuario.findUnique({ where: { id: sessao.usuarioId }, select: { email: true } });
   const atual = await prisma.profissional.findUnique({ where: { id: sessao.profissionalId }, select: { chavePix: true } });
-  const pixNovo = chavePix && !atual?.chavePix ? chavePix : null;
+  const pixNovo = chavePix && chavePix !== (atual?.chavePix ?? "") ? chavePix : null;
+  if (pixNovo && confirmacaoPix !== chavePix) {
+    return { ok: false, erro: "A confirmação não bate com a chave Pix nova. Digite a mesma chave nos dois campos." };
+  }
   await prisma.$transaction([
     prisma.profissional.update({
       where: { id: sessao.profissionalId },
@@ -55,7 +59,7 @@ export async function salvarMeusDados(_anterior: Resultado, dados: FormData): Pr
         email,
         telefone: formatarTelefoneBrasileiro(telefone),
         googleAgendaId: agenda || null,
-        ...(pixNovo ? { chavePix: pixNovo } : {}),
+        ...(pixNovo ? { chavePix: pixNovo, ...(atual?.chavePix ? { chavePixAlteradaEm: new Date() } : {}) } : {}),
       },
     }),
     prisma.usuario.update({ where: { id: sessao.usuarioId }, data: { email } }),
@@ -67,7 +71,11 @@ export async function salvarMeusDados(_anterior: Resultado, dados: FormData): Pr
     "meus-dados",
     [
       antes?.email !== email ? `e-mail de acesso: ${antes?.email} → ${email}` : "contato atualizado",
-      pixNovo ? "chave Pix informada pelo profissional" : null,
+      pixNovo
+        ? atual?.chavePix
+          ? `chave Pix trocada pelo profissional: ${atual.chavePix} → ${pixNovo}`
+          : "chave Pix informada pelo profissional"
+        : null,
     ]
       .filter(Boolean)
       .join(" · ")
@@ -75,5 +83,6 @@ export async function salvarMeusDados(_anterior: Resultado, dados: FormData): Pr
   revalidatePath("/profissional");
   revalidatePath("/profissional/meus-dados");
   revalidatePath("/profissional/disponibilidade");
+  revalidatePath("/painel/financeiro");
   return { ok: true };
 }

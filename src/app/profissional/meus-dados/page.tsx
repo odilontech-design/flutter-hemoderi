@@ -19,9 +19,9 @@ function Fixo({ rotulo, valor }: { rotulo: string; valor: string | null }) {
 
 /**
  * Meus dados (ata de 20/10): o profissional mantém o próprio contato e a
- * conexão com a agenda do Google, sem depender da equipe. O que identifica a
- * pessoa e o pagamento (nome, CPF, registro, chave Pix) fica à vista, mas só a
- * central altera.
+ * conexão com a agenda do Google, sem depender da equipe — e, desde a ata de
+ * 04/11, a chave Pix. O que identifica a pessoa (nome, CPF, registro) fica à
+ * vista, mas só a central altera.
  */
 export default async function MeusDados() {
   const sessao = await exigirProfissional();
@@ -58,15 +58,23 @@ export default async function MeusDados() {
               <Rotulo>Telefone (WhatsApp)</Rotulo>
               <CampoTelefone name="telefone" inicial={eu?.telefone ?? ""} obrigatorio />
             </div>
-            {!eu?.chavePix && (
-              <div>
-                <Rotulo>Chave Pix para receber os repasses</Rotulo>
-                <Campo name="chavePix" placeholder="CPF, e-mail, telefone ou chave aleatória" maxLength={140} />
-                <div className="text-[10px] text-amber-700 mt-1">
-                  Confira antes de salvar: depois de gravada, só a central troca a chave.
-                </div>
+            <div>
+              <Rotulo>Chave Pix para receber os repasses</Rotulo>
+              <Campo
+                name="chavePix"
+                defaultValue={eu?.chavePix ?? ""}
+                placeholder="CPF, e-mail, telefone ou chave aleatória"
+                maxLength={140}
+                autoComplete="off"
+              />
+            </div>
+            <div>
+              <Rotulo>Confirme a chave Pix (só ao informar ou trocar)</Rotulo>
+              <Campo name="chavePixConfirmacao" placeholder="Digite a chave de novo" maxLength={140} autoComplete="off" />
+              <div className="text-[10px] text-amber-700 mt-1">
+                Confira com cuidado: o próximo repasse vai para esta chave. A central é avisada da troca.
               </div>
-            )}
+            </div>
             <div>
               <Rotulo>Agenda do Google (opcional)</Rotulo>
               <Campo name="googleAgendaId" type="email" defaultValue={eu?.googleAgendaId ?? ""} placeholder="voce@gmail.com" />
@@ -106,14 +114,13 @@ export default async function MeusDados() {
           <Cartao>
             <div className="font-display font-bold text-bordo text-sm mb-1">Cadastro</div>
             <div className="text-[11px] text-gray-500 mb-3">
-              Para corrigir algum destes dados, fale com a central — são eles que identificam você e o seu pagamento.
+              Para corrigir algum destes dados, fale com a central — são eles que identificam você.
             </div>
             <div className="grid grid-cols-2 gap-3">
               <Fixo rotulo="Nome" valor={eu?.nome ?? null} />
               <Fixo rotulo="CPF" valor={eu?.cpf ?? null} />
               <Fixo rotulo="Conselho e registro" valor={[eu?.conselho, eu?.registro].filter(Boolean).join(" ") || null} />
               <Fixo rotulo="Especialidade" valor={eu?.especialidade ?? null} />
-              <Fixo rotulo="Chave Pix (pagamentos)" valor={eu?.chavePix ?? null} />
             </div>
           </Cartao>
         </div>

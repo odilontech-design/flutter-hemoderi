@@ -6,6 +6,8 @@ import { formatarReais } from "@/lib/dinheiro";
 import { codigoDoPedido } from "@/lib/numeracao";
 import type { OrdemEsteira } from "@/lib/filtros-esteira";
 import { RotulosDaTabela } from "@/components/RotulosDaTabela";
+import { FORM_EM_MASSA } from "./AcoesEmMassa";
+import { MarcarTodos } from "./MarcarTodos";
 
 type Linha = {
   id: string;
@@ -29,10 +31,13 @@ export function TabelaEsteira({
   pedidos,
   ordem,
   linkDaOrdem,
+  selecionavel = false,
 }: {
   pedidos: Linha[];
   ordem: { coluna: OrdemEsteira; desc: boolean };
   linkDaOrdem: (valor: string) => string;
+  /** Caixas de seleção para as ações em massa (só a logística). */
+  selecionavel?: boolean;
 }) {
   const cabecalho = (rotulo: string, coluna?: OrdemEsteira) => {
     if (!coluna) return <th className="py-2 pr-3 font-semibold text-left whitespace-nowrap">{rotulo}</th>;
@@ -54,6 +59,11 @@ export function TabelaEsteira({
       <table className="tabela-cartoes min-w-full text-xs">
         <thead className="bg-gray-50 text-gray-500 border-b border-gray-200">
           <tr className="[&>th:first-child]:pl-4">
+            {selecionavel && (
+              <th className="py-2 pr-2 text-left">
+                <MarcarTodos />
+              </th>
+            )}
             {cabecalho("Data", "data")}
             {cabecalho("Hora")}
             {cabecalho("Código")}
@@ -69,7 +79,21 @@ export function TabelaEsteira({
         <tbody>
           {pedidos.map((p) => (
             <tr key={p.id} className="border-b border-gray-100 last:border-0 align-top hover:bg-bege/30">
-              <td className="py-2 pl-4 pr-3 whitespace-nowrap font-semibold">{formatarDataCurta(p.data)}</td>
+              {selecionavel && (
+                <td className="py-2 pl-4 pr-2">
+                  {["SOLICITADO", "CONFIRMADO", "ALOCADO"].includes(p.status) && (
+                    <input
+                      type="checkbox"
+                      name="ids"
+                      value={p.id}
+                      form={FORM_EM_MASSA}
+                      aria-label={`Marcar ${codigoDoPedido(p.numero, p.clinica.nome, p.data)}`}
+                      className="h-4 w-4 accent-bordo"
+                    />
+                  )}
+                </td>
+              )}
+              <td className={`py-2 ${selecionavel ? "" : "pl-4 "}pr-3 whitespace-nowrap font-semibold`}>{formatarDataCurta(p.data)}</td>
               <td className="py-2 pr-3">{p.horaInicio}</td>
               <td className="py-2 pr-3 whitespace-nowrap text-bordo font-semibold">{codigoDoPedido(p.numero, p.clinica.nome, p.data)}</td>
               <td className="py-2 pr-3 min-w-[160px]">{p.clinica.nome}</td>

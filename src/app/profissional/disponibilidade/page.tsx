@@ -1,11 +1,12 @@
 import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 import { exigirProfissional } from "@/lib/sessao";
-import { Campo, Cartao, Rotulo, Selecao, Titulo, Vazio } from "@/components/ui";
+import { Campo, Cartao, Rotulo, Titulo, Vazio } from "@/components/ui";
 import { FormularioAcao } from "@/components/FormularioAcao";
 import { BotaoAcao } from "@/components/BotaoAcao";
 import {
   adicionarDisponibilidade,
+  limparDisponibilidade,
   marcarAusencia,
   removerAusencia,
   removerDisponibilidade,
@@ -208,34 +209,47 @@ export default async function Disponibilidade({
             </div>
           )}
 
-          <FormularioAcao acao={adicionarDisponibilidade} botao="Adicionar disponibilidade">
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-              <div>
-                <Rotulo>Dia</Rotulo>
-                <Selecao name="diaSemana" defaultValue="1">
-                  {DIAS.map((dia, indice) => (
-                    <option key={dia} value={indice}>
-                      {dia}
-                    </option>
-                  ))}
-                </Selecao>
+          <FormularioAcao acao={adicionarDisponibilidade} botao="Adicionar ao padrão">
+            <div>
+              <Rotulo>Dias da semana (marque quantos quiser)</Rotulo>
+              <div className="flex flex-wrap gap-1.5">
+                {[1, 2, 3, 4, 5, 6, 0].map((indice) => (
+                  <label
+                    key={indice}
+                    className="inline-flex items-center gap-1.5 rounded-full border border-gray-300 px-3 py-2 text-xs cursor-pointer has-[:checked]:bg-bordo has-[:checked]:text-white has-[:checked]:border-bordo"
+                  >
+                    <input type="checkbox" name="diaSemana" value={indice} className="sr-only" />
+                    {DIAS[indice].slice(0, 3)}
+                  </label>
+                ))}
               </div>
-              <div>
-                <Rotulo>Turno</Rotulo>
-                <Selecao name="turno" defaultValue="MANHA">
-                  {TURNOS.map((turno) => (
-                    <option key={turno.chave} value={turno.chave}>
-                      {turno.rotulo} ({turno.horaInicio}–{turno.horaFim})
-                    </option>
-                  ))}
-                </Selecao>
+            </div>
+            <div>
+              <Rotulo>Turnos</Rotulo>
+              <div className="flex flex-wrap gap-1.5">
+                {TURNOS.map((turno) => (
+                  <label
+                    key={turno.chave}
+                    className="inline-flex items-center gap-1.5 rounded-full border border-gray-300 px-3 py-2 text-xs cursor-pointer has-[:checked]:bg-bordo has-[:checked]:text-white has-[:checked]:border-bordo"
+                  >
+                    <input type="checkbox" name="turno" value={turno.chave} className="sr-only" />
+                    {turno.rotulo} ({turno.horaInicio}–{turno.horaFim})
+                  </label>
+                ))}
               </div>
             </div>
             <div className="text-[10px] text-gray-400">
-              O dia inteiro vale o horário de funcionamento da operação. A manhã é onde a central
-              mais precisa de gente.
+              Ex.: marque Seg a Sex e Manhã + Tarde para declarar a semana toda de uma vez. Vale
+              toda semana; para férias ou um período fora, use Ausências.
             </div>
           </FormularioAcao>
+          {janelas.length > 0 && (
+            <div className="mt-3 text-right">
+              <BotaoAcao acao={limparDisponibilidade} variante="perigo" confirmar="Apagar todas as janelas do seu padrão semanal?">
+                Apagar o padrão inteiro
+              </BotaoAcao>
+            </div>
+          )}
         </Cartao>
 
         <Cartao id="ausencia">

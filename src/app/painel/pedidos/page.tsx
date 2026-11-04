@@ -23,6 +23,7 @@ import { ConferenciaRelatorio } from "./ConferenciaRelatorio";
 import { FiltrosEsteira } from "./FiltrosEsteira";
 import { consultaDosFiltros, lerFiltrosEsteira, lerOrdem, ondeDosFiltros, ordenarPedidos, temFiltro } from "@/lib/filtros-esteira";
 import { TabelaEsteira } from "./TabelaEsteira";
+import { AcoesEmMassa } from "./AcoesEmMassa";
 import { ValorServico } from "./ValorServico";
 import { perfilPermite } from "@/lib/papeis";
 import { AgendaDaEquipe } from "@/components/AgendaDaEquipe";
@@ -232,11 +233,17 @@ export default async function Esteira({
       </div>
 
       {emTabela && pedidos.length > 0 ? (
+        <>
+        {perfilPermite(sessao.perfil, "LOGISTICA") && (
+          <AcoesEmMassa profissionais={profissionais.map(({ id, nome }) => ({ id, nome }))} />
+        )}
         <TabelaEsteira
+          selecionavel={perfilPermite(sessao.perfil, "LOGISTICA")}
           pedidos={ordenarPedidos(pedidos, ordem)}
           ordem={ordem}
           linkDaOrdem={(valor) => `/painel/pedidos?${consultaDosFiltros(filtros, { filtro: filtro.chave, visao: "tabela", ordem: valor })}`}
         />
+        </>
       ) : pedidos.length === 0 ? (
         <Cartao>
           <Vazio>

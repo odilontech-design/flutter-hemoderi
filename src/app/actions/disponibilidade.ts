@@ -15,32 +15,43 @@ import type { Resultado } from "./pedidos";
 export async function adicionarDisponibilidade(_anterior: Resultado, dados: FormData): Promise<Resultado> {
   const sessao = await exigirProfissional();
 
-  const diaSemana = Number(dados.get("diaSemana"));
-  const turno = turnoPorChave(String(dados.get("turno") ?? ""));
+  // Em bloco (ata de 04/11): vários dias e turnos de uma vez — "segunda a
+  // sexta, manhã e tarde" num clique só, em vez de uma linha por dia.
+  const dias = Array.from(new Set(dados.getAll("diaSemana").map((v) => Number(v))));
+  const turnos = Array.from(new Set(dados.getAll("turno").map((v) => String(v)))).map(turnoPorChave);
 
-  if (!Number.isInteger(diaSemana) || diaSemana < 0 || diaSemana > 6) {
+  if (dias.length === 0) return { ok: false, erro: "Marque pelo menos um dia da semana." };
+  if (dias.some((d) => !Number.isInteger(d) || d < 0 || d > 6)) {
     return { ok: false, erro: "Dia da semana inválido." };
   }
-  if (!turno) return { ok: false, erro: "Escolha o turno." };
-
-  const { horaInicio, horaFim } = turno;
-  if (paraMinutos(horaFim) <= paraMinutos(horaInicio)) {
-    return { ok: false, erro: "O fim precisa ser depois do início." };
-  }
+  if (turnos.length === 0 || turnos.some((t) => !t)) return { ok: false, erro: "Marque pelo menos um turno." };
 
   // Declarar o mesmo turno duas vezes não é erro do usuário — é o clique
   // repetido de quem não tem certeza se salvou. Guardar duplicado só suja a
   // lista e não muda a agenda.
-  const jaTem = await prisma.disponibilidade.findFirst({
-    where: { profissionalId: sessao.profissionalId, diaSemana, horaInicio, horaFim },
-    select: { id: true },
+  const existentes = await prisma.disponibilidade.findMany({
+    where: { profissionalId: sessao.profissionalId, diaSemana: { in: dias } },
+    select: { diaSemana: true, horaInicio: true, horaFim: true },
   });
-  if (jaTem) return { ok: true };
+  const jaTem = new Set(existentes.map((e) => `${e.diaSemana}|${e.horaInicio}|${e.horaFim}`));
 
-  await prisma.disponibilidade.create({
-    data: { profissionalId: sessao.profissionalId, diaSemana, horaInicio, horaFim },
-  });
+  const novas = dias.flatMap((diaSemana) =>
+    turnos
+      .filter((t): t is NonNullable<typeof t> => Boolean(t))
+      .filter((t) => paraMinutos(t.horaFim) > paraMinutos(t.horaInicio))
+      .filter((t) => !jaTem.has(`${diaSemana}|${t.horaInicio}|${t.horaFim}`))
+      .map((t) => ({ profissionalId: sessao.profissionalId, diaSemana, horaInicio: t.horaInicio, horaFim: t.horaFim }))
+  );
+  if (novas.length > 0) await prisma.disponibilidade.createMany({ data: novas });
 
+  revalidatePath("/profissional/disponibilidade");
+  return { ok: true };
+}
+
+/** Apaga o padrão semanal inteiro, para declarar de novo do zero. */
+export async function limparDisponibilidade(): Promise<Resultado> {
+  const sessao = await exigirProfissional();
+  await prisma.disponibilidade.deleteMany({ where: { profissionalId: sessao.profissionalId } });
   revalidatePath("/profissional/disponibilidade");
   return { ok: true };
 }
