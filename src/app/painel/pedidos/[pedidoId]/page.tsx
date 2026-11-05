@@ -13,8 +13,9 @@ import { EquipeDoAtendimento, type LinhaDaEquipe } from "../EquipeDoAtendimento"
 import { aptoParaServico } from "@/lib/aptidao";
 import { eventoParaEquipe } from "@/lib/evento-equipe";
 import { agruparPorFamilia } from "@/lib/familia";
-import { isoDeData } from "@/lib/data";
+import { isoDeData, paraHora, paraMinutos } from "@/lib/data";
 import { EditarAgendamento } from "./EditarAgendamento";
+import { AdicionarServico } from "./AdicionarServico";
 import { EditarVisita } from "./EditarVisita";
 import { AlterarLocal } from "./AlterarLocal";
 import { Cartao, SeloStatus, Titulo, Vazio } from "@/components/ui";
@@ -84,10 +85,15 @@ export default async function DetalheDoPedido({
     ? await prisma.pedido.findMany({
         where: { grupoId: pedido.grupoId, status: { in: STATUS_ATIVOS } },
         orderBy: [{ data: "asc" }, { horaInicio: "asc" }],
-        select: { data: true, horaInicio: true, status: true, pacienteNome: true, servico: { select: { nome: true } } },
+        select: { data: true, horaInicio: true, duracaoMin: true, status: true, pacienteNome: true, servico: { select: { nome: true } } },
       })
     : [];
   const gruposDeServicos = agruparPorFamilia(servicosDoCatalogo, { fundirSolitarias: false, ordemDoCatalogo: true });
+  // Sugestão de horário para um serviço a mais: quando o último da visita termina.
+  const fimDaVisita = Math.max(
+    ...(visita.length ? visita : [pedido]).map((m) => paraMinutos(m.horaInicio) + m.duracaoMin)
+  );
+  const horaSugerida = paraHora(Math.min(fimDaVisita, 23 * 60 + 59));
 
   // A equipe do atendimento: o principal e os profissionais adicionais (apoios).
   const principal = await prisma.pedido.findUniqueOrThrow({
@@ -353,6 +359,12 @@ export default async function DetalheDoPedido({
           grupos={gruposDeServicos}
           locais={locais.map((l) => ({ id: l.id, rotulo: l.rotulo }))}
         />
+      )}
+
+      {podeEditar && ["SOLICITADO", "CONFIRMADO", "ALOCADO"].includes(pedido.status) && (
+        <Cartao className="mb-3">
+          <AdicionarServico pedidoId={pedido.id} grupos={gruposDeServicos} horaSugerida={horaSugerida} />
+        </Cartao>
       )}
 
       <Cartao className="mb-3">

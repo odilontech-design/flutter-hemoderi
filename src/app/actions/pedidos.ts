@@ -2309,6 +2309,95 @@ export async function enviarPelaCentral(
   return r.ok ? { ok: true, avisos: [`${rotulo} enviado pela central`] } : { ok: false, erro: r.erro };
 }
 
+/**
+ * Mais um serviço num agendamento que já existe (pedido de 05/11: "na edição
+ * também deveria deixar adicionar mais serviços"). Vira mais um pedido da
+ * mesma visita (grupoId) — mesma clínica, data, local, doutor e pagamento —,
+ * com o preço da tabela da clínica, como no agendamento novo. Conflito de
+ * sala aparece como aviso: quem agenda é a equipe, que pode encaixar.
+ */
+export async function adicionarServicoAoAgendamento(_anterior: Resultado, dados: FormData): Promise<Resultado> {
+  const sessao = await exigirInterno();
+  if (!perfilPermite(sessao.perfil, "COMERCIAL", "ATENDENTE", "POS_VENDA", "LOGISTICA")) {
+    return { ok: false, erro: "Sem permissão para editar o agendamento." };
+  }
+  const pedidoId = String(dados.get("pedidoId") ?? "");
+  const servicoId = String(dados.get("servicoId") ?? "");
+  const quantidade = Number(dados.get("quantidade") ?? 1) || 1;
+  const horaInicio = String(dados.get("horaInicio") ?? "").trim();
+  const pacienteNome = String(dados.get("pacienteNome") ?? "").trim() || null;
+  if (!servicoId) return { ok: false, erro: "Escolha o serviço." };
+  if (!/^\d{2}:\d{2}$/.test(horaInicio)) return { ok: false, erro: "Informe o horário do serviço." };
+
+  const base = await prisma.pedido.findUnique({
+    where: { id: pedidoId },
+    include: { endereco: { select: { uf: true } } },
+  });
+  if (!base) return { ok: false, erro: "Agendamento não encontrado." };
+  if (base.apoioDeId) return { ok: false, erro: "Adicione o serviço no atendimento principal." };
+  if (!["SOLICITADO", "CONFIRMADO", "ALOCADO"].includes(base.status)) {
+    return { ok: false, erro: "Só dá para adicionar serviço em agendamento ainda não realizado nem cancelado." };
+  }
+  const servico = await prisma.servico.findUnique({ where: { id: servicoId } });
+  if (!servico || !servico.ativo) return { ok: false, erro: "Serviço não encontrado." };
+  if (!quantidadeValida(servico, quantidade)) return { ok: false, erro: "Quantidade fora do permitido para este serviço." };
+
+  const unitario = await valorDoServico(base.clinicaId, servicoId, base.endereco?.uf, base.modalidade === "CURSO" ? "CURSO" : "PARTICULAR");
+  const valorServicoCentavos = totalDoItem(unitario, quantidade, servico);
+  const duracaoMin = duracaoEfetiva(servico, quantidade);
+  const grupoId = base.grupoId ?? crypto.randomUUID();
+
+  const impedimentos = await verificarAlocacao({
+    clinicaId: base.clinicaId,
+    data: base.data,
+    horaInicio,
+    duracaoMin,
+    ignorarGrupoId: base.grupoId ?? undefined,
+    ignorarPedidoId: base.id,
+    enderecoId: base.enderecoId,
+  });
+
+  const novo = await prisma.$transaction(async (tx) => {
+    if (!base.grupoId) await tx.pedido.update({ where: { id: base.id }, data: { grupoId } });
+    return tx.pedido.create({
+      data: {
+        numero: await proximoNumeroDePedido(tx),
+        grupoId,
+        clinicaId: base.clinicaId,
+        servicoId,
+        modalidade: base.modalidade,
+        enderecoId: base.enderecoId,
+        quantidade,
+        data: base.data,
+        horaInicio,
+        duracaoMin,
+        status: base.status === "SOLICITADO" ? "SOLICITADO" : "CONFIRMADO",
+        origem: "INTERNO",
+        valorServicoCentavos,
+        pacienteNome: pacienteNome ?? base.pacienteNome,
+        pacienteContato: base.pacienteContato,
+        contatoClinica: base.contatoClinica,
+        doutorNome: base.doutorNome,
+        formaPagamento: base.formaPagamento,
+        condicaoPagamento: base.condicaoPagamento,
+        criadoPorId: sessao.usuarioId,
+      },
+      select: { id: true, numero: true },
+    });
+  });
+
+  await registrarAuditoria(sessao.usuarioId, "Pedido", base.id, "adicionar-servico", `nº ${novo.numero} · ${servico.nome} · ${formatarReais(valorServicoCentavos)}`);
+  atualizarTelas();
+  revalidatePath(`/painel/pedidos/${base.id}`);
+  return {
+    ok: true,
+    avisos: [
+      `Serviço adicionado: ${servico.nome}, ${formatarReais(valorServicoCentavos)}. Aloque o profissional dele na esteira ou na tela do novo serviço.`,
+      ...impedimentos.map((i) => i.mensagem),
+    ],
+  };
+}
+
 // ─── Aviso ao profissional anterior (ata de 03/11) ─────────────────────────
 // As ações que mexem no atendimento passam por aqui: foto antes, ação, aviso
 // a quem saiu do caso ou teve o horário mudado (lib/aviso-profissional.ts).
