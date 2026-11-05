@@ -14,6 +14,7 @@ import { configuradoBradesco } from "@/lib/integracoes/bradesco-pix";
 import { pipedriveConfigurado } from "@/lib/integracoes/pipedrive";
 import { asaasConfigurado, ambienteAsaas } from "@/lib/integracoes/asaas";
 import { PagamentosCartao } from "./PagamentosCartao";
+import { ReatribuirNegocios } from "./ReatribuirNegocios";
 
 export const dynamic = "force-dynamic";
 
@@ -188,6 +189,7 @@ export default async function Integracoes() {
       {configurado && (
         <div className="flex flex-wrap items-center gap-3 mb-3">
           <BotaoAcao acao={testarConexaoPipedrive}>Testar conexão</BotaoAcao>
+          <ReatribuirNegocios />
           {pendencias.length > 0 && (
             <BotaoAcao
               acao={reprocessarTodasPipedrive}

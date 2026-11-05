@@ -165,7 +165,27 @@ async function pessoaDeContato(nome: string, orgId: number, telefone: string | n
   return criada.data.id;
 }
 
-/** Quem agendou vira dono do negócio, se tiver usuário no PipeDrive com o mesmo e-mail. */
+/** Quem é dono de todos os negócios (pedido de 05/11): a Sthefany, ou quem a variável apontar. */
+const DONO_PADRAO = "sthefany@hemoderi.com.br";
+let donoEmCache: { chave: string; id: number } | null = null;
+
+/**
+ * O dono de todo negócio gerado pelo sistema. PIPEDRIVE_DONO_ID (o número do
+ * usuário) vale direto; senão busca o usuário por PIPEDRIVE_DONO_EMAIL (padrão:
+ * a Sthefany). Sem achar, o negócio nasce com o dono do token — nunca com quem
+ * agendou, que era a regra antiga.
+ */
+export async function donoDosNegocios(): Promise<number | null> {
+  const fixo = Number(process.env.PIPEDRIVE_DONO_ID?.trim());
+  if (Number.isInteger(fixo) && fixo > 0) return fixo;
+  const email = (process.env.PIPEDRIVE_DONO_EMAIL?.trim() || DONO_PADRAO).toLowerCase();
+  if (donoEmCache?.chave === email) return donoEmCache.id;
+  const id = await usuarioPorEmail(email);
+  if (id) donoEmCache = { chave: email, id };
+  return id;
+}
+
+/** O usuário do PipeDrive com este e-mail. */
 async function usuarioPorEmail(email: string): Promise<number | null> {
   const json = (await chamar(`/users/find?term=${encodeURIComponent(email)}&search_by_email=1`, "GET")) as {
     data?: { id: number; email?: string; active_flag?: boolean }[] | null;
@@ -253,10 +273,10 @@ export async function criarNegocio(pedidoId: string): Promise<void> {
       // Sem organização/pessoa o negócio ainda nasce — o título já traz a clínica.
     }
     try {
-      const dono = pedido.criadoPor?.email ? await usuarioPorEmail(pedido.criadoPor.email) : null;
+      const dono = await donoDosNegocios();
       if (dono) corpo.user_id = dono;
     } catch {
-      // Sem dono, fica com o dono do token.
+      // Sem achar a Sthefany no PipeDrive, fica com o dono do token.
     }
 
     const json = (await chamar("/deals", "POST", corpo)) as { data?: { id?: number } } | null;
@@ -313,7 +333,9 @@ async function fecharNegocio(pedidoId: string, desfecho: "won" | "lost", motivo?
   }
 
   try {
+    const dono = await donoDosNegocios().catch(() => null);
     await chamar(`/deals/${pedido.pipedriveNegocioId}`, "PUT", {
+      ...(dono ? { user_id: dono } : {}),
       status: desfecho,
       ...(desfecho === "lost" && motivo ? { lost_reason: motivo.slice(0, 250) } : {}),
     });
@@ -425,7 +447,9 @@ export async function registrarNegocioAprovado(pedidoId: string, textoDoRelatori
   try {
     let negocioId = pedido.pipedriveNegocioId;
     if (negocioId) {
-      await chamar(`/deals/${negocioId}`, "PUT", corpo);
+      // Negócio que já existia (criado antes da regra): passa para o dono certo.
+      const dono = await donoDosNegocios().catch(() => null);
+      await chamar(`/deals/${negocioId}`, "PUT", { ...(dono ? { user_id: dono } : {}), ...corpo });
     } else {
       const funil = await resolverFunil();
       Object.assign(corpo, { pipeline_id: funil.pipelineId, stage_id: funil.stageId });
@@ -437,10 +461,10 @@ export async function registrarNegocioAprovado(pedidoId: string, textoDoRelatori
         // Sem organização/pessoa o negócio ainda nasce — o título já traz a clínica.
       }
       try {
-        const dono = pedido.criadoPor?.email ? await usuarioPorEmail(pedido.criadoPor.email) : null;
+        const dono = await donoDosNegocios();
         if (dono) corpo.user_id = dono;
       } catch {
-        // Sem dono, fica com o dono do token.
+        // Sem achar a Sthefany no PipeDrive, fica com o dono do token.
       }
       const json = (await chamar("/deals", "POST", corpo)) as { data?: { id?: number } } | null;
       if (!json?.data?.id) throw new Error("Resposta do PipeDrive sem id do negócio.");
@@ -456,4 +480,37 @@ export async function registrarNegocioAprovado(pedidoId: string, textoDoRelatori
   } catch (erro) {
     await registrarSincronizacao(pedido.id, "negocio-aprovado", false, pedido.pipedriveNegocioId ?? undefined, descreverErroPipedrive(erro));
   }
+}
+
+/**
+ * Passa para o dono certo (a Sthefany) os negócios que já existem no PipeDrive
+ * e foram criados em nome de quem agendou. Em lotes, do mais antigo ao mais
+ * novo; `reatribuidoEm` não existe — o PUT é idempotente, e `a partir` marca
+ * de onde continuar.
+ */
+export async function reatribuirNegocios(limite = 40, aPartirDe?: string): Promise<{ feitos: number; falhas: string[]; ultimo: string | null; restam: number }> {
+  if (!configurado()) return { feitos: 0, falhas: ["PipeDrive não configurado."], ultimo: null, restam: 0 };
+  const dono = await donoDosNegocios();
+  if (!dono) return { feitos: 0, falhas: ["Não achei o usuário da Sthefany no PipeDrive (confira o e-mail em PIPEDRIVE_DONO_EMAIL)."], ultimo: null, restam: 0 };
+  const pedidos = await prisma.pedido.findMany({
+    where: { apoioDeId: null, pipedriveNegocioId: { not: null }, ...(aPartirDe ? { numero: { gt: Number(aPartirDe) } } : {}) },
+    orderBy: { numero: "asc" },
+    take: limite,
+    select: { id: true, numero: true, pipedriveNegocioId: true },
+  });
+  let feitos = 0;
+  const falhas: string[] = [];
+  for (const p of pedidos) {
+    try {
+      await chamar(`/deals/${p.pipedriveNegocioId}`, "PUT", { user_id: dono });
+      feitos++;
+    } catch (erro) {
+      falhas.push(`nº ${p.numero}: ${descreverErroPipedrive(erro)}`);
+    }
+  }
+  const ultimo = pedidos.at(-1)?.numero ?? null;
+  const restam = ultimo
+    ? await prisma.pedido.count({ where: { apoioDeId: null, pipedriveNegocioId: { not: null }, numero: { gt: ultimo } } })
+    : 0;
+  return { feitos, falhas, ultimo: ultimo ? String(ultimo) : null, restam };
 }

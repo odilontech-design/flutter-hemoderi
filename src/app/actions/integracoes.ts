@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { exigirAdministradorTecnico } from "@/lib/sessao";
-import { testarConexao } from "@/lib/integracoes/pipedrive";
+import { reatribuirNegocios, testarConexao } from "@/lib/integracoes/pipedrive";
 import { reprocessarPedidoPipedrive, reprocessarPendenciasPipedrive } from "@/lib/integracoes/pipedrive-pendencias";
 import { despacharPendentes } from "@/lib/integracoes/whatsapp";
 import type { Resultado } from "./pedidos";
@@ -68,4 +68,15 @@ export async function reenviarFalhasWhatsapp(): Promise<Resultado> {
       `${count} devolvida(s) à fila · ${entrega.enviadas} enviada(s) · ${entrega.canceladas} cancelada(s) por já terem passado · ${entrega.falhas} falha(s).`,
     ],
   };
+}
+
+/**
+ * Passa para a Sthefany os negócios que já estavam no PipeDrive em nome de
+ * quem agendou (pedido de 05/11). Um lote por chamada; a tela chama de novo
+ * com `aPartirDe` até acabar.
+ */
+export async function reatribuirNegociosPipedrive(aPartirDe?: string): Promise<{ ok: boolean; erro?: string; feitos: number; restam: number; ultimo: string | null; falhas: string[] }> {
+  await exigirAdministradorTecnico();
+  const r = await reatribuirNegocios(40, aPartirDe);
+  return { ok: r.falhas.length === 0, erro: r.falhas[0], ...r };
 }

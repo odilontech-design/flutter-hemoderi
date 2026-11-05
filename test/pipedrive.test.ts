@@ -94,3 +94,15 @@ test("primeira etapa ativa do funil", () => {
   );
   assert.equal(primeiraEtapa([]), null);
 });
+
+test("o dono de todo negócio é fixado por PIPEDRIVE_DONO_ID, sem consultar o PipeDrive", async () => {
+  const { donoDosNegocios } = await import("../src/lib/integracoes/pipedrive");
+  const antes = process.env.PIPEDRIVE_DONO_ID;
+  process.env.PIPEDRIVE_DONO_ID = "12345";
+  try {
+    assert.equal(await donoDosNegocios(), 12345);
+  } finally {
+    if (antes === undefined) delete process.env.PIPEDRIVE_DONO_ID;
+    else process.env.PIPEDRIVE_DONO_ID = antes;
+  }
+});
