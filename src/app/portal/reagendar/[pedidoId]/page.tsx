@@ -15,7 +15,7 @@ export default async function Reagendar({ params }: { params: { pedidoId: string
   const sessao = await exigirClinica();
 
   const pedido = await prisma.pedido.findFirst({
-    where: { id: params.pedidoId, clinicaId: sessao.clinicaId },
+    where: { apoioDeId: null, id: params.pedidoId, clinicaId: sessao.clinicaId },
     include: {
       servico: { select: { id: true, nome: true, duracaoMin: true } },
       profissional: { select: { id: true, nome: true } },
@@ -29,7 +29,7 @@ export default async function Reagendar({ params }: { params: { pedidoId: string
   // de horários considera a soma das durações.
   const membros = pedido.grupoId
     ? await prisma.pedido.findMany({
-        where: { clinicaId: sessao.clinicaId, grupoId: pedido.grupoId, status: { in: STATUS_ATIVOS } },
+        where: { apoioDeId: null, clinicaId: sessao.clinicaId, grupoId: pedido.grupoId, status: { in: STATUS_ATIVOS } },
         orderBy: [{ horaInicio: "asc" }, { numero: "asc" }],
         select: { servicoId: true, quantidade: true, servico: { select: { nome: true } } },
       })

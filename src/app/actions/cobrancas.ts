@@ -171,13 +171,13 @@ export async function pixDoAgendamento(pedidoId: string, gerar: boolean): Promis
   const sessao = await exigirClinica();
 
   const pedido = await prisma.pedido.findFirst({
-    where: { id: pedidoId, clinicaId: sessao.clinicaId },
+    where: { apoioDeId: null, id: pedidoId, clinicaId: sessao.clinicaId },
     select: { id: true, grupoId: true, clinica: { select: { nome: true, cnpj: true } } },
   });
   if (!pedido) return { ok: false, erro: "Agendamento não encontrado." };
 
   const membros = await prisma.pedido.findMany({
-    where: { clinicaId: sessao.clinicaId, ...(pedido.grupoId ? { grupoId: pedido.grupoId } : { id: pedido.id }) },
+    where: { apoioDeId: null, clinicaId: sessao.clinicaId, ...(pedido.grupoId ? { grupoId: pedido.grupoId } : { id: pedido.id }) },
     select: { id: true, status: true, formaPagamento: true, valorServicoCentavos: true, pixPagoEm: true },
   });
   const ativos = membros.filter((m) => m.status !== "CANCELADO");
@@ -201,7 +201,7 @@ export async function pixDoAgendamento(pedidoId: string, gerar: boolean): Promis
   if (cobranca) {
     const consulta = await consultarCobranca(cobranca.txid);
     if (consulta.ok && consulta.pago) {
-      const agora = await prisma.pedido.findFirst({ where: { id: primeiro.id }, select: { pixPagoEm: true } });
+      const agora = await prisma.pedido.findFirst({ where: { apoioDeId: null, id: primeiro.id }, select: { pixPagoEm: true } });
       return { ok: true, pago: true, pagoEm: (agora?.pixPagoEm ?? new Date()).toISOString() };
     }
     if (cobranca.valorCentavos !== valorCentavos) {
@@ -256,12 +256,12 @@ export async function pixEmLote(pedidoIds: string[], gerar: boolean): Promise<Pi
   if (pedidos.length === 0) return { ok: false, erro: "Escolha ao menos um atendimento." };
 
   const escolhidos = await prisma.pedido.findMany({
-    where: { id: { in: pedidos }, clinicaId: sessao.clinicaId },
+    where: { apoioDeId: null, id: { in: pedidos }, clinicaId: sessao.clinicaId },
     select: { id: true, grupoId: true },
   });
   const grupos = escolhidos.map((p) => p.grupoId).filter((g): g is string => Boolean(g));
   const membros = await prisma.pedido.findMany({
-    where: { clinicaId: sessao.clinicaId, OR: [{ id: { in: escolhidos.map((p) => p.id) } }, ...(grupos.length ? [{ grupoId: { in: grupos } }] : [])] },
+    where: { apoioDeId: null, clinicaId: sessao.clinicaId, OR: [{ id: { in: escolhidos.map((p) => p.id) } }, ...(grupos.length ? [{ grupoId: { in: grupos } }] : [])] },
     select: { id: true, status: true, valorServicoCentavos: true, pixPagoEm: true, cartaoPagoEm: true, faturaId: true },
     orderBy: { id: "asc" },
   });
@@ -319,12 +319,12 @@ export async function cartaoEmLote(pedidoIds: string[], parcelas: number): Promi
   const pedidos = [...new Set(pedidoIds)].slice(0, 100);
   if (pedidos.length === 0) return { ok: false, erro: "Escolha ao menos um atendimento." };
   const escolhidos = await prisma.pedido.findMany({
-    where: { id: { in: pedidos }, clinicaId: sessao.clinicaId },
+    where: { apoioDeId: null, id: { in: pedidos }, clinicaId: sessao.clinicaId },
     select: { id: true, grupoId: true },
   });
   const grupos = escolhidos.map((p) => p.grupoId).filter((g): g is string => Boolean(g));
   const membros = await prisma.pedido.findMany({
-    where: { clinicaId: sessao.clinicaId, OR: [{ id: { in: escolhidos.map((p) => p.id) } }, ...(grupos.length ? [{ grupoId: { in: grupos } }] : [])] },
+    where: { apoioDeId: null, clinicaId: sessao.clinicaId, OR: [{ id: { in: escolhidos.map((p) => p.id) } }, ...(grupos.length ? [{ grupoId: { in: grupos } }] : [])] },
     select: { id: true, status: true, valorServicoCentavos: true, pixPagoEm: true, cartaoPagoEm: true, faturaId: true },
   });
   const cobraveis = membros.filter(

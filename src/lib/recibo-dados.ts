@@ -26,7 +26,7 @@ export type ResultadoDoRecibo = { ok: true; recibo: ReciboDados } | { ok: false;
  */
 export async function reciboDoAgendamento(pedidoId: string, clinicaId: string | null): Promise<ResultadoDoRecibo> {
   const base = await prisma.pedido.findFirst({
-    where: { id: pedidoId, ...(clinicaId ? { clinicaId } : {}) },
+    where: { apoioDeId: null, id: pedidoId, ...(clinicaId ? { clinicaId } : {}) },
     select: { id: true, grupoId: true, clinicaId: true },
   });
   if (!base) return { ok: false, erro: "Agendamento não encontrado." };

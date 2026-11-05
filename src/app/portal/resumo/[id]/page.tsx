@@ -34,13 +34,13 @@ export default async function ResumoDoAgendamento({ params }: { params: { id: st
   const sessao = await exigirClinica();
 
   const pedido = await prisma.pedido.findFirst({
-    where: { id: params.id, clinicaId: sessao.clinicaId },
+    where: { apoioDeId: null, id: params.id, clinicaId: sessao.clinicaId },
     select: { id: true, grupoId: true },
   });
   if (!pedido) notFound();
 
   const membros = await prisma.pedido.findMany({
-    where: { clinicaId: sessao.clinicaId, ...(pedido.grupoId ? { grupoId: pedido.grupoId } : { id: pedido.id }) },
+    where: { apoioDeId: null, clinicaId: sessao.clinicaId, ...(pedido.grupoId ? { grupoId: pedido.grupoId } : { id: pedido.id }) },
     orderBy: [{ horaInicio: "asc" }, { numero: "asc" }],
     include: {
       servico: { select: { nome: true } },

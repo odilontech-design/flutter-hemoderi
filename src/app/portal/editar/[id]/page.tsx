@@ -12,7 +12,7 @@ export default async function EditarAgendamentoDoPortal({ params }: { params: { 
   const sessao = await exigirClinica();
 
   const pedido = await prisma.pedido.findFirst({
-    where: { id: params.id, clinicaId: sessao.clinicaId },
+    where: { apoioDeId: null, id: params.id, clinicaId: sessao.clinicaId },
     select: {
       id: true,
       status: true,

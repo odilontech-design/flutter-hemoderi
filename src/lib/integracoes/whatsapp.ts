@@ -62,6 +62,7 @@ type DadosPedido = {
 /** O que se lê do pedido para montar qualquer mensagem. */
 const SELECAO_DO_PEDIDO = {
   id: true,
+  apoioDeId: true,
   numero: true,
   data: true,
   horaInicio: true,
@@ -205,6 +206,9 @@ export async function enfileirarMensagem(
     select: SELECAO_DO_PEDIDO,
   });
   if (!pedido) return;
+  // Profissional adicional (apoio): a clínica fala com o atendimento principal;
+  // do apoio só saem as mensagens do profissional.
+  if (pedido.apoioDeId && !TIPOS_PARA_O_PROFISSIONAL.includes(tipo)) return;
   // Envio automático ao cliente suspenso: nem entra na fila, para não despejar
   // um acúmulo de mensagens de teste nos clientes quando for religado.
   // A conta de teste (ata de 03/11) recebe mesmo com o envio pausado.
@@ -253,6 +257,9 @@ export async function reenviarMensagem(
     select: SELECAO_DO_PEDIDO,
   });
   if (!pedido) return { ok: false, erro: "Agendamento não encontrado." };
+  if (pedido.apoioDeId && !TIPOS_PARA_O_PROFISSIONAL.includes(tipo)) {
+    return { ok: false, erro: "Este é um profissional adicional: a clínica recebe as mensagens pelo atendimento principal." };
+  }
   if ((tipo === "ALOCACAO" || tipo === "COBRANCA_RELATORIO") && !pedido.profissional) {
     return { ok: false, erro: "Ainda sem profissional alocado." };
   }

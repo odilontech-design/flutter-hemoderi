@@ -32,7 +32,7 @@ export async function HistoricoOuAvaliacoes({ modo }: { modo: "historico" | "ava
 
   const [historico, notasDadas, npsPendente] = await Promise.all([
     prisma.pedido.findMany({
-      where: { clinicaId: sessao.clinicaId, status: { in: ["REALIZADO", "FALTOU", "CANCELADO"] } },
+      where: { apoioDeId: null, clinicaId: sessao.clinicaId, status: { in: ["REALIZADO", "FALTOU", "CANCELADO"] } },
       orderBy: [{ data: "desc" }, { horaInicio: "desc" }],
       take: 120,
       include: {

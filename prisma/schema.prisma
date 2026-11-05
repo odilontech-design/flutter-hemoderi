@@ -988,6 +988,14 @@ model Pedido {
   /// como a operação aloca, cobra e repassa.
   grupoId String?
 
+  /// Profissional adicional (pedido da Joyce, 05/11): atendimento que pede mais
+  /// de um profissional vira um pedido de APOIO por profissional extra, ligado
+  /// ao principal. Cada um tem aceite, check-in, relatório e repasse próprios;
+  /// o apoio não aparece para a clínica e não é cobrado (valor zero).
+  apoioDeId String?
+  apoioDe   Pedido?  @relation("ApoioDoPedido", fields: [apoioDeId], references: [id])
+  apoios    Pedido[] @relation("ApoioDoPedido")
+
   /// Meia-noite UTC do dia do atendimento. Hora fica separada, em texto, pelo
   /// mesmo motivo de lib/data.ts: o dia do atendimento não pode escorregar
   /// porque o servidor da Vercel roda em UTC e a operação é no Brasil.
@@ -1122,6 +1130,7 @@ model Pedido {
   @@index([status])
   @@index([faturaId])
   @@index([grupoId])
+  @@index([apoioDeId])
 }
 
 /// Recusa de uma alocação, ANTES do aceite.

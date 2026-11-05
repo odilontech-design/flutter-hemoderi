@@ -61,7 +61,9 @@ export async function alocarEmMassa(pedidoIds: string[], profissionalId: string)
   const falhas: string[] = [];
   for (const p of atuais) {
     const nome = nomes.get(p.id) ?? p.id;
-    if (p.profissionalId === profissionalId) {
+    // Já alocado com essa pessoa: nada a fazer. (Confirmado com ela só
+    // "solicitada" pela clínica ainda precisa ser alocado.)
+    if (p.status === "ALOCADO" && p.profissionalId === profissionalId) {
       feitos++;
       continue;
     }

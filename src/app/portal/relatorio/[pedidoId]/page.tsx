@@ -18,7 +18,7 @@ export const dynamic = "force-dynamic";
 export default async function RelatorioDaClinica({ params }: { params: { pedidoId: string } }) {
   const sessao = await exigirClinica();
   const pedido = await prisma.pedido.findFirst({
-    where: { id: params.pedidoId, clinicaId: sessao.clinicaId, relatorio: { is: { aprovadoEm: { not: null } } } },
+    where: { apoioDeId: null, id: params.pedidoId, clinicaId: sessao.clinicaId, relatorio: { is: { aprovadoEm: { not: null } } } },
     select: {
       numero: true,
       data: true,

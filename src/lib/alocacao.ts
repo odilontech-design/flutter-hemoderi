@@ -113,6 +113,7 @@ export async function verificarAlocacao(
     ignorarPedidoId,
     ignorarGrupoId,
     enderecoId,
+    semSala = false,
   }: {
     clinicaId: string;
     profissionalId?: string | null;
@@ -125,6 +126,8 @@ export async function verificarAlocacao(
     ignorarGrupoId?: string;
     /** Local do atendimento: a sala só conta quem está no mesmo endereço (null = endereço principal). */
     enderecoId?: string | null;
+    /** Profissional adicional (apoio): vai na sala do atendimento principal, não ocupa outra. */
+    semSala?: boolean;
   },
   bd: ClientePrisma = prisma
 ): Promise<Impedimento[]> {
@@ -152,6 +155,7 @@ export async function verificarAlocacao(
       profissionalId: true,
       equipamentoId: true,
       enderecoId: true,
+      apoioDeId: true,
     },
   });
 
@@ -185,10 +189,11 @@ export async function verificarAlocacao(
     where: { id: clinicaId },
     select: { salas: true, nome: true },
   });
+  // Profissional adicional (apoio) está na mesma sala do atendimento principal.
   const ocupacaoDaClinica = sobrepostos.filter(
-    (p) => p.clinicaId === clinicaId && (enderecoId === undefined || p.enderecoId === enderecoId)
+    (p) => !p.apoioDeId && p.clinicaId === clinicaId && (enderecoId === undefined || p.enderecoId === enderecoId)
   ).length;
-  if (clinica && ocupacaoDaClinica >= clinica.salas) {
+  if (clinica && !semSala && ocupacaoDaClinica >= clinica.salas) {
     impedimentos.push({
       tipo: "SALA",
       mensagem: `${clinica.nome} já tem ${ocupacaoDaClinica} atendimento(s) nesse horário e ${clinica.salas} sala(s).`,
@@ -300,6 +305,7 @@ export async function horariosDisponiveis({
       clinicaId: true,
       profissionalId: true,
       equipamentoId: true,
+      apoioDeId: true,
     },
   });
 
@@ -371,7 +377,7 @@ export async function horariosDisponiveis({
     if (instanteDoAtendimento(data, hora) < limite) return false;
 
     const naClinica = pedidosDoDia.filter(
-      (p) => p.clinicaId === clinicaId && haSobreposicao(alvo, intervaloDe(p.horaInicio, p.duracaoMin))
+      (p) => !p.apoioDeId && p.clinicaId === clinicaId && haSobreposicao(alvo, intervaloDe(p.horaInicio, p.duracaoMin))
     ).length;
     if (naClinica >= clinica.salas) return false;
 
@@ -462,7 +468,7 @@ export async function horariosDisponiveisConjunto({
       ...semOGrupo(ignorarGrupoId),
       OR: [{ clinicaId }, { equipamentoId: { not: null } }],
     },
-    select: { horaInicio: true, duracaoMin: true, clinicaId: true, equipamentoId: true },
+    select: { horaInicio: true, duracaoMin: true, clinicaId: true, equipamentoId: true, apoioDeId: true },
   });
 
   const expediente: Intervalo = {
@@ -505,7 +511,7 @@ export async function horariosDisponiveisConjunto({
     if (instanteDoAtendimento(data, hora) < limite) return false;
 
     const sobrepostos = pedidosDoDia.filter((p) => haSobreposicao(alvo, intervaloDe(p.horaInicio, p.duracaoMin)));
-    if (sobrepostos.filter((p) => p.clinicaId === clinicaId).length >= clinica.salas) return false;
+    if (sobrepostos.filter((p) => !p.apoioDeId && p.clinicaId === clinicaId).length >= clinica.salas) return false;
 
     return pools.every(({ equipamentos }) => {
       if (equipamentos.length === 0) return false;

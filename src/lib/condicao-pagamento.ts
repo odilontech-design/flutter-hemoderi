@@ -34,7 +34,7 @@ export function condicaoAoPagarPix(
 /** Aplica `condicaoAoPagarPix` aos pedidos do Pix recém-pago. */
 export async function preencherCondicaoPeloPix(onde: Prisma.PedidoWhereInput, pagoEm: Date): Promise<number> {
   const pedidos = await prisma.pedido.findMany({
-    where: { AND: [onde, { condicaoPagamento: null }] },
+    where: { apoioDeId: null, AND: [onde, { condicaoPagamento: null }] },
     select: { id: true, data: true, horaInicio: true },
   });
   let preenchidos = 0;

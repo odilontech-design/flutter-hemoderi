@@ -284,9 +284,10 @@ async function fecharNegocio(pedidoId: string, desfecho: "won" | "lost", motivo?
   const acao = desfecho === "won" ? "marcar-ganho" : "marcar-perdido";
   let pedido = await prisma.pedido.findUnique({
     where: { id: pedidoId },
-    select: { id: true, pipedriveNegocioId: true },
+    select: { id: true, pipedriveNegocioId: true, apoioDeId: true },
   });
-  if (!pedido) return;
+  // Profissional adicional não é venda: não tem negócio no PipeDrive.
+  if (!pedido || pedido.apoioDeId) return;
 
   // Cancelado sem negócio não cria nada (ata de 03/11): o negócio só nasce
   // na aprovação do relatório.
@@ -295,7 +296,7 @@ async function fecharNegocio(pedidoId: string, desfecho: "won" | "lost", motivo?
     await criarNegocio(pedido.id);
     pedido = await prisma.pedido.findUnique({
       where: { id: pedidoId },
-      select: { id: true, pipedriveNegocioId: true },
+      select: { id: true, pipedriveNegocioId: true, apoioDeId: true },
     });
   }
   if (!pedido) return;
@@ -388,9 +389,11 @@ export async function registrarNegocioAprovado(pedidoId: string, textoDoRelatori
       profissional: { select: { nome: true } },
       criadoPor: { select: { email: true } },
       relatorio: { select: { compareceu: true, recebimento: true, pacienteNomeInformado: true, doutorNomeInformado: true } },
+      apoioDeId: true,
     },
   });
-  if (!pedido) return;
+  // Profissional adicional não é venda: o negócio é o do atendimento principal.
+  if (!pedido || pedido.apoioDeId) return;
   if (!configurado()) {
     await registrarSincronizacao(pedido.id, "negocio-aprovado", false, undefined, "Integração não configurada.");
     return;

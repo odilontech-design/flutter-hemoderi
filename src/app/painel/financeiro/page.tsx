@@ -69,7 +69,7 @@ export default async function Financeiro({ searchParams }: { searchParams: { com
     // é essa a lista que o fechamento do mês consome.
     prisma.pedido.groupBy({
       by: ["clinicaId"],
-      where: { status: "REALIZADO", faturaId: null, data: { gte: inicio, lt: fim } },
+      where: { status: "REALIZADO", faturaId: null, apoioDeId: null, data: { gte: inicio, lt: fim } },
       _sum: { valorServicoCentavos: true },
       _count: true,
     }),

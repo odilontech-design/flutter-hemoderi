@@ -62,7 +62,7 @@ export async function gerarPesquisasNps(): Promise<{ avaliadas: number; geradas:
 
       avaliadas++;
       const atendimentosRealizados = await prisma.pedido.count({
-        where: { clinicaId: clinica.id, status: "REALIZADO", data: { gte: janelaInicio } },
+        where: { apoioDeId: null, clinicaId: clinica.id, status: "REALIZADO", data: { gte: janelaInicio } },
       });
       if (!elegivelParaPrimeiraPesquisa(atendimentosRealizados)) continue;
 
@@ -88,7 +88,7 @@ export async function gerarPesquisasNps(): Promise<{ avaliadas: number; geradas:
 
     avaliadas++;
     const atendimentosNoPeriodo = await prisma.pedido.count({
-      where: { clinicaId: clinica.id, status: "REALIZADO", data: { gte: janelaInicio, lt: janelaFim } },
+      where: { apoioDeId: null, clinicaId: clinica.id, status: "REALIZADO", data: { gte: janelaInicio, lt: janelaFim } },
     });
     if (!elegivelParaNps(atendimentosNoPeriodo)) continue;
 

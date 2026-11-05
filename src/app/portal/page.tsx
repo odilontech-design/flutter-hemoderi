@@ -21,7 +21,7 @@ export default async function MeusAgendamentos() {
 
   const [proximos, aAvaliar, aguardando] = await Promise.all([
     prisma.pedido.findMany({
-      where: { clinicaId: sessao.clinicaId, data: { gte: hoje }, status: { in: STATUS_ATIVOS } },
+      where: { apoioDeId: null, clinicaId: sessao.clinicaId, data: { gte: hoje }, status: { in: STATUS_ATIVOS } },
       orderBy: [{ data: "asc" }, { horaInicio: "asc" }],
       include: {
         servico: { select: { nome: true, duracaoMin: true } },
@@ -31,7 +31,7 @@ export default async function MeusAgendamentos() {
     // Só a contagem: a lista de avaliações pendentes mora em Histórico e
     // avaliações (ata de 05/10). Aqui fica o aviso de que existe.
     prisma.pedido.count({
-      where: { clinicaId: sessao.clinicaId, status: "REALIZADO", profissionalId: { not: null }, avaliacao: { is: null } },
+      where: { apoioDeId: null, clinicaId: sessao.clinicaId, status: "REALIZADO", profissionalId: { not: null }, avaliacao: { is: null } },
     }),
     // O que a clínica pediu pelo site e a equipe ainda não triou. Sem isto o
     // pedido feito no site sumia até alguém do outro lado vinculá-lo, e quem

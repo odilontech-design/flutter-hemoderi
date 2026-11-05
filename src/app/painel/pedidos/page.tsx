@@ -29,7 +29,8 @@ import { perfilPermite } from "@/lib/papeis";
 import { AgendaDaEquipe } from "@/components/AgendaDaEquipe";
 import { agendaDaEquipe } from "@/lib/integracoes/google-api";
 import { BotaoAcao } from "@/components/BotaoAcao";
-import { enviarAvisoAoProfissional, enviarConfirmacoesWhatsapp, enviarPelaCentral, enviarResumoWhatsapp } from "@/app/actions/pedidos";
+import { enviarPelaCentral } from "@/app/actions/pedidos";
+import { BotoesWhatsapp } from "./BotoesWhatsapp";
 import { eventoParaEquipe } from "@/lib/evento-equipe";
 import { condicaoValida } from "@/lib/pagamento";
 
@@ -97,6 +98,9 @@ export default async function Esteira({
         servico: { select: { nome: true, familia: true } },
         profissional: { select: { nome: true, telefone: true } },
         relatorio: { include: INCLUIR_ADICIONAIS },
+        // Profissionais adicionais (Joyce, 05/11).
+        apoios: { where: { status: { not: "CANCELADO" } }, orderBy: { numero: "asc" }, select: { id: true, profissional: { select: { nome: true } } } },
+        apoioDe: { select: { id: true, numero: true, data: true } },
       },
     }),
     prisma.profissional.findMany({
@@ -308,7 +312,7 @@ export default async function Esteira({
             return (
             <Cartao key={pedido.id} className="!p-4 relative group">
               {/* Editar o agendamento ao passar o mouse no cartão (27/10). */}
-              {podeEditarAgendamento && STATUS_EDITAVEIS.includes(pedido.status) && (
+              {podeEditarAgendamento && !pedido.apoioDeId && STATUS_EDITAVEIS.includes(pedido.status) && (
                 <Link href={`/painel/pedidos/${pedido.id}?editar=1`} className="absolute -top-3 right-4 z-10 text-[11px] font-semibold text-bordo bg-white border border-bordo/30 rounded-lg px-2.5 py-1 shadow-sm sm:opacity-0 sm:group-hover:opacity-100 focus:opacity-100 transition-opacity">
                   ✏️ Editar agendamento
                 </Link>
@@ -327,6 +331,23 @@ export default async function Esteira({
                       {codigoDoPedido(pedido.numero, pedido.clinica.nome, pedido.data)}
                     </Link>
                     <SeloStatus status={pedido.status} />
+                    {pedido.apoioDe && (
+                      <Link
+                        href={`/painel/pedidos/${pedido.apoioDe.id}#equipe`}
+                        className="text-[9px] font-semibold uppercase tracking-wide text-indigo-700 bg-indigo-50 rounded-full px-1.5 py-0.5 hover:underline"
+                      >
+                        profissional adicional de {codigoDoPedido(pedido.apoioDe.numero, pedido.clinica.nome, pedido.apoioDe.data)}
+                      </Link>
+                    )}
+                    {pedido.apoios.length > 0 && (
+                      <Link
+                        href={`/painel/pedidos/${pedido.id}#equipe`}
+                        className="text-[9px] font-semibold uppercase tracking-wide text-indigo-700 bg-indigo-50 rounded-full px-1.5 py-0.5 hover:underline"
+                        title={pedido.apoios.map((a) => a.profissional?.nome ?? "sem profissional").join(", ")}
+                      >
+                        +{pedido.apoios.length} profissional(is)
+                      </Link>
+                    )}
                     {pedido.origem === "PORTAL_CLINICA" && (
                       <span className="text-[9px] uppercase tracking-wide text-gray-400">portal</span>
                     )}
@@ -527,31 +548,15 @@ export default async function Esteira({
                       <div className="text-red-700/80 mt-0.5">Volta para a conferência quando ele reenviar.</div>
                     </div>
                   )}
-                  {/* Confirmação sob demanda pelo Dilon Zap (reunião de 27/10). */}
-                  {(pedido.status === "CONFIRMADO" || pedido.status === "ALOCADO") && (
-                    <div className="mt-1 flex flex-wrap gap-2">
-                      <BotaoAcao tela
-                        acao={enviarConfirmacoesWhatsapp.bind(null, pedido.id)}
-                        confirmar="Enviar o texto curto de confirmação pelo WhatsApp para a clínica (e o aviso ao profissional, se já alocado)?"
-                      >
-                        Enviar confirmação curta
-                      </BotaoAcao>
-                      <BotaoAcao tela
-                        acao={enviarResumoWhatsapp.bind(null, pedido.id)}
-                        confirmar="Enviar o resumo detalhado (data, horário, endereço, clínica, doutor e profissional) para a clínica?"
-                      >
-                        Enviar resumo detalhado
-                      </BotaoAcao>
-                      {pedido.status === "ALOCADO" && (
-                        <BotaoAcao tela
-                acao={enviarAvisoAoProfissional.bind(null, pedido.id)}
-                confirmar="Enviar o aviso de alocação ao profissional pelo WhatsApp?"
-              >
-                Enviar aviso ao profissional
-              </BotaoAcao>
-                      )}
-                    </div>
-                  )}
+                  {/* WhatsApp com o destinatário no botão (Joyce, 05/11). */}
+                  <BotoesWhatsapp
+                    pedidoId={pedido.id}
+                    status={pedido.status}
+                    clinicaNome={pedido.clinica.nome}
+                    telefoneClinica={pedido.contatoClinica || pedido.clinica.telefone}
+                    profissional={pedido.profissional}
+                    apoio={Boolean(pedido.apoioDeId)}
+                  />
                   {/* Passou do dia e o relatório não veio (revisão de 25/10):
                       a central cobra o profissional — pelo Dilon Zap (27/10). */}
                   {pedido.status === "ALOCADO" && !pedido.relatorio && pedido.data.getTime() < hojeUTC().getTime() && (
@@ -602,6 +607,24 @@ export default async function Esteira({
 
               </div>
 
+              {pedido.apoioDeId ? (
+                // O profissional adicional segue o principal: aloca-se, troca-se e
+                // retira-se na equipe do atendimento.
+                <Link
+                  href={`/painel/pedidos/${pedido.apoioDeId}#equipe`}
+                  className="mt-2 inline-block text-[11px] font-semibold text-bordo hover:underline"
+                >
+                  {pedido.profissionalId ? "Trocar ou retirar" : "Alocar"} na equipe do atendimento →
+                </Link>
+              ) : (
+                <>
+                {["SOLICITADO", "CONFIRMADO", "ALOCADO"].includes(pedido.status) && perfilPermite(sessao.perfil, "LOGISTICA") && (
+                  <div className="mb-2">
+                    <Link href={`/painel/pedidos/${pedido.id}#equipe`} className="text-[11px] font-semibold text-indigo-700 hover:underline">
+                      + Mais um profissional neste atendimento
+                    </Link>
+                  </div>
+                )}
               <AcoesPedido
                 pedidoId={pedido.id}
                 status={pedido.status}
@@ -624,6 +647,8 @@ export default async function Esteira({
                 ajudaCustoCentavos={pedido.ajudaCustoCentavos}
                 mostrarAjudaDeCusto={!telaDeAlocados}
               />
+                </>
+              )}
             </Cartao>
             );
           })}

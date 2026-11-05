@@ -8,7 +8,9 @@ import { comEnderecoDoPedido, locaisDaClinica, resumoDoEndereco } from "@/lib/en
 import { AgendaDaEquipe } from "@/components/AgendaDaEquipe";
 import { agendaDaEquipe } from "@/lib/integracoes/google-api";
 import { BotaoAcao } from "@/components/BotaoAcao";
-import { enviarAvisoAoProfissional, enviarConfirmacoesWhatsapp, enviarResumoWhatsapp } from "@/app/actions/pedidos";
+import { BotoesWhatsapp } from "../BotoesWhatsapp";
+import { EquipeDoAtendimento, type LinhaDaEquipe } from "../EquipeDoAtendimento";
+import { aptoParaServico } from "@/lib/aptidao";
 import { eventoParaEquipe } from "@/lib/evento-equipe";
 import { agruparPorFamilia } from "@/lib/familia";
 import { isoDeData } from "@/lib/data";
@@ -49,10 +51,10 @@ export default async function DetalheDoPedido({
   const pedido = await prisma.pedido.findUnique({
     where: { id: params.pedidoId },
     include: {
-      clinica: { select: { nome: true, endereco: true, numero: true, complemento: true, bairro: true, cidade: true, uf: true } },
+      clinica: { select: { nome: true, telefone: true, endereco: true, numero: true, complemento: true, bairro: true, cidade: true, uf: true } },
       servico: { select: { nome: true } },
       endereco: { select: { rotulo: true, endereco: true, numero: true, complemento: true, bairro: true, cidade: true, uf: true, observacoes: true } },
-      profissional: { select: { nome: true } },
+      profissional: { select: { nome: true, telefone: true } },
       relatorio: { include: INCLUIR_ADICIONAIS },
       avaliacao: { select: { nota: true, comentario: true, pontosPositivos: true, pontosNegativos: true, sugestoes: true } },
     },
@@ -63,9 +65,10 @@ export default async function DetalheDoPedido({
 
   // Edição do resumo (ata de 02/10): só para quem atende o telefone e só
   // enquanto o atendimento ainda está de pé.
-  const podeEditar = perfilPermite(sessao.perfil, "COMERCIAL", "ATENDENTE", "POS_VENDA", "LOGISTICA") && STATUS_ATIVOS.includes(pedido.status);
+  // Profissional adicional segue o atendimento principal: edita-se o principal.
+  const podeEditar = !pedido.apoioDeId && perfilPermite(sessao.perfil, "COMERCIAL", "ATENDENTE", "POS_VENDA", "LOGISTICA") && STATUS_ATIVOS.includes(pedido.status);
   // A logística só corrige o local (ata de 27/10); o resto é do comercial.
-  const podeAlterarLocal = !podeEditar && perfilPermite(sessao.perfil, "LOGISTICA") && STATUS_ATIVOS.includes(pedido.status);
+  const podeAlterarLocal = !pedido.apoioDeId && !podeEditar && perfilPermite(sessao.perfil, "LOGISTICA") && STATUS_ATIVOS.includes(pedido.status);
   const [servicosDoCatalogo, locais] = podeEditar || podeAlterarLocal
     ? await Promise.all([
         prisma.servico.findMany({
@@ -86,6 +89,44 @@ export default async function DetalheDoPedido({
     : [];
   const gruposDeServicos = agruparPorFamilia(servicosDoCatalogo, { fundirSolitarias: false, ordemDoCatalogo: true });
 
+  // A equipe do atendimento: o principal e os profissionais adicionais (apoios).
+  const principal = await prisma.pedido.findUniqueOrThrow({
+    where: { id: pedido.apoioDeId ?? pedido.id },
+    select: {
+      id: true,
+      numero: true,
+      data: true,
+      status: true,
+      servicoId: true,
+      clinica: { select: { nome: true } },
+      profissional: { select: { id: true, nome: true } },
+      apoios: {
+        where: { status: { not: "CANCELADO" } },
+        orderBy: { numero: "asc" },
+        select: { id: true, numero: true, data: true, status: true, profissional: { select: { id: true, nome: true } } },
+      },
+    },
+  });
+  const linhasDaEquipe: LinhaDaEquipe[] = [
+    { id: principal.id, codigo: codigoDoPedido(principal.numero, principal.clinica.nome, principal.data), status: principal.status, apoio: false, profissional: principal.profissional },
+    ...principal.apoios.map((a) => ({
+      id: a.id,
+      codigo: codigoDoPedido(a.numero, principal.clinica.nome, a.data),
+      status: a.status,
+      apoio: true,
+      profissional: a.profissional,
+    })),
+  ];
+  const profissionaisAptos = (
+    await prisma.profissional.findMany({
+      where: { ativo: true },
+      orderBy: { nome: "asc" },
+      select: { id: true, nome: true, servicosAptos: { select: { id: true } } },
+    })
+  )
+    .filter((p) => aptoParaServico(p.servicosAptos.map((x) => x.id), principal.servicoId))
+    .map(({ id, nome }) => ({ id, nome }));
+
   return (
     <>
       <Titulo
@@ -101,36 +142,29 @@ export default async function DetalheDoPedido({
       <Cartao className="mb-3">
         <div className="flex flex-wrap items-center gap-2 mb-3">
           <SeloStatus status={pedido.status} />
+          {pedido.apoioDeId && (
+            <Link href={`/painel/pedidos/${pedido.apoioDeId}`} className="text-[10px] font-semibold uppercase tracking-wide text-indigo-700 bg-indigo-50 rounded-full px-2 py-0.5 hover:underline">
+              profissional adicional · ver atendimento principal
+            </Link>
+          )}
           {pedido.modalidade === "CURSO" && (
             <span className="text-[10px] font-semibold uppercase tracking-wide text-bordo bg-bordo/10 rounded-full px-2 py-0.5">Curso</span>
           )}
           {pedido.origem === "PORTAL_CLINICA" && (
             <span className="text-[10px] uppercase tracking-wide text-gray-400">veio do portal</span>
           )}
-          {(pedido.status === "CONFIRMADO" || pedido.status === "ALOCADO") && (
-            <>
-              <BotaoAcao tela
-                acao={enviarConfirmacoesWhatsapp.bind(null, pedido.id)}
-                confirmar="Enviar o texto curto de confirmação pelo WhatsApp para a clínica (e o aviso ao profissional, se já alocado)?"
-              >
-                Enviar confirmação curta
-              </BotaoAcao>
-              <BotaoAcao tela
-                acao={enviarResumoWhatsapp.bind(null, pedido.id)}
-                confirmar="Enviar o resumo detalhado (data, horário, endereço, clínica, doutor e profissional) para a clínica?"
-              >
-                Enviar resumo detalhado
-              </BotaoAcao>
-              {pedido.status === "ALOCADO" && (
-                <BotaoAcao tela
-                acao={enviarAvisoAoProfissional.bind(null, pedido.id)}
-                confirmar="Enviar o aviso de alocação ao profissional pelo WhatsApp?"
-              >
-                Enviar aviso ao profissional
-              </BotaoAcao>
-              )}
-            </>
-          )}
+        </div>
+        <div className="mb-3">
+          <BotoesWhatsapp
+            pedidoId={pedido.id}
+            status={pedido.status}
+            clinicaNome={pedido.clinica.nome}
+            telefoneClinica={pedido.contatoClinica || pedido.clinica.telefone}
+            profissional={pedido.profissional}
+            apoio={Boolean(pedido.apoioDeId)}
+          />
+        </div>
+        <div className="flex flex-wrap items-center gap-2 mb-3">
           {/* Alocado, vai para a agenda de quem acompanha (pedido do André, 26/10). */}
           {pedido.status === "ALOCADO" && (
             <span className="ml-auto">
@@ -259,6 +293,22 @@ export default async function DetalheDoPedido({
       )}
 
       {/* A visita inteira, quando tem mais de um serviço (reunião de 27/10). */}
+      {/* Profissionais do atendimento (Joyce, 05/11): alocar, trocar e
+          adicionar mais de um profissional, também aqui na edição. */}
+      <Cartao className="mb-3" id="equipe">
+        <div className="font-display font-bold text-bordo text-sm mb-1">Profissionais do atendimento</div>
+        <div className="text-[11px] text-gray-500 mb-3">
+          Precisa de mais de uma pessoa? Adicione aqui: cada profissional recebe o próprio aviso, faz o check-in e o
+          relatório e tem o próprio repasse. A clínica não é cobrada a mais.
+        </div>
+        <EquipeDoAtendimento
+          principalId={principal.id}
+          linhas={linhasDaEquipe}
+          profissionais={profissionaisAptos}
+          podeAlocar={perfilPermite(sessao.perfil, "LOGISTICA")}
+        />
+      </Cartao>
+
       {podeEditar && visita.length > 1 && (
         <EditarVisita
           clinicaId={pedido.clinicaId}

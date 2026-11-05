@@ -1,6 +1,7 @@
 "use server";
 
 import { avisarProfissionaisAfetados, fotografar, ondeDaVisita } from "@/lib/aviso-profissional";
+import { sincronizarApoios } from "@/lib/apoio";
 import { condicaoInicial } from "@/lib/condicao-pagamento";
 import { revalidatePath } from "next/cache";
 import type { Prisma, StatusPedido } from "@prisma/client";
@@ -554,6 +555,8 @@ type PedidoParaAlocar = {
   horaInicio: string;
   duracaoMin: number;
   valorServicoCentavos: number;
+  /** Profissional adicional: vai na sala e com o equipamento do principal. */
+  apoioDeId?: string | null;
   servico: {
     id: string;
     duracaoMin: number;
@@ -614,6 +617,7 @@ async function alocarNaTransacao(
       duracaoMin: pedido.duracaoMin,
       ignorarPedidoId: pedido.id,
       enderecoId: pedido.enderecoId,
+      semSala: Boolean(pedido.apoioDeId),
     },
     tx
   );
@@ -624,7 +628,8 @@ async function alocarNaTransacao(
     };
   }
 
-  const reservaEquipamento = pedido.servico.exigeEquipamento && !pedido.servico.equipamentoIlimitado;
+  // O profissional adicional usa o equipamento do atendimento principal.
+  const reservaEquipamento = !pedido.apoioDeId && pedido.servico.exigeEquipamento && !pedido.servico.equipamentoIlimitado;
   const equipamentoId = reservaEquipamento
     ? await equipamentoLivre(
         pedido.data,
@@ -642,7 +647,12 @@ async function alocarNaTransacao(
       ? ["Nenhum equipamento livre nesse horário — profissional alocado sem reservar equipamento. Confira o estoque."]
       : [];
 
-  const repasse = await repasseDoPedido(profissionalId, pedido.servicoId, pedido.valorServicoCentavos, {
+  // O apoio não é cobrado (valor zero): o percentual do repasse incide sobre o
+  // valor do atendimento principal.
+  const base = pedido.apoioDeId
+    ? ((await tx.pedido.findUnique({ where: { id: pedido.apoioDeId }, select: { valorServicoCentavos: true } }))?.valorServicoCentavos ?? 0)
+    : pedido.valorServicoCentavos;
+  const repasse = await repasseDoPedido(profissionalId, pedido.servicoId, base, {
     clinicaId: pedido.clinicaId,
     enderecoId: pedido.enderecoId,
   });
@@ -2015,18 +2025,12 @@ export async function enviarConfirmacoesWhatsapp(pedidoId: string): Promise<Resu
     return { ok: false, erro: "Só se envia confirmação de agendamento confirmado ou alocado." };
   }
 
+  // Só a clínica (pedido da Joyce, 05/11): cada destinatário tem o seu botão,
+  // e o do profissional é "Profissional: aviso de alocação".
   const clinica = await reenviarMensagem(pedido.id, "CONFIRMACAO");
-  const profissional = pedido.profissionalId ? await reenviarMensagem(pedido.id, "ALOCACAO") : null;
-
-  const partes = [
-    clinica.ok ? "clínica: enviada" : `clínica: ${clinica.erro}`,
-    profissional === null ? "profissional: ainda sem alocação" : profissional.ok ? "profissional: enviada" : `profissional: ${profissional.erro}`,
-  ];
-  await registrarAuditoria(sessao.usuarioId, "Pedido", pedido.id, "enviar-confirmacao-whatsapp", partes.join(" · "));
+  await registrarAuditoria(sessao.usuarioId, "Pedido", pedido.id, "enviar-confirmacao-whatsapp", clinica.ok ? "clínica: enviada" : `clínica: ${clinica.erro}`);
   revalidatePath("/painel/integracoes");
-
-  const algumaFoi = clinica.ok || profissional?.ok;
-  return algumaFoi ? { ok: true, avisos: [partes.join(" · ")] } : { ok: false, erro: partes.join(" · ") };
+  return clinica.ok ? { ok: true, avisos: [`Confirmação curta enviada para a clínica (${clinica.destinatario}).`] } : { ok: false, erro: clinica.erro };
 }
 
 /**
@@ -2310,9 +2314,14 @@ export async function enviarPelaCentral(
 // a quem saiu do caso ou teve o horário mudado (lib/aviso-profissional.ts).
 
 async function comAvisoAoProfissional(onde: Prisma.PedidoWhereInput, acao: () => Promise<Resultado>): Promise<Resultado> {
-  const antes = await fotografar(onde);
+  // Os profissionais adicionais (apoios) do atendimento entram na foto: o que
+  // muda no principal muda neles também, e eles também são avisados.
+  const antes = await fotografar({ OR: [onde, { apoioDe: { is: onde } }] });
   const resultado = await acao();
-  if (resultado.ok) await avisarProfissionaisAfetados(antes);
+  if (resultado.ok) {
+    await sincronizarApoios(antes.map((f) => f.id));
+    await avisarProfissionaisAfetados(antes);
+  }
   return resultado;
 }
 

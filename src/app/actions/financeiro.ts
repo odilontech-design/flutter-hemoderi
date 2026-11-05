@@ -34,6 +34,8 @@ export async function fecharFatura(clinicaId: string, competencia: string): Prom
   const pedidos = await prisma.pedido.findMany({
     where: {
       clinicaId,
+      // Profissional adicional não é cobrado: não entra na fatura da clínica.
+      apoioDeId: null,
       status: "REALIZADO",
       faturaId: null,
       data: {
