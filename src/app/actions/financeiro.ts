@@ -245,7 +245,15 @@ export async function devolverRelatorio(pedidoId: string, motivo: string): Promi
   return { ok: true };
 }
 
-export async function aprovarRelatorio(pedidoId: string): Promise<Resultado> {
+/**
+ * `completarConferencia`: quem clica em "Aprovar" na tela de conferência só
+ * consegue com as três caixas marcadas, então o clique já diz que serviço,
+ * valor e ajuda de custo conferem. Se o servidor ainda não tem alguma dessas
+ * marcas (a caixa aparecia marcada sem ter gravado — o que travou uma
+ * aprovação em 05/11), grava agora, no rastro como "ao aprovar", em vez de
+ * recusar uma aprovação que a pessoa fez com tudo à vista.
+ */
+export async function aprovarRelatorio(pedidoId: string, completarConferencia = false): Promise<Resultado> {
   const sessao = await exigirInterno();
   if (!perfilPermite(sessao.perfil, "POS_VENDA")) {
     return { ok: false, erro: "Só o pós-venda aprova relatório." };
@@ -275,7 +283,16 @@ export async function aprovarRelatorio(pedidoId: string): Promise<Resultado> {
   const pendentes = (Object.keys(ITENS_VALIDACAO) as ItemValidacao[]).filter(
     (item) => relatorio[ITENS_VALIDACAO[item].campo] == null
   );
-  if (pendentes.length > 0) {
+  if (pendentes.length > 0 && completarConferencia === true) {
+    const agora = new Date();
+    await prisma.relatorioAtendimento.update({
+      where: { id: relatorio.id },
+      data: Object.fromEntries(pendentes.map((item) => [ITENS_VALIDACAO[item].campo, agora])),
+    });
+    for (const item of pendentes) {
+      await registrarAuditoria(sessao.usuarioId, "Pedido", pedidoId, "conferir", `${ITENS_VALIDACAO[item].rotulo} (ao aprovar)`);
+    }
+  } else if (pendentes.length > 0) {
     const nomes = pendentes.map((item) => ITENS_VALIDACAO[item].rotulo).join(", ");
     return { ok: false, erro: `Falta conferir: ${nomes}.` };
   }
@@ -301,6 +318,8 @@ export async function aprovarRelatorio(pedidoId: string): Promise<Resultado> {
   await registrarNegocioAprovado(pedidoId, await textoDoRelatorioDoPedido(pedidoId));
 
   revalidatePath("/painel/financeiro");
+  revalidatePath("/painel/pedidos");
+  revalidatePath(`/painel/pedidos/${pedidoId}`);
   revalidatePath("/profissional/ganhos");
   return { ok: true };
 }

@@ -567,6 +567,9 @@ export default async function Esteira({
                     !pedido.relatorio.devolvidoEm &&
                     perfilPermite(sessao.perfil, "POS_VENDA") && (
                       <ConferenciaRelatorio
+                        // Recria o componente quando o que está gravado muda: a
+                        // caixa mostra sempre o estado do servidor.
+                        key={`${pedido.id}-${Number(pedido.relatorio.servicoValidadoEm != null)}${Number(pedido.relatorio.valorValidadoEm != null)}${Number(pedido.relatorio.ajudaCustoValidadaEm != null)}`}
                         pedidoId={pedido.id}
                         servicoValidado={pedido.relatorio.servicoValidadoEm != null}
                         valorValidado={pedido.relatorio.valorValidadoEm != null}

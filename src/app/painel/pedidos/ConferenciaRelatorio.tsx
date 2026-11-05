@@ -69,6 +69,10 @@ export function ConferenciaRelatorio({
                   } else avisarSalvo();
                 });
               }}
+              // Sem isso o Chrome devolve caixas marcadas, por posição, depois de
+              // recarregar a página — e o cartão do pedido seguinte aparecia
+              // "conferido" sem ninguém ter conferido.
+              autoComplete="off"
               className="accent-bordo w-4 h-4"
             />
             <span className={marcados[item.chave] ? "text-gray-700" : "text-gray-500"}>{item.rotulo}</span>
@@ -82,7 +86,7 @@ export function ConferenciaRelatorio({
           onClick={() => {
             setErro("");
             iniciar(async () => {
-              const resultado = await aprovarRelatorio(pedidoId);
+              const resultado = await aprovarRelatorio(pedidoId, true);
               if (!resultado.ok) setErro(resultado.erro ?? "Não foi possível aprovar.");
               else avisarSalvo();
             });
