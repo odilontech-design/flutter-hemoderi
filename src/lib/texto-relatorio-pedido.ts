@@ -42,7 +42,7 @@ export async function textoDoRelatorioDoPedido(pedidoId: string): Promise<string
     endereco: r.enderecoInformado ?? enderecoEmUmaLinha(comEnderecoDoPedido(pedido.clinica, pedido.endereco)),
     doutor: r.doutorNomeInformado ?? pedido.doutorNome,
     paciente: r.pacienteNomeInformado ?? pedido.pacienteNome,
-    procedimento: pedido.procedimentoPaciente,
+    procedimento: r.procedimentoInformado ?? pedido.procedimentoPaciente,
     valor: (pedido.valorServicoCentavos / 100).toFixed(2).replace(".", ","),
     formaDoCliente: pedido.formaPagamento,
     servico: r.servicoRealizado?.nome ?? pedido.servico.nome,

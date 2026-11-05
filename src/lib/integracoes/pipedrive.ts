@@ -410,7 +410,7 @@ export async function registrarNegocioAprovado(pedidoId: string, textoDoRelatori
       clinica: { select: { nome: true } },
       profissional: { select: { nome: true } },
       criadoPor: { select: { email: true } },
-      relatorio: { select: { compareceu: true, recebimento: true, pacienteNomeInformado: true, doutorNomeInformado: true } },
+      relatorio: { select: { compareceu: true, recebimento: true, pacienteNomeInformado: true, doutorNomeInformado: true, procedimentoInformado: true } },
       apoioDeId: true,
     },
   });
@@ -435,7 +435,7 @@ export async function registrarNegocioAprovado(pedidoId: string, textoDoRelatori
     [process.env.PIPEDRIVE_CAMPO_NUMERO_PEDIDO, String(pedido.numero)],
     [process.env.PIPEDRIVE_CAMPO_PACIENTE, pedido.relatorio?.pacienteNomeInformado ?? pedido.pacienteNome],
     [process.env.PIPEDRIVE_CAMPO_PROFISSIONAL, pedido.profissional?.nome],
-    [process.env.PIPEDRIVE_CAMPO_PROCEDIMENTO, pedido.procedimentoPaciente],
+    [process.env.PIPEDRIVE_CAMPO_PROCEDIMENTO, pedido.relatorio?.procedimentoInformado ?? pedido.procedimentoPaciente],
     [process.env.PIPEDRIVE_CAMPO_FORMA_PAGAMENTO, pedido.formaPagamento],
     [
       process.env.PIPEDRIVE_CAMPO_STATUS_PAGAMENTO_PROFISSIONAL,

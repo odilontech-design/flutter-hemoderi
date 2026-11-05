@@ -104,6 +104,11 @@ export const CAMPOS_AGENDAMENTO = [
     rotulo: "Nome do paciente",
     ajuda: "Preencha ou corrija o nome do paciente atendido.",
   },
+  {
+    nome: "procedimentoInformado",
+    rotulo: "Procedimento realizado no paciente",
+    ajuda: "Escolha na lista ou escreva o procedimento que o doutor fez no paciente (ex.: Implante dentário).",
+  },
 ] as const;
 
 export type CampoAgendamento = (typeof CAMPOS_AGENDAMENTO)[number]["nome"];

@@ -75,7 +75,7 @@ export default async function Relatorio({
         endereco: revelado ? enviado.enderecoInformado ?? enderecoEmUmaLinha(comEnderecoDoPedido(pedido.clinica, pedido.endereco)) : null,
         doutor: enviado.doutorNomeInformado ?? pedido.doutorNome,
         paciente: enviado.pacienteNomeInformado ?? pedido.pacienteNome,
-        procedimento: pedido.procedimentoPaciente,
+        procedimento: enviado.procedimentoInformado ?? pedido.procedimentoPaciente,
         valor: (pedido.valorServicoCentavos / 100).toFixed(2).replace(".", ","),
         formaDoCliente: pedido.formaPagamento,
         servico: enviado.servicoRealizado?.nome ?? pedido.servico.nome,
@@ -172,6 +172,7 @@ export default async function Relatorio({
     enderecoInformado: r?.enderecoInformado ?? enderecoEmUmaLinha(comEnderecoDoPedido(pedido.clinica, pedido.endereco)),
     doutorNomeInformado: r?.doutorNomeInformado ?? pedido.doutorNome ?? "",
     pacienteNomeInformado: r?.pacienteNomeInformado ?? pedido.pacienteNome ?? "",
+    procedimentoInformado: r?.procedimentoInformado ?? pedido.procedimentoPaciente ?? "",
   };
 
   return (
@@ -243,7 +244,7 @@ export default async function Relatorio({
               Este relatório já foi conferido pela central e o valor do profissional está liberado. Para corrigir
               alguma coisa, fale com a central.
             </Aviso>
-            {enviado && <RelatorioPreenchido relatorio={enviado} />}
+            {enviado && <RelatorioPreenchido relatorio={enviado} procedimentoAgendado={pedido.procedimentoPaciente} />}
           </div>
         ) : (
           <FormularioRelatorio

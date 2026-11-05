@@ -26,8 +26,11 @@ export type RelatorioCompleto = Prisma.RelatorioAtendimentoGetPayload<{ include:
 export function RelatorioPreenchido({
   relatorio,
   paraClinica = false,
+  procedimentoAgendado = null,
 }: {
   relatorio: RelatorioCompleto;
+  /** O procedimento que estava no agendamento; vale quando o profissional não corrigiu. */
+  procedimentoAgendado?: string | null;
   /**
    * A cópia que a clínica vê no portal (ata de 20/10): o atendimento como foi
    * feito, sem o que é da operação — ajuda de custo, o que o profissional
@@ -37,6 +40,7 @@ export function RelatorioPreenchido({
 }) {
   const temCorrecoes =
     relatorio.clinicaNomeInformado || relatorio.enderecoInformado || relatorio.doutorNomeInformado || relatorio.pacienteNomeInformado;
+  const procedimento = relatorio.procedimentoInformado ?? procedimentoAgendado;
 
   return (
     <div className="space-y-4">
@@ -50,6 +54,15 @@ export function RelatorioPreenchido({
             <div className="text-gray-400">Horário real</div>
             <div className="text-gray-700">
               {relatorio.inicioReal ?? "—"} até {relatorio.fimReal ?? "—"}
+            </div>
+          </div>
+        )}
+        {relatorio.compareceu && (
+          <div className="sm:col-span-2">
+            <div className="text-gray-400">Procedimento realizado no paciente</div>
+            <div className={relatorio.procedimentoInformado ? "text-amber-800 font-semibold" : "text-gray-700"}>
+              {procedimento || "não informado"}
+              {relatorio.procedimentoInformado && <span className="font-normal text-gray-500"> — diferente do agendado</span>}
             </div>
           </div>
         )}

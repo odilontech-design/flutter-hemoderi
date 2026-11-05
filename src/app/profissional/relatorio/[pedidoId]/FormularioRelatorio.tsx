@@ -8,6 +8,7 @@ import { enviarRelatorio } from "@/app/actions/relatorio";
 import type { Resultado } from "@/app/actions/pedidos";
 import { obterLocalizacao } from "@/lib/geolocalizacao";
 import { CAMPOS_AGENDAMENTO, CAMPOS_CLINICOS, NAO_SE_APLICA } from "@/lib/relatorio";
+import { PROCEDIMENTOS_NO_PACIENTE } from "@/lib/procedimentos";
 import { FORMAS_RECEBIMENTO, SITUACOES_RECEBIMENTO } from "@/lib/recebimento";
 import { reduzirImagem } from "@/lib/reduzir-imagem";
 import { AnexosDoRelatorio, type AnexoGuardado } from "./AnexosDoRelatorio";
@@ -492,10 +493,20 @@ export function FormularioRelatorio({
           Confira os dados do atendimento. Se algo saiu diferente do agendado, corrija aqui — a
           central confere depois.
         </div>
+        {/* Sugestões do procedimento no paciente: escolhe da lista ou escreve outro. */}
+        <datalist id="lista-procedimentos">
+          {PROCEDIMENTOS_NO_PACIENTE.map((p) => (
+            <option key={p} value={p} />
+          ))}
+        </datalist>
         {CAMPOS_AGENDAMENTO.map((campo) => (
           <div key={campo.nome}>
             <Rotulo>{campo.rotulo}</Rotulo>
-            <Campo name={campo.nome} defaultValue={valores[campo.nome] ?? ""} />
+            <Campo
+              name={campo.nome}
+              defaultValue={valores[campo.nome] ?? ""}
+              {...(campo.nome === "procedimentoInformado" ? { list: "lista-procedimentos", maxLength: 150, autoComplete: "off" } : {})}
+            />
             <div className="text-[10px] text-gray-400 mt-1">{campo.ajuda}</div>
           </div>
         ))}

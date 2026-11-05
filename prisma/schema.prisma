@@ -1237,6 +1237,10 @@ model RelatorioAtendimento {
   enderecoInformado    String?
   doutorNomeInformado  String?
   pacienteNomeInformado String?
+  /// O procedimento que de fato foi feito NO PACIENTE (pedido do André, 05/11):
+  /// chega preenchido com o agendado e o profissional confirma ou corrige. Nulo
+  /// = saiu como estava no agendamento (Pedido.procedimentoPaciente).
+  procedimentoInformado String?
 
   /// Deslocamento. Não é tabelado: a régua é até 150km, mas varia por
   /// quilometragem excedente e por tipo de transporte (moto x carro), então

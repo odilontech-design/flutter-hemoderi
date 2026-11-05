@@ -537,7 +537,7 @@ export default async function Esteira({
                         Relatório preenchido pelo profissional
                       </summary>
                       <div className="px-3 pb-3 pt-1">
-                        <RelatorioPreenchido relatorio={pedido.relatorio} />
+                        <RelatorioPreenchido relatorio={pedido.relatorio} procedimentoAgendado={pedido.procedimentoPaciente} />
                       </div>
                     </details>
                   )}

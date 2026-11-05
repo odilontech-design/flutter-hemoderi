@@ -49,6 +49,7 @@ export async function enviarRelatorio(_anterior: Resultado, dados: FormData): Pr
       servicoId: true,
       doutorNome: true,
       pacienteNome: true,
+      procedimentoPaciente: true,
       clinica: { select: { nome: true, endereco: true, numero: true, bairro: true, cidade: true, uf: true } },
       endereco: { select: { endereco: true, numero: true, bairro: true, cidade: true, uf: true } },
       relatorio: { select: { aprovadoEm: true, comprovante: { select: { id: true } }, anexos: { select: { id: true } } } },
@@ -187,7 +188,14 @@ export async function enviarRelatorio(_anterior: Resultado, dados: FormData): Pr
   const clinicaNome = String(dados.get("clinicaNomeInformado") ?? "").trim();
   const endereco = String(dados.get("enderecoInformado") ?? "").trim();
   const doutor = String(dados.get("doutorNomeInformado") ?? "").trim();
-  const paciente = String(dados.get("pacienteNomeInformado") ?? "").trim();
+  const paciente = String(dados.get("pacienteNomeInformado") ?? "").trim().slice(0, 200);
+  const procedimento = String(dados.get("procedimentoInformado") ?? "").trim().slice(0, 150);
+  // O procedimento realizado no paciente é obrigatório quando houve
+  // atendimento (pedido do André, 05/11): sem ele, nem o agendado nem o
+  // informado, a equipe não sabe o que foi feito.
+  if (compareceu && !procedimento && !pedido.procedimentoPaciente?.trim()) {
+    return { ok: false, erro: "Informe o procedimento realizado no paciente." };
+  }
   // Nome e sobrenome do doutor (ata de 13/10) — só quando houve atendimento:
   // numa falta, quem recebe não chegou a existir.
   if (compareceu && !temNomeESobrenome(doutor)) {
@@ -202,6 +210,7 @@ export async function enviarRelatorio(_anterior: Resultado, dados: FormData): Pr
     enderecoInformado: divergiu(enderecoEmUmaLinha(comEnderecoDoPedido(pedido.clinica, pedido.endereco)), endereco) ? endereco : null,
     doutorNomeInformado: divergiu(pedido.doutorNome, doutor) ? doutor : null,
     pacienteNomeInformado: divergiu(pedido.pacienteNome, paciente) ? paciente : null,
+    procedimentoInformado: divergiu(pedido.procedimentoPaciente, procedimento) ? procedimento : null,
   };
 
   const mandic = await pedeOrcamentoEPg(prisma, pedido.clinicaId);
