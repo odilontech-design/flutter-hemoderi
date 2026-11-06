@@ -41,3 +41,39 @@ export type FormaDePagamento = (typeof FORMAS_DE_PAGAMENTO)[number];
 export function formaDePagamentoValida(valor: string): valor is FormaDePagamento {
   return (FORMAS_DE_PAGAMENTO as readonly string[]).includes(valor);
 }
+
+/**
+ * Texto da cobrança (Asaas e Pix): os serviços exatamente como foram
+ * contratados, com a data. Agrupa repetidos ("Membranas – PRF (2 pacientes)")
+ * e corta no limite do meio de pagamento, sem quebrar no meio de um item.
+ */
+export function descricaoDaCobranca(
+  pedidos: { servicoNome: string; data: string }[],
+  clinicaNome: string,
+  limite: number
+): string {
+  const grupos = new Map<string, { nome: string; datas: Set<string>; n: number }>();
+  for (const p of pedidos) {
+    const g = grupos.get(p.servicoNome) ?? { nome: p.servicoNome, datas: new Set<string>(), n: 0 };
+    g.n += 1;
+    g.datas.add(p.data);
+    grupos.set(p.servicoNome, g);
+  }
+  const itens = [...grupos.values()].map((g) => {
+    const datas = [...g.datas].sort().join(", ");
+    return `${g.nome}${g.n > 1 ? ` x${g.n}` : ""} (${datas})`;
+  });
+  const cabecalho = `Hemoderi - ${clinicaNome}: `;
+  let texto = cabecalho;
+  let usados = 0;
+  for (const item of itens) {
+    const proximo = (usados ? texto + "; " : texto) + item;
+    const resto = itens.length - usados - 1;
+    const sufixo = resto > 0 ? ` e mais ${resto}` : "";
+    if (proximo.length + sufixo.length > limite && usados > 0) break;
+    texto = proximo;
+    usados += 1;
+  }
+  if (usados < itens.length) texto += ` e mais ${itens.length - usados}`;
+  return texto.slice(0, limite);
+}

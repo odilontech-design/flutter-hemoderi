@@ -8,6 +8,15 @@ import { perfilPermite } from "@/lib/papeis";
 import { criarCobrancaPix, consultarCobranca, registrarWebhook, testarConexao } from "@/lib/integracoes/bradesco-pix";
 import { exigirAdministradorTecnico, exigirClinica } from "@/lib/sessao";
 import QRCode from "qrcode";
+import { descricaoDaCobranca } from "@/lib/pagamento";
+
+function descricaoDosAtendimentos(pedidos: { data: Date; servico: { nome: string } }[], clinicaNome: string, limite: number): string {
+  return descricaoDaCobranca(
+    pedidos.map((p) => ({ servicoNome: p.servico.nome, data: p.data.toISOString().slice(8, 10) + "/" + p.data.toISOString().slice(5, 7) })),
+    clinicaNome,
+    limite
+  );
+}
 import type { Resultado } from "./pedidos";
 
 /**
@@ -178,7 +187,7 @@ export async function pixDoAgendamento(pedidoId: string, gerar: boolean): Promis
 
   const membros = await prisma.pedido.findMany({
     where: { apoioDeId: null, clinicaId: sessao.clinicaId, ...(pedido.grupoId ? { grupoId: pedido.grupoId } : { id: pedido.id }) },
-    select: { id: true, status: true, formaPagamento: true, valorServicoCentavos: true, pixPagoEm: true },
+    select: { id: true, status: true, formaPagamento: true, valorServicoCentavos: true, pixPagoEm: true, data: true, servico: { select: { nome: true } } },
   });
   const ativos = membros.filter((m) => m.status !== "CANCELADO");
   if (ativos.length === 0) return { ok: false, erro: "Este agendamento foi cancelado." };
@@ -217,7 +226,7 @@ export async function pixDoAgendamento(pedidoId: string, gerar: boolean): Promis
       grupoId: pedido.grupoId,
       valorCentavos,
       vencimento: new Date(Date.now() + 3 * 24 * 3600 * 1000),
-      descricao: `Hemoderi - Agendamento ${pedido.clinica.nome}`,
+      descricao: descricaoDosAtendimentos(ativos, pedido.clinica.nome, 140),
       devedorNome: pedido.clinica.nome,
       devedorCnpj: pedido.clinica.cnpj ?? undefined,
     });
@@ -262,7 +271,7 @@ export async function pixEmLote(pedidoIds: string[], gerar: boolean): Promise<Pi
   const grupos = escolhidos.map((p) => p.grupoId).filter((g): g is string => Boolean(g));
   const membros = await prisma.pedido.findMany({
     where: { apoioDeId: null, clinicaId: sessao.clinicaId, OR: [{ id: { in: escolhidos.map((p) => p.id) } }, ...(grupos.length ? [{ grupoId: { in: grupos } }] : [])] },
-    select: { id: true, status: true, valorServicoCentavos: true, pixPagoEm: true, cartaoPagoEm: true, faturaId: true },
+    select: { id: true, status: true, valorServicoCentavos: true, pixPagoEm: true, cartaoPagoEm: true, faturaId: true, data: true, servico: { select: { nome: true } } },
     orderBy: { id: "asc" },
   });
   const cobraveis = membros.filter(
@@ -293,7 +302,7 @@ export async function pixEmLote(pedidoIds: string[], gerar: boolean): Promise<Pi
       pedidoIds: ids,
       valorCentavos,
       vencimento: new Date(Date.now() + 3 * 24 * 3600 * 1000),
-      descricao: `Hemoderi - ${ids.length} atendimento(s) ${clinica?.nome ?? ""}`.trim(),
+      descricao: descricaoDosAtendimentos(cobraveis, clinica?.nome ?? sessao.clinicaNome, 140),
       devedorNome: clinica?.nome ?? sessao.clinicaNome,
       devedorCnpj: clinica?.cnpj ?? undefined,
     });
@@ -325,7 +334,7 @@ export async function cartaoEmLote(pedidoIds: string[], parcelas: number): Promi
   const grupos = escolhidos.map((p) => p.grupoId).filter((g): g is string => Boolean(g));
   const membros = await prisma.pedido.findMany({
     where: { apoioDeId: null, clinicaId: sessao.clinicaId, OR: [{ id: { in: escolhidos.map((p) => p.id) } }, ...(grupos.length ? [{ grupoId: { in: grupos } }] : [])] },
-    select: { id: true, status: true, valorServicoCentavos: true, pixPagoEm: true, cartaoPagoEm: true, faturaId: true },
+    select: { id: true, status: true, valorServicoCentavos: true, pixPagoEm: true, cartaoPagoEm: true, faturaId: true, data: true, servico: { select: { nome: true } } },
   });
   const cobraveis = membros.filter(
     (m) => m.status !== "CANCELADO" && STATUS_QUE_PAGAM.includes(m.status) && !m.pixPagoEm && !m.cartaoPagoEm && !m.faturaId
@@ -338,7 +347,7 @@ export async function cartaoEmLote(pedidoIds: string[], parcelas: number): Promi
     pedidoIds: cobraveis.map((m) => m.id).sort(),
     valorCentavos,
     parcelas,
-    descricao: `Hemoderi - ${cobraveis.length} atendimento(s) - ${sessao.clinicaNome}`,
+    descricao: descricaoDosAtendimentos(cobraveis, sessao.clinicaNome, 500),
   });
   return resultado.ok ? { ok: true, link: resultado.link } : { ok: false, erro: resultado.erro };
 }
