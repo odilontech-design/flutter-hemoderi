@@ -51,7 +51,11 @@ async function chamar<T>(caminho: string, metodo: "GET" | "POST" | "DELETE", cor
     } catch {
       // resposta sem JSON: fica o texto
     }
-    throw new Error(`Asaas ${resposta.status}: ${detalhe}`);
+    const falha = new Error(`Asaas ${resposta.status}: ${detalhe}`) as Error & { recusaAsaas?: string };
+    // 400 = o Asaas recusou os dados (valor mínimo, documento inválido…): a
+    // descrição vem em português e serve para quem está pagando entender.
+    if (resposta.status === 400 && detalhe) falha.recusaAsaas = detalhe;
+    throw falha;
   }
   return (texto ? JSON.parse(texto) : {}) as T;
 }
@@ -153,6 +157,8 @@ export async function criarCobrancaCartao(d: {
     return { ok: true, link: pagamento.invoiceUrl };
   } catch (erro) {
     console.error("asaas: criar cobrança", erro);
+    const recusa = (erro as { recusaAsaas?: string }).recusaAsaas;
+    if (recusa) return { ok: false, erro: `O Asaas não aceitou a cobrança: ${recusa.slice(0, 200)}` };
     return { ok: false, erro: "Não foi possível abrir o pagamento com cartão agora. Tente de novo em instantes ou fale com a central." };
   }
 }
