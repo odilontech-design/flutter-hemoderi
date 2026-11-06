@@ -11,6 +11,7 @@ import { ROTULO_STATUS_CLIENTE, STATUS_ATIVOS } from "@/lib/pedido";
 import { PagarComPix } from "../PagarComPix";
 import { configuradoBradesco } from "@/lib/integracoes/bradesco-pix";
 import { asaasConfigurado, tabelaDeJuros } from "@/lib/integracoes/asaas";
+import { FORMA_CARTAO } from "@/lib/pagamento";
 import { PagarComCartao } from "../../PagarComCartao";
 
 export const dynamic = "force-dynamic";
@@ -68,6 +69,7 @@ export default async function ResumoDoAgendamento({ params }: { params: { id: st
   // Pix escolhido no agendamento (pedido de 29/10): o QR aparece aqui.
   const ativos = membros.filter((m) => m.status !== "CANCELADO");
   const escolheuPix = ativos.length > 0 && ativos.every((m) => m.formaPagamento === "Pix");
+  const escolheuCartao = ativos.length > 0 && ativos.every((m) => m.formaPagamento === FORMA_CARTAO);
   const pixPagoEm = ativos.find((m) => m.pixPagoEm)?.pixPagoEm ?? null;
   const confirmado = ativos.every((m) => ["CONFIRMADO", "ALOCADO", "REALIZADO"].includes(m.status));
   const pixDisponivel = configuradoBradesco() && confirmado && totalCentavos > 0;
@@ -186,6 +188,16 @@ export default async function ResumoDoAgendamento({ params }: { params: { id: st
       {asaasConfigurado() && confirmado && totalCentavos > 0 && !pixPagoEm && !ativos.some((m) => m.cartaoPagoEm || m.faturaId) && (
         <div className="max-w-2xl mt-3">
           <PagarComCartao pedidoIds={ativos.map((m) => m.id)} valorCentavos={ativos.reduce((soma, m) => soma + m.valorServicoCentavos, 0)} juros={tabelaDeJuros()} />
+        </div>
+      )}
+      {escolheuCartao && !ativos.some((m) => m.cartaoPagoEm) && !(asaasConfigurado() && confirmado && totalCentavos > 0) && (
+        <div className="max-w-2xl mt-3 rounded-xl border border-gray-200 bg-white p-4 text-xs text-gray-600">
+          <div className="font-semibold text-bordo mb-1">Pagamento com cartão de crédito</div>
+          {!asaasConfigurado()
+            ? "O pagamento com cartão pelo portal ainda não está disponível. A central envia o link de pagamento pelo WhatsApp."
+            : !confirmado
+              ? "O pagamento com cartão (à vista ou parcelado) fica disponível aqui assim que a central confirmar o agendamento."
+              : "O valor ainda está sob consulta: a central informa o valor antes do pagamento."}
         </div>
       )}
       {ativos.some((m) => m.cartaoPagoEm) && (

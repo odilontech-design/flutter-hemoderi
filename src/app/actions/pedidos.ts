@@ -228,7 +228,7 @@ async function criarAgendamento(
   }
   const formaPagamento = String(dados.get("formaPagamento") ?? "");
   if (!formaDePagamentoValida(formaPagamento)) {
-    return { ok: false, erro: "Escolha a forma de pagamento: Pix, dinheiro ou cheque." };
+    return { ok: false, erro: "Escolha a forma de pagamento: Pix, cartão de crédito, dinheiro ou cheque." };
   }
 
   // Contato da clínica obrigatório e no padrão brasileiro (ata de 13/10): é
@@ -1577,7 +1577,7 @@ async function editarAgendamentoSemAviso(_anterior: Resultado, dados: FormData):
 
   const forma = String(dados.get("formaPagamento") ?? "").trim();
   if (forma && !formaDePagamentoValida(forma)) {
-    return { ok: false, erro: "Forma de pagamento: Pix, dinheiro ou cheque." };
+    return { ok: false, erro: "Forma de pagamento: Pix, cartão de crédito, dinheiro ou cheque." };
   }
 
   const novaData = dataDeISO(dataISO);
@@ -1714,7 +1714,7 @@ async function editarAgendamentoPeloPortalSemAviso(_anterior: Resultado, dados: 
   }
   const formaPagamento = String(dados.get("formaPagamento") ?? "");
   if (!formaDePagamentoValida(formaPagamento)) {
-    return { ok: false, erro: "Escolha a forma de pagamento: Pix, dinheiro ou cheque." };
+    return { ok: false, erro: "Escolha a forma de pagamento: Pix, cartão de crédito, dinheiro ou cheque." };
   }
 
   const contatoClinica = lerTelefoneBrasileiro(String(dados.get("contatoClinica") ?? ""));
@@ -2148,7 +2148,7 @@ async function editarVisitaSemAviso(_anterior: Resultado, dados: FormData): Prom
   if (enderecoId && !endereco) return { ok: false, erro: "Endereço não encontrado para esta clínica." };
 
   const forma = String(dados.get("formaPagamento") ?? "").trim();
-  if (forma && !formaDePagamentoValida(forma)) return { ok: false, erro: "Forma de pagamento: Pix, dinheiro ou cheque." };
+  if (forma && !formaDePagamentoValida(forma)) return { ok: false, erro: "Forma de pagamento: Pix, cartão de crédito, dinheiro ou cheque." };
   const contatoTexto = String(dados.get("contatoClinica") ?? "").trim();
   const contato = contatoTexto ? lerTelefoneBrasileiro(contatoTexto) : null;
   if (contatoTexto && !contato) return { ok: false, erro: `Contato da clínica: ${MENSAGEM_TELEFONE_INVALIDO}` };

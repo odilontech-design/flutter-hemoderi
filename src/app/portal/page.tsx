@@ -1,3 +1,4 @@
+import { FORMA_CARTAO } from "@/lib/pagamento";
 import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 import { exigirClinica } from "@/lib/sessao";
@@ -175,13 +176,13 @@ export default async function MeusAgendamentos() {
                         </Link>
                       </div>
                     ) : (
-                      primeiro.formaPagamento === "Pix" &&
+                      (primeiro.formaPagamento === "Pix" || primeiro.formaPagamento === FORMA_CARTAO) &&
                       ["CONFIRMADO", "ALOCADO", "REALIZADO"].includes(statusDaVisita) && (
                         <Link
                           href={`/portal/resumo/${primeiro.id}`}
                           className="text-[11px] font-semibold text-green-800 hover:underline whitespace-nowrap"
                         >
-                          Pagar com Pix
+                          {primeiro.formaPagamento === "Pix" ? "Pagar com Pix" : "Pagar com cartão"}
                         </Link>
                       )
                     )}

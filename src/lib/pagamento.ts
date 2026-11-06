@@ -26,12 +26,15 @@ export function condicaoValida(valor: string): valor is CondicaoPagamento {
 
 /**
  * Como o CLIENTE paga o atendimento — o que ele escolhe ao agendar (ata de
- * 02/10). Começa com Pix, dinheiro e cheque; outras formas entram depois.
+ * 02/10). Pix, cartão de crédito (Asaas), dinheiro e cheque.
  *
  * Não confundir com `CONDICOES_PAGAMENTO`, o acordo interno da operação com a
  * clínica (antecipado, faturado…), que o cliente não vê.
  */
-export const FORMAS_DE_PAGAMENTO = ["Pix", "Dinheiro", "Cheque"] as const;
+export const FORMAS_DE_PAGAMENTO = ["Pix", "Cartão de crédito", "Dinheiro", "Cheque"] as const;
+
+/** A escolha que leva ao pagamento com cartão pelo Asaas (à vista ou parcelado). */
+export const FORMA_CARTAO = "Cartão de crédito";
 
 export type FormaDePagamento = (typeof FORMAS_DE_PAGAMENTO)[number];
 
