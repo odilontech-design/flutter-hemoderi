@@ -5,13 +5,12 @@ import { exigirInterno } from "@/lib/sessao";
 import { perfilPermite } from "@/lib/papeis";
 import { STATUS_ATIVOS } from "@/lib/pedido";
 import { comEnderecoDoPedido, locaisDaClinica, resumoDoEndereco } from "@/lib/endereco";
-import { AgendaDaEquipe } from "@/components/AgendaDaEquipe";
+import { AgendaCompartilhada } from "@/components/AgendaCompartilhada";
 import { agendaDaEquipe } from "@/lib/integracoes/google-api";
 import { BotaoAcao } from "@/components/BotaoAcao";
 import { BotoesWhatsapp } from "../BotoesWhatsapp";
 import { EquipeDoAtendimento, type LinhaDaEquipe } from "../EquipeDoAtendimento";
 import { aptoParaServico } from "@/lib/aptidao";
-import { eventoParaEquipe } from "@/lib/evento-equipe";
 import { agruparPorFamilia } from "@/lib/familia";
 import { isoDeData, paraHora, paraMinutos } from "@/lib/data";
 import { EditarAgendamento } from "./EditarAgendamento";
@@ -174,29 +173,7 @@ export default async function DetalheDoPedido({
           {/* Alocado, vai para a agenda de quem acompanha (pedido do André, 26/10). */}
           {pedido.status === "ALOCADO" && (
             <span className="ml-auto">
-              {agendaNativa ? (
-                <span className="text-[10px] font-semibold text-green-700">📅 na agenda da equipe</span>
-              ) : (
-<AgendaDaEquipe
-                        pedidoId={pedido.id}
-                        salvaEm={pedido.agendaSalvaEm}
-                        salvaPor={pedido.agendaSalvaPor}
-                evento={eventoParaEquipe({
-                  id: pedido.id,
-                  data: pedido.data,
-                  horaInicio: pedido.horaInicio,
-                  duracaoMin: pedido.duracaoMin,
-                  clinicaNome: pedido.clinica.nome,
-                  servicoNome: pedido.servico.nome,
-                  profissionalNome: pedido.profissional?.nome,
-                  doutorNome: pedido.doutorNome,
-                  contatoClinica: pedido.contatoClinica,
-                  pacienteNome: pedido.pacienteNome,
-                  procedimentoPaciente: pedido.procedimentoPaciente,
-                  local: resumoDoEndereco(comEnderecoDoPedido(pedido.clinica, pedido.endereco)),
-                })}
-              />
-              )}
+              <AgendaCompartilhada pedidoId={pedido.id} salvaEm={pedido.agendaSalvaEm} configurada={agendaNativa} />
             </span>
           )}
         </div>

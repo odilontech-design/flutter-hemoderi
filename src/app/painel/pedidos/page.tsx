@@ -26,12 +26,12 @@ import { TabelaEsteira } from "./TabelaEsteira";
 import { AcoesEmMassa } from "./AcoesEmMassa";
 import { ValorServico } from "./ValorServico";
 import { perfilPermite } from "@/lib/papeis";
-import { AgendaDaEquipe } from "@/components/AgendaDaEquipe";
+import { AgendaCompartilhada } from "@/components/AgendaCompartilhada";
+import { IconeCheck, IconeMapa, IconeRelogio, IconeUsuarioMais } from "@/components/Icones";
 import { agendaDaEquipe } from "@/lib/integracoes/google-api";
 import { BotaoAcao } from "@/components/BotaoAcao";
 import { enviarPelaCentral } from "@/app/actions/pedidos";
 import { BotoesWhatsapp } from "./BotoesWhatsapp";
-import { eventoParaEquipe } from "@/lib/evento-equipe";
 import { condicaoValida } from "@/lib/pagamento";
 
 export const dynamic = "force-dynamic";
@@ -425,57 +425,40 @@ export default async function Esteira({
                       mostrar quem ainda não respondeu — é o pedido que corre
                       risco de chegar na véspera sem ninguém. */}
                   {pedido.status === "ALOCADO" && (
-                    <div className="text-[10px] mt-0.5 flex flex-wrap items-center gap-x-2">
+                    <div className="mt-2 flex flex-wrap items-center gap-1.5 text-[11px]">
                       {pedido.aceitoEm ? (
-                        <span className="font-semibold text-green-700">aceito pelo profissional</span>
+                        <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 font-semibold text-emerald-700">
+                          <IconeCheck className="!h-3.5 !w-3.5" /> Aceito pelo profissional
+                        </span>
                       ) : (
-                        <span className="font-semibold text-amber-700">aguardando aceite</span>
+                        <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 px-2 py-0.5 font-semibold text-amber-800">
+                          <IconeRelogio className="!h-3.5 !w-3.5" /> Aguardando aceite
+                        </span>
                       )}
-                      {/* Depois de alocado, a equipe põe na própria agenda (pedido
-                          do André, 26/10) — com local, profissional e contato. */}
-                      {agendaNativa ? (
-                        <span className="text-[10px] font-semibold text-green-700">📅 na agenda da equipe</span>
-                      ) : (
-<AgendaDaEquipe
-                        pedidoId={pedido.id}
-                        salvaEm={pedido.agendaSalvaEm}
-                        salvaPor={pedido.agendaSalvaPor}
-                        variante="link"
-                        evento={eventoParaEquipe({
-                          id: pedido.id,
-                          data: pedido.data,
-                          horaInicio: pedido.horaInicio,
-                          duracaoMin: pedido.duracaoMin,
-                          clinicaNome: pedido.clinica.nome,
-                          servicoNome: pedido.servico.nome,
-                          profissionalNome: pedido.profissional?.nome,
-                          doutorNome: pedido.doutorNome,
-                          contatoClinica: pedido.contatoClinica,
-                          pacienteNome: pedido.pacienteNome,
-                          procedimentoPaciente: pedido.procedimentoPaciente,
-                          local: resumoDoEndereco(comEnderecoDoPedido(pedido.clinica, pedido.endereco)),
-                        })}
-                      />
-                      )}
+                      {/* A cópia do atendimento na agenda COMPARTILHADA da equipe:
+                          criada sozinha ao alocar; o "salvo" só aparece se salvou de fato. */}
+                      <AgendaCompartilhada pedidoId={pedido.id} salvaEm={pedido.agendaSalvaEm} configurada={agendaNativa} />
                       {pedido.checkinEm &&
                         (pedido.checkinLatitude != null && pedido.checkinLongitude != null ? (
                           <a
                             href={`https://www.google.com/maps?q=${pedido.checkinLatitude},${pedido.checkinLongitude}`}
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="font-semibold text-green-700 hover:underline"
+                            className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 font-semibold text-emerald-700 hover:bg-emerald-100"
                           >
-                            📍 chegada registrada
+                            <IconeMapa className="!h-3.5 !w-3.5" /> Chegada registrada
                           </a>
                         ) : (
-                          <span className="font-semibold text-green-700">chegada registrada</span>
+                          <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 font-semibold text-emerald-700">
+                            <IconeMapa className="!h-3.5 !w-3.5" /> Chegada registrada
+                          </span>
                         ))}
                       {/* O atraso aparece junto da chegada, não escondido no
                           relatório: é agora que a central avisa a clínica. */}
                       {houveAtraso(pedido.data, pedido.horaInicio, pedido.checkinEm) && (
-                        <span className="font-semibold text-amber-700">
-                          {formatarAtraso(minutosDeAtraso(pedido.data, pedido.horaInicio, pedido.checkinEm!))}{" "}
-                          de atraso
+                        <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 px-2 py-0.5 font-semibold text-amber-800">
+                          <IconeRelogio className="!h-3.5 !w-3.5" />
+                          {formatarAtraso(minutosDeAtraso(pedido.data, pedido.horaInicio, pedido.checkinEm!))} de atraso
                           {pedido.checkinJustificativa ? ` · ${pedido.checkinJustificativa}` : ""}
                         </span>
                       )}
@@ -618,13 +601,7 @@ export default async function Esteira({
                 </Link>
               ) : (
                 <>
-                {["SOLICITADO", "CONFIRMADO", "ALOCADO"].includes(pedido.status) && perfilPermite(sessao.perfil, "LOGISTICA") && (
-                  <div className="mb-2">
-                    <Link href={`/painel/pedidos/${pedido.id}#equipe`} className="text-[11px] font-semibold text-indigo-700 hover:underline">
-                      + Mais um profissional neste atendimento
-                    </Link>
-                  </div>
-                )}
+
               <AcoesPedido
                 pedidoId={pedido.id}
                 status={pedido.status}
@@ -646,6 +623,16 @@ export default async function Esteira({
                 profissionalSolicitadoId={pedido.profissionalId}
                 ajudaCustoCentavos={pedido.ajudaCustoCentavos}
                 mostrarAjudaDeCusto={!telaDeAlocados}
+                extra={
+                  ["SOLICITADO", "CONFIRMADO", "ALOCADO"].includes(pedido.status) && perfilPermite(sessao.perfil, "LOGISTICA") ? (
+                    <Link
+                      href={`/painel/pedidos/${pedido.id}#equipe`}
+                      className="inline-flex items-center gap-1.5 rounded-lg px-3 py-2 min-h-[40px] sm:min-h-0 text-xs font-semibold text-gray-600 transition hover:bg-gray-100 hover:text-bordo"
+                    >
+                      <IconeUsuarioMais /> Mais um profissional
+                    </Link>
+                  ) : null
+                }
               />
                 </>
               )}
@@ -758,30 +745,7 @@ function CartaoDoGrupo({
           {/* A visita inteira alocada vira UM compromisso na agenda da equipe. */}
           {contar("ALOCADO") === membros.length && (
             <div className="mt-1">
-              {agendaNativa ? (
-                <span className="text-[10px] font-semibold text-green-700">📅 na agenda da equipe</span>
-              ) : (
-<AgendaDaEquipe
-                        pedidoId={primeiro.id}
-                        salvaEm={primeiro.agendaSalvaEm}
-                        salvaPor={primeiro.agendaSalvaPor}
-                variante="link"
-                evento={eventoParaEquipe({
-                  id: primeiro.grupoId ?? primeiro.id,
-                  data: primeiro.data,
-                  horaInicio: primeiro.horaInicio,
-                  duracaoMin: membros.reduce((soma, m) => soma + m.duracaoMin, 0),
-                  clinicaNome: primeiro.clinica.nome,
-                  servicoNome: membros.map((m) => m.servico.nome).join(" + "),
-                  profissionalNome: [...new Set(membros.map((m) => m.profissional?.nome).filter(Boolean))].join(", "),
-                  doutorNome: primeiro.doutorNome,
-                  contatoClinica: primeiro.contatoClinica,
-                  pacienteNome: primeiro.pacienteNome,
-                  procedimentoPaciente: primeiro.procedimentoPaciente,
-                  local: resumoDoEndereco(comEnderecoDoPedido(primeiro.clinica, primeiro.endereco)),
-                })}
-              />
-              )}
+              <AgendaCompartilhada pedidoId={primeiro.id} salvaEm={primeiro.agendaSalvaEm} configurada={agendaNativa} />
             </div>
           )}
         </div>

@@ -9,7 +9,7 @@ import { codigoDoPedido } from "@/lib/numeracao";
 import { formatarData, formatarDataHora } from "@/lib/data";
 import { pendenciasDeSincronizacao } from "@/lib/sincronizacao";
 import { reenviarFalhasWhatsapp, reprocessarPipedrive, reprocessarTodasPipedrive, testarConexaoPipedrive } from "@/app/actions/integracoes";
-import { integracaoConfigurada as googleConfigurado, agendaDaOperacao } from "@/lib/integracoes/google-api";
+import { integracaoConfigurada as googleConfigurado, agendaDaOperacao, agendaDaEquipe } from "@/lib/integracoes/google-api";
 import { configuradoBradesco } from "@/lib/integracoes/bradesco-pix";
 import { pipedriveConfigurado } from "@/lib/integracoes/pipedrive";
 import { asaasConfigurado, ambienteAsaas } from "@/lib/integracoes/asaas";
@@ -111,8 +111,14 @@ export default async function Integracoes() {
     },
     {
       nome: "Google Agenda",
-      ligado: googleConfigurado() && Boolean(agendaDaOperacao()),
-      linhas: [`${falhasGoogle} falha(s) nas últimas 24h`],
+      ligado: googleConfigurado() && Boolean(agendaDaOperacao() || agendaDaEquipe()),
+      linhas: [
+        agendaDaEquipe() ? "agenda compartilhada da equipe: configurada" : "agenda compartilhada da equipe: NÃO configurada",
+        `${falhasGoogle} falha(s) nas últimas 24h`,
+      ],
+      alerta: agendaDaEquipe()
+        ? null
+        : "Cadastre na Vercel GOOGLE_AGENDA_EQUIPE_ID (o e-mail/ID da agenda compartilhada) e compartilhe essa agenda com a conta de serviço, com permissão para fazer alterações nos eventos.",
     },
     {
       nome: "Cartão Asaas",

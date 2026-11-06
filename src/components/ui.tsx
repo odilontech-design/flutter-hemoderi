@@ -68,15 +68,24 @@ export function Area(props: React.TextareaHTMLAttributes<HTMLTextAreaElement>) {
   return <textarea {...props} className={`${CAMPO} ${props.className ?? ""}`} />;
 }
 
+export type VarianteBotao = "primario" | "secundario" | "perigo" | "suave" | "whatsapp" | "fantasma" | "perigoSuave";
+
 export function Botao({
   variante = "primario",
   className = "",
+  icone,
+  children,
   ...props
-}: React.ButtonHTMLAttributes<HTMLButtonElement> & { variante?: "primario" | "secundario" | "perigo" }) {
+}: React.ButtonHTMLAttributes<HTMLButtonElement> & { variante?: VarianteBotao; icone?: React.ReactNode }) {
   const estilos = {
-    primario: "bg-bordo text-white hover:bg-bordoEscuro",
+    primario: "bg-bordo text-white shadow-sm hover:bg-bordoEscuro active:scale-[0.98]",
     secundario: "bg-white text-bordo border border-gray-300 hover:bg-gray-50",
     perigo: "bg-white text-red-600 border border-red-300 hover:bg-red-50",
+    // Tom suave: ação comum, sem gritar mais que a principal (06/11).
+    suave: "bg-bordo/10 text-bordo hover:bg-bordo/15 active:scale-[0.98]",
+    whatsapp: "bg-emerald-50 text-emerald-800 border border-emerald-200 hover:bg-emerald-100 active:scale-[0.98]",
+    fantasma: "text-gray-600 hover:bg-gray-100 hover:text-bordo",
+    perigoSuave: "text-red-600 hover:bg-red-50",
   }[variante];
   return (
     // min-h-[40px] no celular: com py-2 o botão dava 32px de altura, abaixo do
@@ -84,8 +93,11 @@ export function Botao({
     // que mantém a esteira densa para quem trabalha nela o dia inteiro.
     <button
       {...props}
-      className={`text-xs font-semibold px-3 py-2 min-h-[40px] sm:min-h-0 rounded-lg transition-colors disabled:opacity-50 ${estilos} ${className}`}
-    />
+      className={`inline-flex items-center justify-center gap-1.5 text-xs font-semibold px-3 py-2 min-h-[40px] sm:min-h-0 rounded-lg transition disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-bordo/40 ${estilos} ${className}`}
+    >
+      {icone}
+      {children}
+    </button>
   );
 }
 

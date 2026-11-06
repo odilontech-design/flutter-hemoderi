@@ -29,7 +29,7 @@ import {
   paraMinutos,
 } from "@/lib/data";
 import { enfileirarMensagem, reenviarMensagem } from "@/lib/integracoes/whatsapp";
-import { sincronizarEvento } from "@/lib/integracoes/google-agenda";
+import { salvarNaAgendaDaEquipe, sincronizarEvento } from "@/lib/integracoes/google-agenda";
 import { marcarNegocioPerdido } from "@/lib/integracoes/pipedrive";
 import { condicaoValida, formaDePagamentoValida } from "@/lib/pagamento";
 import { procedimentoEscolhido } from "@/lib/procedimentos";
@@ -2069,23 +2069,27 @@ export async function enviarResumoWhatsapp(pedidoId: string): Promise<Resultado>
 }
 
 /**
- * "Salvei no Google Agenda" (reunião de 27/10): a equipe confirma que pôs o
- * atendimento na agenda, e a tela passa a mostrar quem e quando — para o
- * resto do time não salvar de novo nem ficar na dúvida.
+ * "Salvar agora na agenda compartilhada" (06/11): o salvamento é automático; este
+ * botão só aparece quando ele falhou, e tenta de novo na conta compartilhada.
+ * A confirmação manual ("salvei na agenda") deixou de existir.
  */
-export async function marcarAgendaSalva(pedidoId: string): Promise<Resultado> {
+export async function salvarNaAgendaCompartilhada(pedidoId: string): Promise<Resultado> {
   const sessao = await exigirInterno();
   const pedido = await prisma.pedido.findUnique({ where: { id: pedidoId }, select: { id: true, grupoId: true } });
   if (!pedido) return { ok: false, erro: "Agendamento não encontrado." };
-  // A visita com vários serviços é um compromisso só na agenda.
-  await prisma.pedido.updateMany({
-    where: pedido.grupoId ? { grupoId: pedido.grupoId } : { id: pedido.id },
-    data: { agendaSalvaEm: new Date(), agendaSalvaPor: sessao.nome || "equipe" },
-  });
-  await registrarAuditoria(sessao.usuarioId, "Pedido", pedido.id, "agenda-salva");
+  // A visita com vários serviços é um compromisso por serviço; tenta todos.
+  const ids = pedido.grupoId
+    ? (await prisma.pedido.findMany({ where: { grupoId: pedido.grupoId }, select: { id: true } })).map((p) => p.id)
+    : [pedido.id];
+  let falha: string | null = null;
+  for (const id of ids) {
+    const r = await salvarNaAgendaDaEquipe(id);
+    if (!r.ok) falha = r.erro;
+  }
+  await registrarAuditoria(sessao.usuarioId, "Pedido", pedido.id, "agenda-salvar-de-novo", falha ?? "salvo");
   atualizarTelas();
   revalidatePath(`/painel/pedidos/${pedido.id}`);
-  return { ok: true };
+  return falha ? { ok: false, erro: falha } : { ok: true, avisos: ["Salvo na agenda compartilhada."] };
 }
 
 /**

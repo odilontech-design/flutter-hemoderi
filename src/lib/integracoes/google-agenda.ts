@@ -96,18 +96,49 @@ async function sincronizarEventoDaEquipe(pedidoId: string, transporte: Transport
   try {
     if (plano.acao === "criar") {
       const eventoId = await transporte.criar(agenda, montarEventoDaEquipe(pedido));
-      await prisma.pedido.update({ where: { id: pedido.id }, data: { googleEventoEquipeId: eventoId } });
+      // "Salvo" só existe depois de salvo de verdade na agenda compartilhada
+      // (pedido de 06/11): ninguém mais confirma à mão.
+      await prisma.pedido.update({
+        where: { id: pedido.id },
+        data: { googleEventoEquipeId: eventoId, agendaSalvaEm: new Date(), agendaSalvaPor: "automático" },
+      });
       await registrar(pedido.id, "criar-equipe", true, eventoId);
     } else if (plano.acao === "atualizar") {
       await transporte.atualizar(agenda, plano.eventoId, montarEventoDaEquipe(pedido));
+      await prisma.pedido.update({ where: { id: pedido.id }, data: { agendaSalvaEm: new Date(), agendaSalvaPor: "automático" } });
     } else if (plano.acao === "apagar") {
       await transporte.apagar(agenda, plano.eventoId);
-      await prisma.pedido.update({ where: { id: pedido.id }, data: { googleEventoEquipeId: null } });
+      await prisma.pedido.update({
+        where: { id: pedido.id },
+        data: { googleEventoEquipeId: null, agendaSalvaEm: null, agendaSalvaPor: null },
+      });
       await registrar(pedido.id, "apagar-equipe", true, plano.eventoId);
     }
   } catch (erro) {
     await registrar(pedido.id, `${plano.acao}-equipe`, false, null, erro instanceof Error ? erro.message : String(erro));
   }
+}
+
+/**
+ * "Salvar agora na agenda compartilhada": refaz a sincronização da cópia da
+ * equipe e diz o que aconteceu. É a nova tentativa de um salvamento que falhou
+ * — não a confirmação manual, que deixou de existir.
+ */
+export async function salvarNaAgendaDaEquipe(
+  pedidoId: string,
+  transporte: TransporteAgenda = transporteGoogle
+): Promise<{ ok: true } | { ok: false; erro: string }> {
+  if (!agendaDaEquipe()) return { ok: false, erro: "A agenda compartilhada ainda não foi configurada (GOOGLE_AGENDA_EQUIPE_ID)." };
+  if (!integracaoConfigurada()) return { ok: false, erro: "A conta de serviço do Google não está configurada." };
+  await sincronizarEventoDaEquipe(pedidoId, transporte);
+  const pedido = await prisma.pedido.findUnique({ where: { id: pedidoId }, select: { agendaSalvaEm: true } });
+  if (pedido?.agendaSalvaEm) return { ok: true };
+  const falha = await prisma.sincronizacaoExterna.findFirst({
+    where: { sistema: "GOOGLE_AGENDA", entidade: "Pedido", entidadeId: pedidoId, sucesso: false },
+    orderBy: { criadaEm: "desc" },
+    select: { erro: true },
+  });
+  return { ok: false, erro: falha?.erro ?? "Não foi possível salvar na agenda compartilhada." };
 }
 
 async function sincronizarEventoDoProfissional(

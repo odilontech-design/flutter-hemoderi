@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { Botao } from "@/components/ui";
+import { Botao, type VarianteBotao } from "@/components/ui";
 import type { Resultado } from "@/app/actions/pedidos";
 import { useConfirmarSalvo } from "@/components/ConfirmacaoSalvo";
 
@@ -17,10 +17,15 @@ export function BotaoAcao({
   variante = "secundario",
   confirmar,
   tela = false,
+  icone,
+  titulo,
 }: {
   acao: () => Promise<Resultado>;
   children: React.ReactNode;
-  variante?: "primario" | "secundario" | "perigo";
+  variante?: VarianteBotao;
+  icone?: React.ReactNode;
+  /** Dica ao passar o mouse (ex.: o número de quem vai receber). */
+  titulo?: string;
   confirmar?: string;
   /** Abre a tela de confirmação do envio, em vez do aviso no rodapé (reunião de 28/10). */
   tela?: boolean;
@@ -34,6 +39,8 @@ export function BotaoAcao({
     <span className="inline-flex items-center gap-2">
       <Botao
         variante={variante}
+        icone={icone}
+        title={titulo}
         disabled={pendente}
         onClick={() => {
           if (confirmar && !window.confirm(confirmar)) return;

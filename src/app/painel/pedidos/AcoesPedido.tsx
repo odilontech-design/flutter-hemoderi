@@ -2,7 +2,8 @@
 
 import { useState, useTransition } from "react";
 import type { PerfilInterno, StatusPedido } from "@prisma/client";
-import { Botao, Campo, Selecao } from "@/components/ui";
+import { Botao, Campo, Selecao, type VarianteBotao } from "@/components/ui";
+import { IconeCalendario, IconeCheck, IconeUsuario, IconeUsuarioMenos, IconeX, IconeLixo } from "@/components/Icones";
 import { perfilPermite } from "@/lib/papeis";
 import { CampoHora } from "@/components/CampoHora";
 import {
@@ -32,13 +33,15 @@ const MOTIVOS_DESALOCACAO = [
 export function AcaoComMotivo({
   rotulo,
   variante,
+  icone,
   disabled,
   motivos,
   placeholder,
   onConfirmar,
 }: {
   rotulo: string;
-  variante: "secundario" | "perigo";
+  variante: VarianteBotao;
+  icone?: React.ReactNode;
   disabled?: boolean;
   /** Quando ausente, o motivo é sempre texto livre. */
   motivos?: { valor: string; rotulo: string }[];
@@ -51,7 +54,7 @@ export function AcaoComMotivo({
 
   if (!aberto) {
     return (
-      <Botao variante={variante} disabled={disabled} onClick={() => setAberto(true)}>
+      <Botao variante={variante} icone={icone} disabled={disabled} onClick={() => setAberto(true)}>
         {rotulo}
       </Botao>
     );
@@ -86,7 +89,7 @@ export function AcaoComMotivo({
         />
       )}
       <Botao
-        variante={variante}
+        variante={variante === "perigoSuave" ? "perigo" : variante === "fantasma" ? "secundario" : variante}
         disabled={disabled || !motivoFinal}
         onClick={() => {
           onConfirmar(motivoFinal);
@@ -96,7 +99,7 @@ export function AcaoComMotivo({
       >
         Confirmar
       </Botao>
-      <Botao variante="secundario" disabled={disabled} onClick={() => setAberto(false)}>
+      <Botao variante="fantasma" disabled={disabled} onClick={() => setAberto(false)}>
         Voltar
       </Botao>
     </div>
@@ -176,7 +179,7 @@ function AcaoReagendar({ disabled, onConfirmar }: { disabled?: boolean; onConfir
 
   if (!aberto) {
     return (
-      <Botao variante="secundario" disabled={disabled} onClick={() => setAberto(true)}>
+      <Botao variante="fantasma" icone={<IconeCalendario />} disabled={disabled} onClick={() => setAberto(true)}>
         Reagendar
       </Botao>
     );
@@ -239,6 +242,7 @@ export function AcoesPedido({
   profissionalSolicitadoId,
   ajudaCustoCentavos = null,
   mostrarAjudaDeCusto = true,
+  extra = null,
 }: {
   pedidoId: string;
   status: StatusPedido;
@@ -250,6 +254,8 @@ export function AcoesPedido({
   ajudaCustoCentavos?: number | null;
   /** Falso na fila de Alocados (ata de 03/11): a ajuda de custo é da etapa "Para alocar". */
   mostrarAjudaDeCusto?: boolean;
+  /** Outras ações do atendimento (ex.: mais um profissional), junto das de gerenciar. */
+  extra?: React.ReactNode;
 }) {
   const [pendente, iniciar] = useTransition();
   const [mensagem, setMensagem] = useState<{ texto: string; erro: boolean } | null>(null);
@@ -282,86 +288,98 @@ export function AcoesPedido({
   const podeReagendar = perfilPermite(perfil, "COMERCIAL", "LOGISTICA");
 
   return (
-    <div className="mt-3 pt-3 border-t border-gray-100 flex flex-wrap items-center gap-2">
-      {status === "SOLICITADO" && (
-        <Botao disabled={pendente} onClick={() => executar(() => confirmarPedido(pedidoId))}>
-          Confirmar
-        </Botao>
-      )}
+    <div className="mt-3 pt-3 border-t border-gray-100 space-y-3">
+      {/* O que fazer agora: a ação principal em destaque, uma só por estado. */}
+      <div className="flex flex-wrap items-center gap-2">
+        {status === "SOLICITADO" && (
+          <Botao icone={<IconeCheck />} disabled={pendente} onClick={() => executar(() => confirmarPedido(pedidoId))}>
+            Confirmar agendamento
+          </Botao>
+        )}
 
-      {status === "CONFIRMADO" && podeAlocar && (
-        <>
-          <Selecao
-            aria-label="Profissional para alocar"
-            value={profissionalId}
-            onChange={(e) => setProfissionalId(e.target.value)}
-            className="!w-auto !py-1.5 !min-h-[40px] sm:!min-h-0 text-xs"
-          >
-            <option value="">Alocar profissional…</option>
-            {profissionais.map((p) => (
-              <option key={p.id} value={p.id}>
-                {p.nome}
-                {p.id === profissionalSolicitadoId ? " (pedido pela clínica)" : ""}
-              </option>
-            ))}
-          </Selecao>
-          <CampoAjudaDeCusto valor={ajudaCusto} onChange={setAjudaCusto} />
-          <Botao
-            disabled={pendente || !profissionalId}
-            onClick={() => executar(() => alocarPedido(pedidoId, profissionalId, ajudaCusto))}
-          >
-            Alocar
-          </Botao>
-        </>
-      )}
+        {status === "CONFIRMADO" && podeAlocar && (
+          <div className="flex flex-wrap items-center gap-2 rounded-xl border border-gray-200 bg-gray-50/70 p-2 w-full sm:w-auto">
+            <IconeUsuario className="ml-1 text-gray-400" />
+            <Selecao
+              aria-label="Profissional para alocar"
+              value={profissionalId}
+              onChange={(e) => setProfissionalId(e.target.value)}
+              className="!w-auto !py-1.5 !min-h-[40px] sm:!min-h-0 text-xs"
+            >
+              <option value="">Escolha o profissional…</option>
+              {profissionais.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.nome}
+                  {p.id === profissionalSolicitadoId ? " (pedido pela clínica)" : ""}
+                </option>
+              ))}
+            </Selecao>
+            <CampoAjudaDeCusto valor={ajudaCusto} onChange={setAjudaCusto} />
+            <Botao
+              icone={<IconeCheck />}
+              disabled={pendente || !profissionalId}
+              onClick={() => executar(() => alocarPedido(pedidoId, profissionalId, ajudaCusto))}
+            >
+              Alocar
+            </Botao>
+          </div>
+        )}
 
-      {status === "ALOCADO" && (
-        <>
-          <Botao disabled={pendente} onClick={() => executar(() => marcarResultadoInterno(pedidoId, true))}>
-            Marcar realizado
-          </Botao>
-          <Botao
-            variante="secundario"
-            disabled={pendente}
-            onClick={() => executar(() => marcarResultadoInterno(pedidoId, false))}
-          >
-            Registrar falta
-          </Botao>
-          {podeAlocar && mostrarAjudaDeCusto && (
-            <EditarAjudaDeCusto pedidoId={pedidoId} inicial={ajudaCustoCentavos} />
-          )}
-          {podeAlocar && (
-            <AcaoComMotivo
-              rotulo="Desalocar"
-              variante="secundario"
+        {status === "ALOCADO" && (
+          <>
+            <Botao icone={<IconeCheck />} disabled={pendente} onClick={() => executar(() => marcarResultadoInterno(pedidoId, true))}>
+              Marcar realizado
+            </Botao>
+            <Botao
+              variante="suave"
+              icone={<IconeX />}
               disabled={pendente}
-              motivos={MOTIVOS_DESALOCACAO}
-              placeholder="Descreva o motivo"
-              onConfirmar={(motivo) => executar(() => desalocarPedido(pedidoId, motivo))}
+              onClick={() => executar(() => marcarResultadoInterno(pedidoId, false))}
+            >
+              Registrar falta
+            </Botao>
+            {podeAlocar && mostrarAjudaDeCusto && <EditarAjudaDeCusto pedidoId={pedidoId} inicial={ajudaCustoCentavos} />}
+          </>
+        )}
+      </div>
+
+      {/* Gerenciar: o que muda o atendimento, em tom discreto; cancelar fica à parte. */}
+      <div className="flex flex-wrap items-center gap-1">
+        <span className="mr-1 text-[10px] font-semibold uppercase tracking-wide text-gray-400">Gerenciar</span>
+        {podeReagendar && (
+          <AcaoReagendar
+            disabled={pendente}
+            onConfirmar={(data, hora, motivo) => executar(() => reagendarPedidoInterno(pedidoId, data, hora, motivo))}
+          />
+        )}
+        {status === "ALOCADO" && podeAlocar && (
+          <AcaoComMotivo
+            rotulo="Desalocar"
+            variante="fantasma"
+            icone={<IconeUsuarioMenos />}
+            disabled={pendente}
+            motivos={MOTIVOS_DESALOCACAO}
+            placeholder="Descreva o motivo"
+            onConfirmar={(motivo) => executar(() => desalocarPedido(pedidoId, motivo))}
+          />
+        )}
+        {extra}
+        {podeCancelar && (
+          <span className="ml-auto">
+            <AcaoComMotivo
+              rotulo="Cancelar"
+              variante="perigoSuave"
+              icone={<IconeLixo />}
+              disabled={pendente}
+              placeholder="Motivo do cancelamento"
+              onConfirmar={(motivo) => executar(() => cancelarPedido(pedidoId, motivo))}
             />
-          )}
-        </>
-      )}
-
-      {podeReagendar && (
-        <AcaoReagendar
-          disabled={pendente}
-          onConfirmar={(data, hora, motivo) => executar(() => reagendarPedidoInterno(pedidoId, data, hora, motivo))}
-        />
-      )}
-
-      {podeCancelar && (
-        <AcaoComMotivo
-          rotulo="Cancelar"
-          variante="perigo"
-          disabled={pendente}
-          placeholder="Motivo do cancelamento"
-          onConfirmar={(motivo) => executar(() => cancelarPedido(pedidoId, motivo))}
-        />
-      )}
+          </span>
+        )}
+      </div>
 
       {mensagem && (
-        <span className={`text-[11px] ${mensagem.erro ? "text-red-600" : "text-amber-700"}`}>{mensagem.texto}</span>
+        <div className={`text-[11px] ${mensagem.erro ? "text-red-600" : "text-amber-700"}`}>{mensagem.texto}</div>
       )}
     </div>
   );
