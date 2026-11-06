@@ -389,6 +389,8 @@ function FormularioBase({
   const exigePaciente = modalidade === "CURSO" || variosServicos;
   const perguntaPendente = variosServicos && mesmoPaciente === null;
   const faltaPacienteNaLinha = variosServicos && mesmoPaciente === false && linhas.some((l) => !l.item.paciente.trim());
+  // Se todos os serviços já têm paciente na lista, o campo geral não faz sentido.
+  const todosComPaciente = linhas.length > 0 && linhas.every((l) => l.item.paciente.trim());
   const pacienteFaltando = exigePaciente && linhas.some((l) => !(l.item.paciente.trim() || pacienteNome.trim()));
   const algumSobConsulta = linhas.some((l) => precoUnitario(l.servico.id) === 0);
 
@@ -899,6 +901,7 @@ function FormularioBase({
               <CampoTelefone name="contatoClinica" inicial={telefoneClinica} obrigatorio />
               <div className="text-[10px] text-gray-400 mt-1">Para onde a central liga ou escreve.</div>
             </div>
+            {!todosComPaciente && (
             <div>
               <Rotulo>{exigePaciente ? "Paciente (obrigatório)" : "Paciente (opcional)"}</Rotulo>
               <Campo
@@ -909,6 +912,7 @@ function FormularioBase({
               />
               <div className="text-[10px] text-gray-400 mt-1">Vale para os serviços sem paciente informado na lista.</div>
             </div>
+            )}
           </div>
 
           {equipe && equipe.profissionais.length > 0 && (
