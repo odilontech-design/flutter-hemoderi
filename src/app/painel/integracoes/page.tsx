@@ -8,7 +8,7 @@ import { registrarAvisoDePagamentoBradesco, testarConexaoBradesco } from "@/app/
 import { codigoDoPedido } from "@/lib/numeracao";
 import { formatarData, formatarDataHora } from "@/lib/data";
 import { pendenciasDeSincronizacao } from "@/lib/sincronizacao";
-import { reenviarFalhasWhatsapp, reprocessarPipedrive, reprocessarTodasPipedrive, testarConexaoPipedrive } from "@/app/actions/integracoes";
+import { reenviarFalhasWhatsapp, reprocessarPipedrive, reprocessarTodasPipedrive, testarConexaoPipedrive, verificarDonoPipedrive } from "@/app/actions/integracoes";
 import { integracaoConfigurada as googleConfigurado, agendaDaOperacao, agendaDaEquipe } from "@/lib/integracoes/google-api";
 import { configuradoBradesco } from "@/lib/integracoes/bradesco-pix";
 import { pipedriveConfigurado } from "@/lib/integracoes/pipedrive";
@@ -195,6 +195,7 @@ export default async function Integracoes() {
       {configurado && (
         <div className="flex flex-wrap items-center gap-3 mb-3">
           <BotaoAcao acao={testarConexaoPipedrive}>Testar conexão</BotaoAcao>
+          <BotaoAcao acao={verificarDonoPipedrive}>Quem é o dono dos negócios?</BotaoAcao>
           <ReatribuirNegocios />
           {pendencias.length > 0 && (
             <BotaoAcao

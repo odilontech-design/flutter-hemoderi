@@ -167,6 +167,7 @@ async function pessoaDeContato(nome: string, orgId: number, telefone: string | n
 
 /** Quem é dono de todos os negócios (pedido de 05/11): a Sthefany, ou quem a variável apontar. */
 const DONO_PADRAO = "sthefany@hemoderi.com.br";
+const NOME_PADRAO = "sthefany";
 let donoEmCache: { chave: string; id: number } | null = null;
 
 /**
@@ -179,19 +180,34 @@ export async function donoDosNegocios(): Promise<number | null> {
   const fixo = Number(process.env.PIPEDRIVE_DONO_ID?.trim());
   if (Number.isInteger(fixo) && fixo > 0) return fixo;
   const email = (process.env.PIPEDRIVE_DONO_EMAIL?.trim() || DONO_PADRAO).toLowerCase();
-  if (donoEmCache?.chave === email) return donoEmCache.id;
-  const id = await usuarioPorEmail(email);
-  if (id) donoEmCache = { chave: email, id };
+  const nome = (process.env.PIPEDRIVE_DONO_NOME?.trim() || NOME_PADRAO).toLowerCase();
+  const chave = `${email}|${nome}`;
+  if (donoEmCache?.chave === chave) return donoEmCache.id;
+  const usuarios = await usuariosDoPipedrive();
+  const id = escolherDono(usuarios, email, nome);
+  if (id) donoEmCache = { chave, id };
   return id;
 }
 
-/** O usuário do PipeDrive com este e-mail. */
-async function usuarioPorEmail(email: string): Promise<number | null> {
-  const json = (await chamar(`/users/find?term=${encodeURIComponent(email)}&search_by_email=1`, "GET")) as {
-    data?: { id: number; email?: string; active_flag?: boolean }[] | null;
-  } | null;
-  const usuario = (json?.data ?? []).find((u) => u.email?.toLowerCase() === email.toLowerCase() && u.active_flag !== false);
-  return usuario?.id ?? null;
+export type UsuarioPipedrive = { id: number; name?: string; email?: string; active_flag?: boolean };
+
+/** Todos os usuários da conta do PipeDrive. */
+export async function usuariosDoPipedrive(): Promise<UsuarioPipedrive[]> {
+  const json = (await chamar("/users", "GET")) as { data?: UsuarioPipedrive[] | null } | null;
+  return json?.data ?? [];
+}
+
+/**
+ * O e-mail exato vale primeiro. Se o e-mail dela no PipeDrive for outro, o
+ * nome decide — mas só quando há UM usuário ativo com aquele nome: dois
+ * "Sthefany" é ambiguidade, e adivinhar o dono errado é pior que avisar.
+ */
+export function escolherDono(usuarios: UsuarioPipedrive[], email: string, nome: string): number | null {
+  const ativos = usuarios.filter((u) => u.active_flag !== false);
+  const porEmail = ativos.find((u) => u.email?.toLowerCase() === email.toLowerCase());
+  if (porEmail) return porEmail.id;
+  const porNome = ativos.filter((u) => u.name?.toLowerCase().includes(nome.toLowerCase()));
+  return porNome.length === 1 ? porNome[0].id : null;
 }
 
 async function registrarSincronizacao(

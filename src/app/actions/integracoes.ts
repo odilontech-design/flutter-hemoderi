@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { exigirAdministradorTecnico } from "@/lib/sessao";
-import { reatribuirNegocios, testarConexao } from "@/lib/integracoes/pipedrive";
+import { donoDosNegocios, reatribuirNegocios, testarConexao, usuariosDoPipedrive } from "@/lib/integracoes/pipedrive";
 import { reprocessarPedidoPipedrive, reprocessarPendenciasPipedrive } from "@/lib/integracoes/pipedrive-pendencias";
 import { despacharPendentes } from "@/lib/integracoes/whatsapp";
 import type { Resultado } from "./pedidos";
@@ -25,6 +25,27 @@ export async function testarConexaoPipedrive(): Promise<Resultado> {
   await exigirAdministradorTecnico();
   const teste = await testarConexao();
   return teste.ok ? { ok: true, avisos: [teste.descricao] } : { ok: false, erro: teste.erro };
+}
+
+/**
+ * Mostra em nome de quem os negócios novos nascem. Se não achou a Sthefany,
+ * lista os usuários do PipeDrive com o número de cada um — o número vai em
+ * PIPEDRIVE_DONO_ID na Vercel e resolve de vez.
+ */
+export async function verificarDonoPipedrive(): Promise<Resultado> {
+  await exigirAdministradorTecnico();
+  try {
+    const dono = await donoDosNegocios();
+    const usuarios = await usuariosDoPipedrive();
+    if (dono) {
+      const u = usuarios.find((x) => x.id === dono);
+      return { ok: true, avisos: [`Os negócios novos nascem com ${u?.name ?? "o usuário"} ${u?.email ? `(${u.email}) ` : ""}— número ${dono}.`] };
+    }
+    const lista = usuarios.filter((u) => u.active_flag !== false).map((u) => `${u.name ?? "?"} <${u.email ?? "sem e-mail"}> = ${u.id}`).join(" · ");
+    return { ok: false, erro: `Não achei a Sthefany. Os negócios estão indo para o dono do token. Usuários: ${lista}. Coloque o número dela em PIPEDRIVE_DONO_ID na Vercel e faça o redeploy.` };
+  } catch (erro) {
+    return { ok: false, erro: erro instanceof Error ? erro.message : "Falhou." };
+  }
 }
 
 /** Por clique: cabe no tempo de uma função da Vercel mesmo com o PipeDrive lento. */
