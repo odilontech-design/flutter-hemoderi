@@ -5,6 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { exigirAdministradorTecnico } from "@/lib/sessao";
 import { donoDosNegocios, reatribuirNegocios, testarConexao, usuariosDoPipedrive } from "@/lib/integracoes/pipedrive";
 import { reprocessarPedidoPipedrive, reprocessarPendenciasPipedrive } from "@/lib/integracoes/pipedrive-pendencias";
+import { salvarPendentesNaAgendaDaEquipe } from "@/lib/integracoes/google-agenda";
 import { despacharPendentes } from "@/lib/integracoes/whatsapp";
 import type { Resultado } from "./pedidos";
 
@@ -46,6 +47,18 @@ export async function verificarDonoPipedrive(): Promise<Resultado> {
   } catch (erro) {
     return { ok: false, erro: erro instanceof Error ? erro.message : "Falhou." };
   }
+}
+
+/**
+ * Salva na agenda compartilhada os atendimentos futuros que ainda não estão
+ * nela. Um lote por chamada; a tela chama de novo com `aPartirDe` até acabar.
+ */
+export async function salvarPendentesNaAgenda(aPartirDe?: number): Promise<{ ok: boolean; erro?: string; feitos: number; restam: number; ultimo: number | null; falhas: string[] }> {
+  await exigirAdministradorTecnico();
+  const r = await salvarPendentesNaAgendaDaEquipe(15, aPartirDe);
+  revalidatePath("/painel/integracoes");
+  revalidatePath("/painel/pedidos");
+  return { ok: r.falhas.length === 0, erro: r.falhas[0], ...r };
 }
 
 /** Por clique: cabe no tempo de uma função da Vercel mesmo com o PipeDrive lento. */

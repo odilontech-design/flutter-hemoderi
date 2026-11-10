@@ -7,6 +7,7 @@ type Partes = {
   bairro?: string | null;
   cidade?: string | null;
   uf?: string | null;
+  cep?: string | null;
 };
 
 /** "Rua das Flores, 120 – sala 3 – Centro, São Paulo/SP" — só o que existe. */
@@ -46,6 +47,7 @@ export function comEnderecoDoPedido<C extends Partes, E extends Partes | null | 
     bairro: endereco.bairro ?? null,
     cidade: endereco.cidade ?? null,
     uf: endereco.uf ?? null,
+    cep: endereco.cep ?? null,
   } as C;
 }
 

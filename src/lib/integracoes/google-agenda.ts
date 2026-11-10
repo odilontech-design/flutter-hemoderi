@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { comEnderecoDoPedido } from "@/lib/endereco";
+import { hojeUTC } from "@/lib/data";
 import {
   agendaDaEquipe,
   agendaDaOperacao,
@@ -38,8 +39,11 @@ const SELECAO = {
   googleAgendaId: true,
   googleEventoEquipeId: true,
   doutorNome: true,
-  clinica: { select: { nome: true, endereco: true, cidade: true } },
-  endereco: { select: { endereco: true, cidade: true } },
+  valorServicoCentavos: true,
+  formaPagamento: true,
+  procedimentoPaciente: true,
+  clinica: { select: { nome: true, endereco: true, numero: true, complemento: true, bairro: true, cidade: true, uf: true, cep: true } },
+  endereco: { select: { endereco: true, numero: true, complemento: true, bairro: true, cidade: true, uf: true, cep: true } },
   servico: { select: { nome: true } },
   profissional: { select: { nome: true, googleAgendaId: true } },
 } as const;
@@ -95,7 +99,7 @@ async function sincronizarEventoDaEquipe(pedidoId: string, transporte: Transport
   );
   try {
     if (plano.acao === "criar") {
-      const eventoId = await transporte.criar(agenda, montarEventoDaEquipe(pedido));
+      const eventoId = await transporte.criar(agenda, montarEventoDaEquipe(pedido, true));
       // "Salvo" só existe depois de salvo de verdade na agenda compartilhada
       // (pedido de 06/11): ninguém mais confirma à mão.
       await prisma.pedido.update({
@@ -104,7 +108,7 @@ async function sincronizarEventoDaEquipe(pedidoId: string, transporte: Transport
       });
       await registrar(pedido.id, "criar-equipe", true, eventoId);
     } else if (plano.acao === "atualizar") {
-      await transporte.atualizar(agenda, plano.eventoId, montarEventoDaEquipe(pedido));
+      await transporte.atualizar(agenda, plano.eventoId, montarEventoDaEquipe(pedido, false));
       await prisma.pedido.update({ where: { id: pedido.id }, data: { agendaSalvaEm: new Date(), agendaSalvaPor: "automático" } });
     } else if (plano.acao === "apagar") {
       await transporte.apagar(agenda, plano.eventoId);
@@ -139,6 +143,45 @@ export async function salvarNaAgendaDaEquipe(
     select: { erro: true },
   });
   return { ok: false, erro: falha?.erro ?? "Não foi possível salvar na agenda compartilhada." };
+}
+
+/**
+ * Põe na agenda compartilhada os atendimentos que já estavam confirmados antes
+ * da integração ligar (e os que falharam): CONFIRMADO ou ALOCADO, de hoje em
+ * diante, ainda sem evento da equipe. Em lotes pequenos — cada evento é uma
+ * ida ao Google —, do mais próximo ao mais distante; a tela chama de novo com
+ * `aPartirDe` (a data+número do último) até acabar, então uma falha não
+ * prende o lote numa volta infinita.
+ */
+export async function salvarPendentesNaAgendaDaEquipe(
+  limite = 15,
+  aPartirDe?: number,
+  transporte: TransporteAgenda = transporteGoogle
+): Promise<{ feitos: number; falhas: string[]; ultimo: number | null; restam: number }> {
+  if (!agendaDaEquipe()) return { feitos: 0, falhas: ["A agenda compartilhada ainda não foi configurada (GOOGLE_AGENDA_EQUIPE_ID)."], ultimo: null, restam: 0 };
+  if (!integracaoConfigurada()) return { feitos: 0, falhas: ["A conta de serviço do Google não está configurada."], ultimo: null, restam: 0 };
+  const hoje = hojeUTC();
+  const filtro = {
+    status: { in: ["CONFIRMADO", "ALOCADO"] as ("CONFIRMADO" | "ALOCADO")[] },
+    data: { gte: hoje },
+    googleEventoEquipeId: null,
+  };
+  const pedidos = await prisma.pedido.findMany({
+    where: { ...filtro, ...(aPartirDe ? { numero: { gt: aPartirDe } } : {}) },
+    orderBy: { numero: "asc" },
+    take: limite,
+    select: { id: true, numero: true },
+  });
+  let feitos = 0;
+  const falhas: string[] = [];
+  for (const p of pedidos) {
+    const r = await salvarNaAgendaDaEquipe(p.id, transporte);
+    if (r.ok) feitos++;
+    else falhas.push(`nº ${p.numero}: ${r.erro.slice(0, 160)}`);
+  }
+  const ultimo = pedidos.at(-1)?.numero ?? null;
+  const restam = ultimo ? await prisma.pedido.count({ where: { ...filtro, numero: { gt: ultimo } } }) : 0;
+  return { feitos, falhas, ultimo, restam };
 }
 
 async function sincronizarEventoDoProfissional(

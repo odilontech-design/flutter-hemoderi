@@ -15,6 +15,7 @@ import { pipedriveConfigurado } from "@/lib/integracoes/pipedrive";
 import { asaasConfigurado, ambienteAsaas } from "@/lib/integracoes/asaas";
 import { PagamentosCartao } from "./PagamentosCartao";
 import { ReatribuirNegocios } from "./ReatribuirNegocios";
+import { SalvarAgendaPendentes } from "./SalvarAgendaPendentes";
 
 export const dynamic = "force-dynamic";
 
@@ -176,6 +177,13 @@ export default async function Integracoes() {
           </Cartao>
         ))}
       </div>
+
+      {googleConfigurado() && agendaDaEquipe() && (
+        <div className="flex flex-wrap items-center gap-3 mb-4">
+          <div className="font-display font-bold text-bordo text-sm">Google Agenda</div>
+          <SalvarAgendaPendentes />
+        </div>
+      )}
 
       <PagamentosCartao />
 
