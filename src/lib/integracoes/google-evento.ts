@@ -166,6 +166,7 @@ function enderecoCompleto(c: PedidoParaAgenda["clinica"]): string {
 
 export type PedidoParaEquipe = PedidoParaAgenda & {
   doutorNome?: string | null;
+  valorServicoCentavos?: number;
   formaPagamento?: string | null;
   procedimentoPaciente?: string | null;
 };
@@ -174,11 +175,11 @@ export type PedidoParaEquipe = PedidoParaAgenda & {
  * A ficha que a logística preenchia à mão na agenda (pedido da Joyce,
  * 10/11): os mesmos campos, na mesma ordem. O que o sistema sabe vem
  * preenchido; o que só a equipe sabe depois do atendimento (pagamento, sinais
- * vitais, orçamento, início e fim) fica em branco para digitar no evento. Sem
- * valores: a agenda é compartilhada e não leva preço (pedido de 10/11).
+ * vitais, orçamento, início e fim) fica em branco para digitar no evento.
  */
 export function fichaDoAtendimento(pedido: PedidoParaEquipe): string {
   const fim = somarMinutos(pedido.horaInicio, pedido.duracaoMin);
+  const valor = (pedido.valorServicoCentavos ?? 0) > 0 ? ((pedido.valorServicoCentavos ?? 0) / 100).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : "";
   const sedacao = /seda/i.test(pedido.servico.nome);
   return [
     `Data: ${diaBR(pedido.data)}`,
@@ -190,6 +191,7 @@ export function fichaDoAtendimento(pedido: PedidoParaEquipe): string {
     `Procedimento que será realizado no paciente: ${pedido.procedimentoPaciente ?? ""}`,
     `Serviços Hemoderi: ${pedido.servico.nome}`,
     `Profissional Hemoderi: ${pedido.profissional?.nome ?? "a alocar"}`,
+    `Valor = ${valor}`,
     "Pagamento (Sim/Não) =",
     `Forma de Pagamento: ${pedido.formaPagamento ?? ""}`,
     ...(sedacao ? ["FC=", "Sato2=", "PA =", "Destro"] : []),

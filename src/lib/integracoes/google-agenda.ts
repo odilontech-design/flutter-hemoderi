@@ -39,6 +39,7 @@ const SELECAO = {
   googleAgendaId: true,
   googleEventoEquipeId: true,
   doutorNome: true,
+  valorServicoCentavos: true,
   formaPagamento: true,
   procedimentoPaciente: true,
   clinica: { select: { nome: true, endereco: true, numero: true, complemento: true, bairro: true, cidade: true, uf: true, cep: true } },
