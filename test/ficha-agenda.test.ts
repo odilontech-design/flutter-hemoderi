@@ -14,7 +14,6 @@ const pedido = {
   servico: { nome: "Sedação consciente" },
   profissional: { nome: "Iara", googleAgendaId: null },
   doutorNome: "Dra. Teste",
-  valorServicoCentavos: 85000,
   formaPagamento: "Pix",
   procedimentoPaciente: "Protocolo inferior",
 };
@@ -25,7 +24,7 @@ test("a ficha segue os campos que a logística preenchia à mão", () => {
   assert.match(ficha, /Endereço completo com CEP: Rua Fictícia, 560 – conj 82 – Bela Vista, São Paulo\/SP – CEP 01323-000/);
   assert.match(ficha, /Cirurgião: Dra\. Teste/);
   assert.match(ficha, /Profissional Hemoderi: Iara/);
-  assert.match(ficha, /Valor = 850,00/);
+  assert.doesNotMatch(ficha, /Valor|850/);
   assert.match(ficha, /Forma de Pagamento: Pix/);
   assert.match(ficha, /FC=\nSato2=\nPA =\nDestro/);
   assert.match(ficha, /Pagamento \(Sim\/Não\) =\n/);
