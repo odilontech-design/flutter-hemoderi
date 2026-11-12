@@ -32,6 +32,7 @@ import { enfileirarMensagem, reenviarMensagem } from "@/lib/integracoes/whatsapp
 import { salvarNaAgendaDaEquipe, sincronizarEvento } from "@/lib/integracoes/google-agenda";
 import { marcarNegocioPerdido } from "@/lib/integracoes/pipedrive";
 import { condicaoValida, formaDePagamentoValida } from "@/lib/pagamento";
+import { pacienteObrigatorio } from "@/lib/paciente-obrigatorio";
 import { procedimentoEscolhido } from "@/lib/procedimentos";
 import { camposFaltando } from "@/lib/cadastro-completo";
 import { aptoParaServico } from "@/lib/aptidao";
@@ -190,7 +191,8 @@ async function criarAgendamento(
       return { ok: false, erro: "Algum serviço escolhido não faz parte da tabela de cursos." };
     }
   }
-  if ((modalidade === "CURSO" || pedidos.length > 1) && pedidos.some((p) => !(p.paciente || pacienteGeral))) {
+  const mesmoPaciente = String(dados.get("mesmoPaciente") ?? "") === "sim" ? true : String(dados.get("mesmoPaciente") ?? "") === "nao" ? false : null;
+  if (pacienteObrigatorio({ modalidade, servicos: pedidos.length, pelaEquipe, mesmoPaciente }) && pedidos.some((p) => !(p.paciente || pacienteGeral))) {
     return { ok: false, erro: "Informe o nome do paciente." };
   }
 

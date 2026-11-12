@@ -9,6 +9,7 @@ import { CampoTelefone } from "@/components/CampoTelefone";
 import { CampoHora } from "@/components/CampoHora";
 import { OutroEndereco } from "@/components/OutroEndereco";
 import { FORMAS_DE_PAGAMENTO } from "@/lib/pagamento";
+import { pacienteObrigatorio } from "@/lib/paciente-obrigatorio";
 import { OUTRO_PROCEDIMENTO, PROCEDIMENTOS_NO_PACIENTE } from "@/lib/procedimentos";
 import { agendarPelaEquipe, solicitarAgendamento, type Resultado } from "@/app/actions/pedidos";
 import { linkWhatsapp, mensagemDeUrgencia } from "@/lib/whatsapp-link";
@@ -386,7 +387,7 @@ function FormularioBase({
   // Pacientes diferentes no mesmo horário, um profissional cada (Joyce, 29/10).
   const [simultaneo, setSimultaneo] = useState(false);
   const variosServicos = linhas.length > 1;
-  const exigePaciente = modalidade === "CURSO" || variosServicos;
+  const exigePaciente = pacienteObrigatorio({ modalidade, servicos: linhas.length, pelaEquipe: Boolean(equipe), mesmoPaciente });
   const perguntaPendente = variosServicos && mesmoPaciente === null;
   const faltaPacienteNaLinha = variosServicos && mesmoPaciente === false && linhas.some((l) => !l.item.paciente.trim());
   // Se todos os serviços já têm paciente na lista, o campo geral não faz sentido.
@@ -424,6 +425,8 @@ function FormularioBase({
     <form action={enviar} className="space-y-3 max-w-4xl">
       <input type="hidden" name="itens" value={JSON.stringify(itens)} />
       <input type="hidden" name="modalidade" value={modalidade} />
+      {/* A pergunta mora na etapa 1, que fecha depois de respondida: o campo vai escondido para o servidor saber. */}
+      <input type="hidden" name="mesmoPaciente" value={variosServicos ? (mesmoPaciente === true ? "sim" : mesmoPaciente === false ? "nao" : "") : ""} />
       <input type="hidden" name="simultaneo" value={equipe && simultaneo && linhas.length > 1 && mesmoPaciente === false ? "sim" : ""} />
       <input type="hidden" name="enderecoId" value={local?.id ?? ""} />
       <input type="hidden" name="data" value={data} />
@@ -647,11 +650,11 @@ function FormularioBase({
                 <legend className="px-1 text-[11px] font-semibold text-bordo">Os serviços são para o mesmo paciente?</legend>
                 <div className="flex flex-wrap gap-x-5 gap-y-1 text-xs text-gray-700">
                   <label className="flex items-center gap-1.5">
-                    <input type="radio" name="mesmoPaciente" checked={mesmoPaciente === true} onChange={() => setMesmoPaciente(true)} />
+                    <input type="radio" name="mesmoPacienteEscolha" checked={mesmoPaciente === true} value="sim" onChange={() => setMesmoPaciente(true)} />
                     Sim, o mesmo paciente
                   </label>
                   <label className="flex items-center gap-1.5">
-                    <input type="radio" name="mesmoPaciente" checked={mesmoPaciente === false} onChange={() => setMesmoPaciente(false)} />
+                    <input type="radio" name="mesmoPacienteEscolha" checked={mesmoPaciente === false} value="nao" onChange={() => setMesmoPaciente(false)} />
                     Não, pacientes diferentes (um relatório para cada)
                   </label>
                 </div>
@@ -910,7 +913,11 @@ function FormularioBase({
                 onChange={(e) => setPacienteNome(e.target.value)}
                 required={exigePaciente && mesmoPaciente !== false}
               />
-              <div className="text-[10px] text-gray-400 mt-1">Vale para os serviços sem paciente informado na lista.</div>
+              <div className="text-[10px] text-gray-400 mt-1">
+                {equipe && mesmoPaciente === true && !exigePaciente
+                  ? "Pode ficar em branco se ainda não souber: o profissional informa o paciente no relatório."
+                  : "Vale para os serviços sem paciente informado na lista."}
+              </div>
             </div>
             )}
           </div>
