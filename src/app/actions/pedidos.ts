@@ -1903,6 +1903,8 @@ export async function aceitarAlocacao(pedidoId: string): Promise<Resultado> {
 
   await prisma.pedido.update({ where: { id: pedido.id }, data: { aceitoEm: new Date() } });
   await registrarAuditoria(sessao.usuarioId, "Pedido", pedido.id, "aceitar-alocacao");
+  // O evento na agenda do profissional (se ele conectou a dele) nasce no aceite.
+  await sincronizarEvento(pedido.id);
 
   atualizarTelas();
   return { ok: true };

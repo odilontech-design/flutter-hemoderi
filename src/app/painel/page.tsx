@@ -248,10 +248,10 @@ export default async function Hoje({ searchParams }: { searchParams: { servico?:
       {falhasNaAgenda > 0 && (
         <div className="mb-4">
           <Aviso tom="alerta">
-            <strong>Google Agenda:</strong>{" "}
+            <strong>Google Agenda da equipe:</strong>{" "}
             {falhasNaAgenda === 1 ? "1 sincronização falhou" : `${falhasNaAgenda} sincronizações falharam`} nas últimas 24h. Os atendimentos estão no
-            sistema normalmente, mas podem não ter chegado à agenda do profissional. Causa mais
-            comum: a agenda dele deixou de estar compartilhada com a conta de serviço.
+            sistema normalmente, mas podem não ter chegado à agenda compartilhada. Causa mais comum: a agenda
+            deixou de estar compartilhada com a conta de serviço. Em Integrações, &quot;Salvar na agenda todos os confirmados&quot; tenta de novo.
           </Aviso>
         </div>
       )}

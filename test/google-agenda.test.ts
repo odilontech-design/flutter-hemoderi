@@ -154,3 +154,12 @@ test("agenda da operação fica sem notificações", () => {
   const sem = { ...PEDIDO, profissional: { nome: "Ana", googleAgendaId: null } };
   assert.deepEqual(montarEvento(sem).reminders, { useDefault: false, overrides: [] });
 });
+
+import { deveTerEventoDoProfissional } from "../src/lib/integracoes/google-evento";
+
+test("o evento na agenda do profissional só existe depois do aceite", () => {
+  assert.equal(deveTerEventoDoProfissional("ALOCADO", false), false);
+  assert.equal(deveTerEventoDoProfissional("ALOCADO", true), true);
+  assert.equal(deveTerEventoDoProfissional("CANCELADO", true), false);
+  assert.equal(deveTerEventoDoProfissional("REALIZADO", true), true);
+});

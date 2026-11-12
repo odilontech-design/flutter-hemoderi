@@ -3,12 +3,11 @@ import { comEnderecoDoPedido } from "@/lib/endereco";
 import { hojeUTC } from "@/lib/data";
 import {
   agendaDaEquipe,
-  agendaDaOperacao,
   integracaoConfigurada,
   transporteGoogle,
   type TransporteAgenda,
 } from "./google-api";
-import { agendaAlvo, deveTerEvento, montarEvento, montarEventoDaEquipe, planejar } from "./google-evento";
+import { agendaAlvo, deveTerEvento, deveTerEventoDoProfissional, montarEvento, montarEventoDaEquipe, planejar } from "./google-evento";
 
 export * from "./google-evento";
 
@@ -37,6 +36,7 @@ const SELECAO = {
   observacoes: true,
   googleEventoId: true,
   googleAgendaId: true,
+  aceitoEm: true,
   googleEventoEquipeId: true,
   doutorNome: true,
   valorServicoCentavos: true,
@@ -80,7 +80,7 @@ async function registrar(
 export async function sincronizarEvento(
   pedidoId: string,
   transporte: TransporteAgenda = transporteGoogle,
-  agendaPadrao: string | null = agendaDaOperacao()
+  agendaPadrao: string | null = null
 ): Promise<void> {
   await sincronizarEventoDoProfissional(pedidoId, transporte, agendaPadrao);
   await sincronizarEventoDaEquipe(pedidoId, transporte);
@@ -195,7 +195,9 @@ async function sincronizarEventoDoProfissional(
 
   const plano = planejar(
     { eventoId: pedido.googleEventoId, agendaId: pedido.googleAgendaId },
-    { agendaId: agendaAlvo(pedido, agendaPadrao), deveExistir: deveTerEvento(pedido.status) }
+    // Na agenda de quem atende só depois do ACEITE no portal (12/11), e só se
+    // o profissional conectou a dele: sem isso a agenda dele não é da operação.
+    { agendaId: agendaAlvo(pedido, agendaPadrao), deveExistir: deveTerEventoDoProfissional(pedido.status, Boolean(pedido.aceitoEm)) }
   );
   if (plano.acao === "nada") return;
 
@@ -266,7 +268,42 @@ export async function falhasRecentes(): Promise<number> {
   // nenhuma agenda ligada (29/10).
   if (!integracaoConfigurada()) return 0;
   const desde = new Date(Date.now() - 24 * 60 * 60 * 1000);
+  // Só a agenda COMPARTILHADA DA EQUIPE acende o alerta geral. A agenda de
+  // cada profissional é opcional e é dele: se ele não compartilhou, o aviso
+  // aparece em "Meus dados" dele, não no painel da operação (12/11).
   return prisma.sincronizacaoExterna.count({
-    where: { sistema: "GOOGLE_AGENDA", sucesso: false, criadaEm: { gte: desde }, NOT: { erro: "Integração do Google não configurada." } },
+    where: {
+      sistema: "GOOGLE_AGENDA",
+      sucesso: false,
+      criadaEm: { gte: desde },
+      acao: { endsWith: "-equipe" },
+      NOT: { erro: "Integração do Google não configurada." },
+    },
+  });
+}
+
+/**
+ * Tentativas de colocar atendimentos na agenda do PRÓPRIO profissional que
+ * falharam nos últimos dias — o que "Meus dados" mostra para ele consertar o
+ * compartilhamento.
+ */
+export async function falhasNaAgendaDoProfissional(profissionalId: string, dias = 14): Promise<number> {
+  if (!integracaoConfigurada()) return 0;
+  const desde = new Date(Date.now() - dias * 24 * 60 * 60 * 1000);
+  const pedidos = await prisma.pedido.findMany({
+    where: { profissionalId },
+    select: { id: true },
+    orderBy: { data: "desc" },
+    take: 200,
+  });
+  if (pedidos.length === 0) return 0;
+  return prisma.sincronizacaoExterna.count({
+    where: {
+      sistema: "GOOGLE_AGENDA",
+      sucesso: false,
+      criadaEm: { gte: desde },
+      entidadeId: { in: pedidos.map((p) => p.id) },
+      NOT: { acao: { endsWith: "-equipe" } },
+    },
   });
 }

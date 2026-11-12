@@ -9,7 +9,7 @@ import { codigoDoPedido } from "@/lib/numeracao";
 import { formatarData, formatarDataHora } from "@/lib/data";
 import { pendenciasDeSincronizacao } from "@/lib/sincronizacao";
 import { reenviarFalhasWhatsapp, reprocessarPipedrive, reprocessarTodasPipedrive, testarConexaoPipedrive, verificarDonoPipedrive } from "@/app/actions/integracoes";
-import { integracaoConfigurada as googleConfigurado, agendaDaOperacao, agendaDaEquipe } from "@/lib/integracoes/google-api";
+import { integracaoConfigurada as googleConfigurado, agendaDaEquipe } from "@/lib/integracoes/google-api";
 import { configuradoBradesco } from "@/lib/integracoes/bradesco-pix";
 import { pipedriveConfigurado } from "@/lib/integracoes/pipedrive";
 import { asaasConfigurado, ambienteAsaas } from "@/lib/integracoes/asaas";
@@ -79,7 +79,7 @@ export default async function Integracoes() {
       select: { erro: true, criadaEm: true },
     }),
     prisma.mensagemWhatsapp.findFirst({ where: { status: "ENVIADA" }, orderBy: { enviadaEm: "desc" }, select: { enviadaEm: true } }),
-    prisma.sincronizacaoExterna.count({ where: { sistema: "GOOGLE_AGENDA", sucesso: false, criadaEm: { gte: umDiaAtras } } }),
+    prisma.sincronizacaoExterna.count({ where: { sistema: "GOOGLE_AGENDA", sucesso: false, criadaEm: { gte: umDiaAtras }, acao: { endsWith: "-equipe" } } }),
     prisma.sincronizacaoExterna.findFirst({
       where: { sistema: "PIPEDRIVE", sucesso: true },
       orderBy: { criadaEm: "desc" },
@@ -112,10 +112,11 @@ export default async function Integracoes() {
     },
     {
       nome: "Google Agenda",
-      ligado: googleConfigurado() && Boolean(agendaDaOperacao() || agendaDaEquipe()),
+      ligado: googleConfigurado() && Boolean(agendaDaEquipe()),
       linhas: [
         agendaDaEquipe() ? "agenda compartilhada da equipe: configurada" : "agenda compartilhada da equipe: NÃO configurada",
-        `${falhasGoogle} falha(s) nas últimas 24h`,
+        `${falhasGoogle} falha(s) na agenda da equipe nas últimas 24h`,
+        "agenda de cada profissional: opcional, conectada por ele em Meus dados; o evento nasce quando ele aceita",
       ],
       alerta: agendaDaEquipe()
         ? null

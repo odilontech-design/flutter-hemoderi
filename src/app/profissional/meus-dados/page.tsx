@@ -4,6 +4,7 @@ import { Cartao, Rotulo, Campo, Titulo } from "@/components/ui";
 import { FormularioAcao } from "@/components/FormularioAcao";
 import { CampoTelefone } from "@/components/CampoTelefone";
 import { salvarMeusDados } from "@/app/actions/meus-dados";
+import { falhasNaAgendaDoProfissional } from "@/lib/integracoes/google-agenda";
 
 export const dynamic = "force-dynamic";
 
@@ -41,6 +42,7 @@ export default async function MeusDados() {
   });
   const usuario = await prisma.usuario.findUnique({ where: { id: sessao.usuarioId }, select: { email: true } });
   const contaDeServico = process.env.GOOGLE_CLIENT_EMAIL ?? null;
+  const falhasNaAgenda = eu?.googleAgendaId ? await falhasNaAgendaDoProfissional(sessao.profissionalId) : 0;
 
   return (
     <>
@@ -80,9 +82,15 @@ export default async function MeusDados() {
               <Campo name="googleAgendaId" type="email" defaultValue={eu?.googleAgendaId ?? ""} placeholder="voce@gmail.com" />
               <div className="text-[10px] text-gray-400 mt-1">
                 {eu?.googleAgendaId
-                  ? "Conectada: cada atendimento seu vira compromisso nessa agenda. Para desconectar, apague e salve."
+                  ? "Conectada: cada atendimento que você aceita vira compromisso nessa agenda. Para desconectar, apague e salve."
                   : "Sem conectar, seus atendimentos aparecem só aqui no portal."}
               </div>
+              {falhasNaAgenda > 0 && (
+                <div className="text-[11px] text-amber-700 mt-1">
+                  Não conseguimos colocar seus atendimentos nessa agenda. Confira se ela foi compartilhada com a conta indicada ao lado,
+                  com a permissão &quot;Fazer alterações nos eventos&quot;. Depois disso, os próximos atendimentos aceitos entram sozinhos.
+                </div>
+              )}
             </div>
           </FormularioAcao>
         </Cartao>

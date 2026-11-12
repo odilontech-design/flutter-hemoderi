@@ -51,6 +51,15 @@ export function deveTerEvento(status: string): boolean {
 }
 
 /**
+ * Na agenda de quem atende o evento só nasce DEPOIS do aceite no portal
+ * (12/11): alocar não é compromisso até o profissional confirmar. Sem aceite,
+ * ou com o atendimento devolvido (recusa, desalocação), o evento não existe.
+ */
+export function deveTerEventoDoProfissional(status: string, aceito: boolean): boolean {
+  return aceito && deveTerEvento(status);
+}
+
+/**
  * Em qual agenda este atendimento deve estar. Null = nenhuma configurada, e
  * aí a integração simplesmente não tem para onde escrever.
  */
