@@ -384,6 +384,7 @@ function FormularioBase({
   // Paciente (ata de 27/10): obrigatório no curso e quando a visita tem mais de
   // um serviço — aí a primeira pergunta é se é o mesmo paciente para todos.
   const [mesmoPaciente, setMesmoPaciente] = useState<boolean | null>(null);
+  const [profissionalEscolhido, setProfissionalEscolhido] = useState("");
   // Pacientes diferentes no mesmo horário, um profissional cada (Joyce, 29/10).
   const [simultaneo, setSimultaneo] = useState(false);
   const variosServicos = linhas.length > 1;
@@ -925,7 +926,7 @@ function FormularioBase({
           {equipe && equipe.profissionais.length > 0 && (
             <div className="max-w-sm">
               <Rotulo>Profissional (opcional)</Rotulo>
-              <Selecao name="profissionalId" defaultValue="">
+              <Selecao name="profissionalId" value={profissionalEscolhido} onChange={(e) => setProfissionalEscolhido(e.target.value)}>
                 <option value="">Alocar depois</option>
                 {equipe.profissionais.map((p) => (
                   <option key={p.id} value={p.id}>
@@ -936,6 +937,13 @@ function FormularioBase({
               <div className="text-[10px] text-gray-400 mt-1">
                 Se escolher agora, o agendamento já sai alocado. Sem escolher, vai para a fila &quot;Para alocar&quot;.
               </div>
+              {profissionalEscolhido && (
+                <div className="mt-2">
+                  <Rotulo>Ajuda de custo prevista (opcional)</Rotulo>
+                  <Campo name="ajudaCusto" inputMode="decimal" placeholder="R$ 150,00" className="max-w-[10rem]" />
+                  <div className="text-[10px] text-gray-400 mt-1">Pode ficar em branco e ser definida depois, na esteira.</div>
+                </div>
+              )}
             </div>
           )}
 

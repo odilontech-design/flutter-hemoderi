@@ -21,7 +21,7 @@ const pedido = {
 
 test("a ficha segue os campos que a logística preenchia à mão", () => {
   const ficha = fichaDoAtendimento(pedido);
-  assert.match(ficha, /^Data: 11\/11\/2026\nHorário: 07:00 às 07:45\n/);
+  assert.match(ficha, /^Data: 11\/11\/2026\nHorário: 07:00\n/);
   assert.match(ficha, /Endereço completo com CEP: Rua Fictícia, 560 – conj 82 – Bela Vista, São Paulo\/SP – CEP 01323-000/);
   assert.match(ficha, /Cirurgião: Dra\. Teste/);
   assert.match(ficha, /Profissional Hemoderi: Iara/);

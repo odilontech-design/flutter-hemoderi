@@ -158,13 +158,6 @@ function diaBR(data: Date): string {
   return `${d}/${m}/${a}`;
 }
 
-/** "08:00" + 45 min = "08:45". */
-function somarMinutos(hora: string, minutos: number): string {
-  const [h, m] = hora.split(":").map(Number);
-  const total = (h * 60 + (m || 0) + minutos) % (24 * 60);
-  return `${String(Math.floor(total / 60)).padStart(2, "0")}:${String(total % 60).padStart(2, "0")}`;
-}
-
 /** "Rua X, 560 – conj 82 – Bela Vista, São Paulo/SP – CEP 01323-000". */
 function enderecoCompleto(c: PedidoParaAgenda["clinica"]): string {
   const rua = [c.endereco, c.numero].filter(Boolean).join(", ");
@@ -182,17 +175,17 @@ export type PedidoParaEquipe = PedidoParaAgenda & {
 
 /**
  * A ficha que a logística preenchia à mão na agenda (pedido da Joyce,
- * 10/11): os mesmos campos, na mesma ordem. O que o sistema sabe vem
+ * 10/11): os mesmos campos, na mesma ordem. Só o horário de INÍCIO (13/11): o
+ * término somado das durações gerava dúvida. O que o sistema sabe vem
  * preenchido; o que só a equipe sabe depois do atendimento (pagamento, sinais
  * vitais, orçamento, início e fim) fica em branco para digitar no evento.
  */
 export function fichaDoAtendimento(pedido: PedidoParaEquipe): string {
-  const fim = somarMinutos(pedido.horaInicio, pedido.duracaoMin);
   const valor = (pedido.valorServicoCentavos ?? 0) > 0 ? ((pedido.valorServicoCentavos ?? 0) / 100).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : "";
   const sedacao = /seda/i.test(pedido.servico.nome);
   return [
     `Data: ${diaBR(pedido.data)}`,
-    `Horário: ${pedido.horaInicio} às ${fim}`,
+    `Horário: ${pedido.horaInicio}`,
     `Endereço completo com CEP: ${enderecoCompleto(pedido.clinica)}`,
     `Nome da Clínica: ${pedido.clinica.nome}`,
     `Cirurgião: ${pedido.doutorNome ?? ""}`,

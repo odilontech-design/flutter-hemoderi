@@ -481,6 +481,12 @@ export async function agendarPelaEquipe(_anterior: Resultado, dados: FormData): 
   const sessao = await exigirInterno();
   const clinicaId = String(dados.get("clinicaId") ?? "");
   if (!clinicaId) return { ok: false, erro: "Escolha a clínica." };
+  // Ajuda de custo opcional já no agendamento (Joyce, 13/11): confere o texto
+  // antes de criar, para um erro de digitação não deixar o agendamento criado
+  // e a alocação por fazer.
+  const ajudaDeCusto = String(dados.get("ajudaCusto") ?? "").trim();
+  const ajudaLida = lerAjudaDeCusto(ajudaDeCusto);
+  if (!ajudaLida.ok) return ajudaLida;
 
   const resultado = await criarAgendamento({ tipo: "equipe", usuarioId: sessao.usuarioId, clinicaId }, dados);
   if (!resultado.ok || !resultado.criados) return resultado;
@@ -502,8 +508,8 @@ export async function agendarPelaEquipe(_anterior: Resultado, dados: FormData): 
       ? (await prisma.pedido.findUnique({ where: { id: resultado.criados[0].id }, select: { grupoId: true } }))?.grupoId
       : null;
     const alocacao = grupoId
-      ? await alocarGrupo(grupoId, profissionalId)
-      : await alocarPedido(resultado.criados[0].id, profissionalId);
+      ? await alocarGrupo(grupoId, profissionalId, ajudaDeCusto)
+      : await alocarPedido(resultado.criados[0].id, profissionalId, ajudaDeCusto);
     if (alocacao.ok) avisos.push(...(alocacao.avisos ?? []));
     else avisos.push(`Agendamento criado, mas não foi possível alocar: ${alocacao.erro} Ele está na fila "Para alocar".`);
   }
@@ -623,12 +629,19 @@ async function alocarNaTransacao(
     },
     tx
   );
-  if (temBloqueio(impedimentos)) {
+  // Profissional já com outro atendimento perto desse horário é AVISO, não trava
+  // (Joyce, 13/11): há casos muito próximos em que ele consegue fazer dois em
+  // sequência, e quem sabe é a logística. Sala e equipamento continuam travando.
+  const travas = impedimentos.filter((i) => i.bloqueante && i.tipo !== "PROFISSIONAL");
+  if (travas.length > 0) {
     return {
       ok: false as const,
-      erro: impedimentos.filter((i) => i.bloqueante).map((i) => i.mensagem).join(" "),
+      erro: travas.map((i) => i.mensagem).join(" "),
     };
   }
+  const avisosDeAgenda = impedimentos.map((i) =>
+    i.tipo === "PROFISSIONAL" ? `Atenção: ${i.mensagem} Confirme com ele que consegue fazer em sequência.` : i.mensagem
+  );
 
   // O profissional adicional usa o equipamento do atendimento principal.
   const reservaEquipamento = !pedido.apoioDeId && pedido.servico.exigeEquipamento && !pedido.servico.equipamentoIlimitado;
@@ -673,7 +686,7 @@ async function alocarNaTransacao(
   return {
     ok: true as const,
     repasseOrigem: repasse.origem,
-    avisos: [...impedimentos.filter((i) => !i.bloqueante).map((i) => i.mensagem), ...avisoDeEquipamento],
+    avisos: [...avisosDeAgenda, ...avisoDeEquipamento],
   };
 }
 
