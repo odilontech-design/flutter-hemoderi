@@ -27,8 +27,7 @@ type DefinicaoEquipamento = { tipo: string; unidades: number };
 export type DefinicaoServico = {
   nome: string;
   /** A categoria do catálogo (sumário, página 2) — ver CATEGORIAS_DO_CATALOGO. */
-  /** Uma seção do catálogo oficial, ou "Waterlase" (locação em demonstração, ainda sem foto de capa). */
-  familia: (typeof CATEGORIAS_DO_CATALOGO)[number] | "Waterlase";
+  familia: (typeof CATEGORIAS_DO_CATALOGO)[number];
   /** Área da operação, para relatório: Odontologia, Estética ou Saúde. */
   categoria: CategoriaServico;
   descricao: string;
@@ -693,7 +692,7 @@ export const SERVICOS_DO_CATALOGO: DefinicaoServico[] = [
     familia: "Waterlase",
     categoria: "ODONTOLOGIA",
     descricao:
-      "Locação do laser Waterlase por 4 horas, a R$ 100,00 por hora. Laser odontológico de alta potência para tecidos duros e moles.",
+      "Locação do laser Waterlase iPlus por 4 horas, a R$ 100,00 por hora. Laser all-tissue para tecidos moles, duros e ósseos.",
     duracaoMin: 240,
     valorPadraoCentavos: 40_000,
     unidadeCobranca: "PERIODO",
@@ -705,7 +704,7 @@ export const SERVICOS_DO_CATALOGO: DefinicaoServico[] = [
     familia: "Waterlase",
     categoria: "ODONTOLOGIA",
     descricao:
-      "Locação do laser Waterlase por 6 horas, a R$ 100,00 por hora. Laser odontológico de alta potência para tecidos duros e moles.",
+      "Locação do laser Waterlase iPlus por 6 horas, a R$ 100,00 por hora. Laser all-tissue para tecidos moles, duros e ósseos.",
     duracaoMin: 360,
     valorPadraoCentavos: 60_000,
     unidadeCobranca: "PERIODO",
@@ -716,7 +715,7 @@ export const SERVICOS_DO_CATALOGO: DefinicaoServico[] = [
     nome: "Waterlase – Por Paciente",
     familia: "Waterlase",
     categoria: "ODONTOLOGIA",
-    descricao: "Valor por paciente, a R$ 100,00. Laser odontológico de alta potência para tecidos duros e moles.",
+    descricao: "Valor por paciente, a R$ 100,00. Laser Waterlase iPlus, all-tissue, para tecidos moles, duros e ósseos.",
     duracaoMin: 60,
     valorPadraoCentavos: 10_000,
     exigeEquipamento: true,

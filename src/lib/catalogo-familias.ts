@@ -384,6 +384,41 @@ export const DESCRITIVO_DAS_FAMILIAS: Record<string, DescritivoDaFamilia> = {
     observacao: `Por cirurgia: o profissional acompanha a cirurgia; não inclui contra-ângulo e peça reta. Diária (até 8 horas): retirada ao final do dia, com horários flexíveis. Em todos, entrega e teste do equipamento por profissional Hemoderi. Não garantimos a marca do motor que será enviada. ${RAIO_150}`,
   },
 
+  Waterlase: {
+    imagem: "/catalogo/waterlase.webp",
+    legenda: "Locação do laser Waterlase iPlus",
+    blocos: [
+      {
+        titulo: "Equipamento",
+        texto:
+          "Waterlase iPlus, laser all-tissue para tecido mole, duro e ósseo, distribuído no Brasil pela Nivaa. Segundo o fornecedor, são mais de 80 aplicações aprovadas pelo FDA.",
+      },
+      {
+        titulo: "Principais aplicações",
+        itens: [
+          "Restauradoras;",
+          "Odontopediatria;",
+          "Periodontia;",
+          "Peri-implantite;",
+          "Endodontia;",
+          "Bucomaxilofacial e cirurgia oral;",
+          "Estética facial.",
+        ],
+      },
+      {
+        titulo: "O que o fornecedor destaca",
+        itens: [
+          "Menos dor e desconforto, com pouca ou nenhuma anestesia;",
+          "Menos inchaço e dor no pós-operatório;",
+          "Remoção precisa de cárie, preservando o tecido saudável;",
+          "Frenectomias rápidas, com média de cerca de 5 minutos;",
+          "Tratamento de vários quadrantes no mesmo dia.",
+        ],
+      },
+    ],
+    observacao: "Locação por 4 ou 6 horas (R$ 100,00 por hora) ou valor por paciente (R$ 100,00).",
+  },
+
   "PRF – Coleta e Produção": {
     imagem: "/catalogo/prf.webp",
     legenda: "PRF — produzimos no protocolo de sua preferência",

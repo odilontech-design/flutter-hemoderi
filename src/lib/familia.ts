@@ -36,10 +36,12 @@ export const CATEGORIAS_DO_CATALOGO = [
   "Laser CO2 Fracionado",
   "Bisturi Elétrico",
   "Motor de Implante",
+  // Locação em demonstração com o fornecedor (16/11): Waterlase iPlus, da Nivaa.
+  "Waterlase",
   "PRF – Coleta e Produção",
 ] as const;
 
-const [AIRFLOW, LITETOUCH, SEDACAO, PIEZO, FOTO, ULTRASSOM, MEGADERME, PLATINUM, LASER_THERAPY, CO2, BISTURI, IMPLANTE, PRF] =
+const [AIRFLOW, LITETOUCH, SEDACAO, PIEZO, FOTO, ULTRASSOM, MEGADERME, PLATINUM, LASER_THERAPY, CO2, BISTURI, IMPLANTE, WATERLASE, PRF] =
   CATEGORIAS_DO_CATALOGO;
 
 /**
@@ -62,8 +64,7 @@ const REGRAS: { familia: string; padrao: RegExp }[] = [
   { familia: AIRFLOW, padrao: /airflow|gbt/i },
   { familia: PLATINUM, padrao: /platinum/i },
   { familia: IMPLANTE, padrao: /implante/i },
-  // Fora do sumário oficial (sem foto de capa ainda): vem depois das categorias do catálogo.
-  { familia: "Waterlase", padrao: /waterlase/i },
+  { familia: WATERLASE, padrao: /waterlase/i },
   { familia: BISTURI, padrao: /bisturi/i },
   { familia: SEDACAO, padrao: /seda[çc]/i },
   { familia: FOTO, padrao: /fotogr/i },
