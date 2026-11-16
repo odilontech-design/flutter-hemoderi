@@ -42,3 +42,22 @@ test("a ficha só é escrita ao criar; atualizar preserva o que a equipe anotou"
   assert.equal(montarEventoDaEquipe(pedido, false).description, undefined);
   assert.equal(montarEventoDaEquipe(pedido, false).summary, "Dra. Teste · Sedação consciente · Iara");
 });
+
+import { textoDoAvisoDeCancelamento } from "../src/lib/aviso-equipe";
+
+test("o aviso de cancelamento traz profissional, atendimento, quando e a observação", () => {
+  const t = textoDoAvisoDeCancelamento({
+    profissional: "Profissional Fictícia",
+    servico: "Sedação Consciente",
+    clinica: "Clínica Fictícia",
+    data: new Date("2026-11-17T00:00:00Z"),
+    hora: "09:00",
+    codigo: "2026-0001",
+    observacao: "Paciente avisou na porta",
+    link: "https://exemplo/painel/pedidos/1",
+  });
+  assert.match(t, /^Aviso de cancelamento:/);
+  assert.match(t, /Profissional: Profissional Fictícia/);
+  assert.match(t, /17\/11\/2026 às 09:00/);
+  assert.match(t, /Observação do profissional: Paciente avisou na porta/);
+});

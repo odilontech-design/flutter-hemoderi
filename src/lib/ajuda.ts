@@ -12,7 +12,7 @@ export const AJUDA_EQUIPE: TopicoDeAjuda[] = [
     tela: "Hoje",
     para: "O resumo do dia: quantos estão em cada fila (cada número leva à fila), a agenda do dia em ordem de horário, com chegada e relatório de cada atendimento.",
     botoes: [
-      { nome: "Números coloridos no topo", faz: "Abrem a fila correspondente na esteira (para confirmar, para alocar, para conferir…)." },
+      { nome: "Números coloridos no topo", faz: "Abrem a fila correspondente na esteira (para confirmar, para alocar, relatório para conferir…)." },
       { nome: "Avisar clínica", faz: "Aparece quando o profissional está atrasado: manda o aviso de atraso à clínica pela central do WhatsApp." },
       { nome: "Reenviar aviso", faz: "Na lista \"Aguardando aceite\": manda de novo ao profissional o aviso da alocação." },
     ],

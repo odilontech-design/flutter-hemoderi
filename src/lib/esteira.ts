@@ -72,24 +72,24 @@ export const ETAPAS: Etapa[] = [
   },
   {
     chave: "aguardando-aceite",
-    rotulo: "Aguardando aceite",
+    rotulo: "Profissional não aceitou",
     // Sem dono: é um recorte de "Alocados" para acompanhar, não uma fila de trabalho própria.
-    descricao: "Alocados, de hoje em diante, cujo profissional ainda não deu o aceite — só quem falta.",
+    descricao: "Alocados, de hoje em diante, em que o profissional ainda não aceitou o atendimento — só quem falta aceitar.",
     get onde(): Prisma.PedidoWhereInput {
       return { status: "ALOCADO", aceitoEm: null, data: { gte: hojeUTC() } };
     },
   },
   {
     chave: "conferir",
-    rotulo: "Para conferir",
-    descricao: "Atendido, com relatório aguardando a conferência do pós-venda.",
+    rotulo: "Relatório para conferir",
+    descricao: "Atendimento realizado, com o relatório do profissional esperando a conferência do pós-venda.",
     dono: "POS_VENDA",
     onde: PENDENTE_DE_CONFERENCIA,
   },
   {
     chave: "sem-relatorio",
-    rotulo: "Sem relatório",
-    descricao: "O dia do atendimento passou e o profissional ainda não enviou o relatório — cobrar.",
+    rotulo: "Relatório não enviado",
+    descricao: "O dia do atendimento passou e o profissional ainda não enviou o relatório — cobrar o profissional.",
     // Revisão de 25/10: 19 atendimentos passados seguiam "alocados", sem
     // relatório, misturados aos futuros. Sem relatório não há conferência,
     // repasse nem cobrança — e ninguém via. O pós-venda é quem cobra.
@@ -99,7 +99,7 @@ export const ETAPAS: Etapa[] = [
   },
   {
     chave: "devolvidos",
-    rotulo: "Devolvidos",
+    rotulo: "Relatório devolvido",
     descricao: "Relatório recusado pelo pós-venda, esperando o profissional corrigir.",
     onde: { status: "REALIZADO", relatorio: { is: { aprovadoEm: null, devolvidoEm: { not: null } } } },
   },
@@ -118,8 +118,10 @@ export const ETAPAS: Etapa[] = [
   {
     chave: "todos",
     rotulo: "Todos",
-    descricao: "A esteira inteira, sem recorte.",
-    onde: {},
+    // Os cancelados não ficam na esteira de ações ativas (reunião de 16/11):
+    // têm aba própria, e "Todos" é tudo o que ainda pede ou já teve ação.
+    descricao: "Todos, exceto os cancelados — que ficam na aba Cancelados.",
+    onde: { status: { not: "CANCELADO" } },
   },
 ];
 

@@ -206,8 +206,8 @@ export default async function Hoje({ searchParams }: { searchParams: { servico?:
   const filas = [
     { chave: "triagem", rotulo: "Para confirmar", dono: "comercial" },
     { chave: "alocar", rotulo: "Para alocar", dono: "logística" },
-    { chave: "conferir", rotulo: "Para conferir", dono: "pós-venda" },
-    { chave: "sem-relatorio", rotulo: "Sem relatório", dono: "cobrar o profissional" },
+    { chave: "conferir", rotulo: "Relatório para conferir", dono: "pós-venda" },
+    { chave: "sem-relatorio", rotulo: "Relatório não enviado", dono: "cobrar o profissional" },
   ];
   const [contagens, aguardandoAceite] = await Promise.all([
     Promise.all(filas.map((f) => prisma.pedido.count({ where: etapaPorChave(f.chave)!.onde }))),
@@ -229,7 +229,7 @@ export default async function Hoje({ searchParams }: { searchParams: { servico?:
   ]);
   const atencao = [
     ...filas.map((f, i) => ({ ...f, total: contagens[i], href: `/painel/pedidos?filtro=${f.chave}` })),
-    { chave: "aceite", rotulo: "Aguardando aceite", dono: "só quem ainda não aceitou", total: aguardandoAceite.length, href: "/painel/pedidos?filtro=aguardando-aceite" },
+    { chave: "aceite", rotulo: "Profissional não aceitou", dono: "só quem ainda não aceitou", total: aguardandoAceite.length, href: "/painel/pedidos?filtro=aguardando-aceite" },
   ];
   const concluidosHoje = doDia.filter((p) => p.status === "REALIZADO" || p.status === "FALTOU").length;
 
@@ -280,7 +280,7 @@ export default async function Hoje({ searchParams }: { searchParams: { servico?:
       {aguardandoAceite.length > 0 && (
         <Cartao className="mb-4" >
           <div id="aguardando-aceite" className="font-display font-bold text-bordo text-sm mb-2 scroll-mt-24">
-            Aguardando aceite ({aguardandoAceite.length})
+            Profissional não aceitou ({aguardandoAceite.length})
           </div>
           <ul className="divide-y divide-gray-100">
             {aguardandoAceite.map((p) => (
@@ -374,7 +374,7 @@ export default async function Hoje({ searchParams }: { searchParams: { servico?:
                         {pedido.profissional?.nome ?? <span className="text-red-600 font-semibold">{pedido.status === "SOLICITADO" ? "a confirmar" : "a alocar"}</span>}
                         {pedido.status === "ALOCADO" && (
                           <div className={`text-[10px] font-semibold ${pedido.aceitoEm ? "text-green-700" : "text-amber-700"}`}>
-                            {pedido.aceitoEm ? "aceitou" : "aguardando aceite"}
+                            {pedido.aceitoEm ? "profissional aceitou" : "profissional ainda não aceitou"}
                           </div>
                         )}
                       </td>
@@ -410,7 +410,7 @@ export default async function Hoje({ searchParams }: { searchParams: { servico?:
                         ) : pedido.relatorio?.devolvidoEm ? (
                           <span className="font-semibold text-red-600">devolvido</span>
                         ) : pedido.relatorio ? (
-                          <span className="font-semibold text-amber-700">para conferir</span>
+                          <span className="font-semibold text-amber-700">relatório para conferir</span>
                         ) : (
                           <span className="text-gray-300">—</span>
                         )}

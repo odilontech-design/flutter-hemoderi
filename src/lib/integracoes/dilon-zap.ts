@@ -95,7 +95,7 @@ export function mensagemVencida(params: {
 }): boolean {
   // Feedback e cobrança de relatório são DEPOIS do atendimento, por natureza:
   // valem como o aviso de resultado, por dois dias desde que a equipe mandou.
-  if (params.tipo === "RESULTADO" || params.tipo === "FEEDBACK" || params.tipo === "COBRANCA_RELATORIO") {
+  if (params.tipo === "RESULTADO" || params.tipo === "FEEDBACK" || params.tipo === "COBRANCA_RELATORIO" || params.tipo === "AVISO_EQUIPE") {
     return params.agora.getTime() - params.criadaEm.getTime() > VALIDADE_RESULTADO_MS;
   }
   if (params.tipo === "ATRASO" || params.tipo === "LEMBRETE_CHEGADA") {

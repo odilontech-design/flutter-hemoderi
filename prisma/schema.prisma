@@ -1776,6 +1776,8 @@ enum TipoMensagem {
   LEMBRETE_CHEGADA
   /// Aviso ao profissional que perdeu o atendimento ou teve o horário mudado (ata de 03/11)
   AVISO_PROFISSIONAL
+  /// Aviso interno ao responsável quando um profissional registra que o paciente não compareceu (reunião de 16/11)
+  AVISO_EQUIPE
 }
 
 enum StatusMensagem {

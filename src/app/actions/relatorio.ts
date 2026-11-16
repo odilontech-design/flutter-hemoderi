@@ -1,5 +1,6 @@
 "use server";
 
+import { avisarCancelamentoDoProfissional } from "@/lib/aviso-equipe";
 import { pedeOrcamentoEPg } from "@/lib/mandic";
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
@@ -308,6 +309,10 @@ export async function enviarRelatorio(_anterior: Resultado, dados: FormData): Pr
     pedido.status === "ALOCADO"
       ? await registrarResultado(pedido.id, compareceu, sessao.usuarioId)
       : { ok: true as const };
+  // O paciente não compareceu: o responsável é avisado na hora (reunião de 16/11).
+  if (!compareceu && pedido.status === "ALOCADO" && resultado.ok) {
+    await avisarCancelamentoDoProfissional(pedido.id, String(dados.get("observacoes") ?? ""));
+  }
 
   revalidatePath("/profissional");
   revalidatePath("/profissional/relatorios");

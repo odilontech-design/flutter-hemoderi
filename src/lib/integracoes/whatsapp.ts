@@ -95,6 +95,15 @@ export function envioAutomaticoLigado(): boolean {
 export const TIPOS_PARA_O_PROFISSIONAL: TipoMensagem[] = ["ALOCACAO", "COBRANCA_RELATORIO", "LEMBRETE_CHEGADA", "AVISO_PROFISSIONAL"];
 
 /**
+ * Avisos INTERNOS, para o responsável da operação (reunião de 16/11): não são
+ * do cliente, então não passam pela suspensão do envio automático.
+ */
+export const TIPOS_DA_EQUIPE: TipoMensagem[] = ["AVISO_EQUIPE"];
+
+/** Tudo o que sai mesmo com o envio automático ao cliente suspenso. */
+export const TIPOS_SEMPRE_AUTOMATICOS: TipoMensagem[] = [...TIPOS_PARA_O_PROFISSIONAL, ...TIPOS_DA_EQUIPE];
+
+/**
  * Os textos. Ficam no código, e não no banco, enquanto forem poucos e
  * estáveis — vale trocar por cadastro quando a equipe pedir a segunda
  * variação. Os modelos reais que a Hemoderi usa hoje entram na Fase 0
@@ -160,6 +169,9 @@ export function montarTexto(tipo: TipoMensagem, pedido: DadosPedido, horasRevela
     }
     case "AVISO_PROFISSIONAL":
       // O texto nasce em lib/aviso-profissional.ts, com o antes e o depois.
+      return "";
+    case "AVISO_EQUIPE":
+      // O texto nasce em lib/aviso-equipe.ts.
       return "";
     case "LEMBRETE_CHEGADA":
       return `Olá, ${pedido.profissional?.nome?.split(" ")[0] ?? ""}! Já são ${pedido.horaInicio} e a sua chegada ao atendimento de ${pedido.servico.nome} ainda não foi registrada. Ao chegar, toque em "Cheguei" no app: ${urlBase()}/profissional. Se não puder comparecer, avise a logística. Agendamento ${numeroDoPedido(pedido.numero, pedido.data)}.`;
@@ -350,7 +362,11 @@ export async function despacharPendentes(
       continue;
     }
 
-    const nome = TIPOS_PARA_O_PROFISSIONAL.includes(mensagem.tipo) ? mensagem.pedido?.profissional?.nome : mensagem.pedido?.clinica.nome;
+    const nome = TIPOS_DA_EQUIPE.includes(mensagem.tipo)
+      ? "Responsável Hemoderi"
+      : TIPOS_PARA_O_PROFISSIONAL.includes(mensagem.tipo)
+        ? mensagem.pedido?.profissional?.nome
+        : mensagem.pedido?.clinica.nome;
     let desfecho: ReturnType<typeof interpretarResposta>;
     try {
       const resposta = await fetch(url, {

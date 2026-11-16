@@ -67,8 +67,8 @@ test("chave desconhecida não vira etapa — quem chama decide o padrão", () =>
   assert.equal(etapaPorChave(undefined), undefined);
 });
 
-test("a etapa `todos` não filtra nada", () => {
-  assert.deepEqual(etapaPorChave("todos")?.onde, {});
+test("a etapa `todos` não mostra os cancelados (eles têm aba própria)", () => {
+  assert.deepEqual(etapaPorChave("todos")?.onde, { status: { not: "CANCELADO" } });
 });
 
 test("cada perfil vê só as etapas do seu setor; gestão e responsável veem tudo", () => {

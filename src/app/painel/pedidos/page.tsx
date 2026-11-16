@@ -441,7 +441,7 @@ export default async function Esteira({
                         </span>
                       ) : (
                         <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 px-2 py-0.5 font-semibold text-amber-800">
-                          <IconeRelogio className="!h-3.5 !w-3.5" /> Aguardando aceite
+                          <IconeRelogio className="!h-3.5 !w-3.5" /> Profissional ainda não aceitou
                         </span>
                       )}
                       {/* A cópia do atendimento na agenda COMPARTILHADA da equipe:
@@ -781,7 +781,7 @@ function CartaoDoGrupo({
                     {m.profissional.nome}
                     {m.status === "ALOCADO" && (
                       <span className={m.aceitoEm ? " text-green-700" : " text-amber-700"}>
-                        {m.aceitoEm ? " · aceito" : " · aguardando aceite"}
+                        {m.aceitoEm ? " · aceito" : " · profissional ainda não aceitou"}
                       </span>
                     )}
                   </span>

@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/prisma";
-import { despacharPendentes, enfileirarMensagem, TIPOS_PARA_O_PROFISSIONAL } from "@/lib/integracoes/whatsapp";
+import { despacharPendentes, enfileirarMensagem, TIPOS_SEMPRE_AUTOMATICOS } from "@/lib/integracoes/whatsapp";
 import { hojeUTC, instanteDoAtendimento } from "@/lib/data";
 
 // Rota de dados vivos: nunca pré-renderizada no build.
@@ -38,7 +38,7 @@ export async function GET(requisicao: Request) {
 
   for (const pedido of devidos) await enfileirarMensagem(pedido.id, "LEMBRETE_CHEGADA");
   // O que ficou na fila (queda de rede na hora) sai agora.
-  const entrega = await despacharPendentes(50, undefined, TIPOS_PARA_O_PROFISSIONAL);
+  const entrega = await despacharPendentes(50, undefined, TIPOS_SEMPRE_AUTOMATICOS);
 
   return Response.json({ avaliados: candidatos.length, lembrados: devidos.length, ...entrega });
 }
