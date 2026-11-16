@@ -462,6 +462,7 @@ const RESUMO_DOS_PACOTES: Record<string, string> = {
   "Laser CO2 Fracionado": "Períodos de 4, 6 ou 8 horas, nas modalidades Essencial ou Assistido, e valor por paciente para cursos.",
   "Bisturi Elétrico": "Por cirurgia ou diária de 8 horas.",
   "Motor de Implante": "Por cirurgia ou diária de 8 horas.",
+  Waterlase: "Locação de 4 ou 6 horas (R$ 100,00 por hora) ou valor por paciente (R$ 100,00).",
   "PRF – Coleta e Produção":
     "Por paciente: membranas de PRF, PRF para harmonização ou para medicina, Stickybone + membranas — ou diária I-PRF Day. Disponibilidade conforme a região.",
 };

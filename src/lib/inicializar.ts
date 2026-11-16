@@ -27,7 +27,8 @@ type DefinicaoEquipamento = { tipo: string; unidades: number };
 export type DefinicaoServico = {
   nome: string;
   /** A categoria do catálogo (sumário, página 2) — ver CATEGORIAS_DO_CATALOGO. */
-  familia: (typeof CATEGORIAS_DO_CATALOGO)[number];
+  /** Uma seção do catálogo oficial, ou "Waterlase" (locação em demonstração, ainda sem foto de capa). */
+  familia: (typeof CATEGORIAS_DO_CATALOGO)[number] | "Waterlase";
   /** Área da operação, para relatório: Odontologia, Estética ou Saúde. */
   categoria: CategoriaServico;
   descricao: string;
@@ -72,6 +73,8 @@ export const EQUIPAMENTOS_DO_CATALOGO: DefinicaoEquipamento[] = [
   { tipo: "Atria Ultrassom", unidades: 1 },
   // Catálogo de outubro (Out.26). Unidade a confirmar com a Hemoderi.
   { tipo: "Laser CO2 Fracionado", unidades: 1 },
+  // Locação em demonstração com o fornecedor (16/11). Unidade a confirmar.
+  { tipo: "Waterlase", unidades: 1 },
 ];
 
 /**
@@ -682,6 +685,42 @@ export const SERVICOS_DO_CATALOGO: DefinicaoServico[] = [
     unidadeCobranca: "PERIODO",
     exigeEquipamento: true,
     tipoEquipamento: "Motor de Implante",
+  },
+
+  // ── Waterlase (locação, demonstração de 16/11) ───────────────────────────
+  {
+    nome: "Waterlase – Locação 4 Horas",
+    familia: "Waterlase",
+    categoria: "ODONTOLOGIA",
+    descricao:
+      "Locação do laser Waterlase por 4 horas, a R$ 100,00 por hora. Laser odontológico de alta potência para tecidos duros e moles.",
+    duracaoMin: 240,
+    valorPadraoCentavos: 40_000,
+    unidadeCobranca: "PERIODO",
+    exigeEquipamento: true,
+    tipoEquipamento: "Waterlase",
+  },
+  {
+    nome: "Waterlase – Locação 6 Horas",
+    familia: "Waterlase",
+    categoria: "ODONTOLOGIA",
+    descricao:
+      "Locação do laser Waterlase por 6 horas, a R$ 100,00 por hora. Laser odontológico de alta potência para tecidos duros e moles.",
+    duracaoMin: 360,
+    valorPadraoCentavos: 60_000,
+    unidadeCobranca: "PERIODO",
+    exigeEquipamento: true,
+    tipoEquipamento: "Waterlase",
+  },
+  {
+    nome: "Waterlase – Por Paciente",
+    familia: "Waterlase",
+    categoria: "ODONTOLOGIA",
+    descricao: "Valor por paciente, a R$ 100,00. Laser odontológico de alta potência para tecidos duros e moles.",
+    duracaoMin: 60,
+    valorPadraoCentavos: 10_000,
+    exigeEquipamento: true,
+    tipoEquipamento: "Waterlase",
   },
 
   // ── PRF – Coleta e Produção ──────────────────────────────────────────────

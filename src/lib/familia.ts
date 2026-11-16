@@ -62,6 +62,8 @@ const REGRAS: { familia: string; padrao: RegExp }[] = [
   { familia: AIRFLOW, padrao: /airflow|gbt/i },
   { familia: PLATINUM, padrao: /platinum/i },
   { familia: IMPLANTE, padrao: /implante/i },
+  // Fora do sumário oficial (sem foto de capa ainda): vem depois das categorias do catálogo.
+  { familia: "Waterlase", padrao: /waterlase/i },
   { familia: BISTURI, padrao: /bisturi/i },
   { familia: SEDACAO, padrao: /seda[çc]/i },
   { familia: FOTO, padrao: /fotogr/i },
