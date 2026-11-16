@@ -55,7 +55,7 @@ function urlBase(caminho: string): string {
   );
 }
 
-async function chamar(caminho: string, metodo: "GET" | "POST" | "PUT", corpo?: unknown): Promise<unknown> {
+async function chamar(caminho: string, metodo: "GET" | "POST" | "PUT" | "DELETE", corpo?: unknown): Promise<unknown> {
   const resposta = await fetch(urlBase(caminho), {
     method: metodo,
     headers: { "Content-Type": "application/json", Accept: "application/json" },
@@ -529,4 +529,34 @@ export async function reatribuirNegocios(limite = 40, aPartirDe?: string): Promi
     ? await prisma.pedido.count({ where: { apoioDeId: null, pipedriveNegocioId: { not: null }, numero: { gt: ultimo } } })
     : 0;
   return { feitos, falhas, ultimo: ultimo ? String(ultimo) : null, restam };
+}
+
+
+/**
+ * Apaga no PipeDrive os negócios nascidos de agendamentos de CLÍNICA DE TESTE
+ * (reunião de 16/11: limpar o que o André criou ao testar). Só mexe em pedidos
+ * de clínica marcada como conta de teste; o negócio sai do PipeDrive e o pedido
+ * perde o vínculo, mas continua no sistema. Em lotes; 404 conta como feito.
+ */
+export async function apagarNegociosDeTeste(limite = 30): Promise<{ feitos: number; falhas: string[]; restam: number }> {
+  if (!configurado()) return { feitos: 0, falhas: ["PipeDrive não configurado."], restam: 0 };
+  const filtro = { pipedriveNegocioId: { not: null }, clinica: { contaDeTeste: true } };
+  const pedidos = await prisma.pedido.findMany({ where: filtro, orderBy: { numero: "asc" }, take: limite, select: { id: true, numero: true, pipedriveNegocioId: true } });
+  let feitos = 0;
+  const falhas: string[] = [];
+  for (const p of pedidos) {
+    try {
+      try {
+        await chamar(`/deals/${p.pipedriveNegocioId}`, "DELETE");
+      } catch (erro) {
+        if (!/404/.test(erro instanceof Error ? erro.message : "")) throw erro;
+      }
+      await prisma.pedido.update({ where: { id: p.id }, data: { pipedriveNegocioId: null } });
+      feitos++;
+    } catch (erro) {
+      falhas.push(`nº ${p.numero}: ${descreverErroPipedrive(erro)}`);
+    }
+  }
+  const restam = Math.max(0, (await prisma.pedido.count({ where: filtro })) - falhas.length);
+  return { feitos, falhas, restam };
 }

@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { exigirAdministradorTecnico } from "@/lib/sessao";
-import { donoDosNegocios, reatribuirNegocios, testarConexao, usuariosDoPipedrive } from "@/lib/integracoes/pipedrive";
+import { apagarNegociosDeTeste, donoDosNegocios, reatribuirNegocios, testarConexao, usuariosDoPipedrive } from "@/lib/integracoes/pipedrive";
 import { reprocessarPedidoPipedrive, reprocessarPendenciasPipedrive } from "@/lib/integracoes/pipedrive-pendencias";
 import { salvarPendentesNaAgendaDaEquipe } from "@/lib/integracoes/google-agenda";
 import { despacharPendentes } from "@/lib/integracoes/whatsapp";
@@ -26,6 +26,14 @@ export async function testarConexaoPipedrive(): Promise<Resultado> {
   await exigirAdministradorTecnico();
   const teste = await testarConexao();
   return teste.ok ? { ok: true, avisos: [teste.descricao] } : { ok: false, erro: teste.erro };
+}
+
+/** Apaga do PipeDrive os negócios de clínicas de teste (só o administrador técnico). */
+export async function apagarNegociosDeTestePipedrive(): Promise<{ ok: boolean; erro?: string; feitos: number; restam: number; falhas: string[] }> {
+  await exigirAdministradorTecnico();
+  const r = await apagarNegociosDeTeste(30);
+  revalidatePath("/painel/integracoes");
+  return { ok: r.falhas.length === 0, erro: r.falhas[0], ...r };
 }
 
 /**
