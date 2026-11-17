@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { exigirClinica } from "@/lib/sessao";
 import { Aviso, Cartao, Titulo } from "@/components/ui";
+import { PreferenciaBiometria } from "@/components/PreferenciaBiometria";
 import { camposFaltando } from "@/lib/cadastro-completo";
 import { formatarCnpj, formatarCpf } from "@/lib/documento";
 import { DadosDaClinica } from "./DadosDaClinica";
@@ -66,6 +67,7 @@ export default async function Configuracoes() {
       )}
 
       <div className="max-w-3xl space-y-3">
+        <PreferenciaBiometria />
         <Cartao>
           <div className="font-display font-bold text-bordo text-sm mb-3">Dados da clínica</div>
           <DadosDaClinica

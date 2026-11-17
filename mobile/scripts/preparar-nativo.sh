@@ -13,10 +13,10 @@ if [ "$(uname)" = "Darwin" ]; then
   [ -d ios ] || npx cap add ios
 fi
 
-# Android: notificações (Android 13+), câmera para anexos e localização do "Cheguei".
+# Android: notificações (Android 13+), biometria, câmera para anexos e localização do "Cheguei".
 MANIFESTO="android/app/src/main/AndroidManifest.xml"
 if [ -f "$MANIFESTO" ]; then
-  for PERMISSAO in POST_NOTIFICATIONS CAMERA ACCESS_FINE_LOCATION ACCESS_COARSE_LOCATION; do
+  for PERMISSAO in POST_NOTIFICATIONS USE_BIOMETRIC CAMERA ACCESS_FINE_LOCATION ACCESS_COARSE_LOCATION; do
     grep -q "android.permission.$PERMISSAO" "$MANIFESTO" || \
       sed -i.bak "s|</manifest>|    <uses-permission android:name=\"android.permission.$PERMISSAO\" />\n</manifest>|" "$MANIFESTO"
   done

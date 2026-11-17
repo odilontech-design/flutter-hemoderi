@@ -4,6 +4,7 @@ import { exigirProfissional } from "@/lib/sessao";
 import { BotaoWhatsapp } from "@/components/BotaoWhatsapp";
 import { CentralDeAvisos } from "@/components/CentralDeAvisos";
 import { PonteDoApp } from "@/components/PonteDoApp";
+import { BloqueioBiometrico } from "@/components/BloqueioBiometrico";
 import {
   IconeAgenda,
   IconeAjuda,
@@ -45,6 +46,7 @@ export default async function LayoutProfissional({ children }: { children: React
       <BotaoWhatsapp contexto="portal do profissional" />
         <CentralDeAvisos area="profissional" />
         <PonteDoApp app="profissional" />
+        <BloqueioBiometrico />
       </div>
     </Provedores>
   );

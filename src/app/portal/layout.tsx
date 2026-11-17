@@ -4,6 +4,7 @@ import { exigirClinica } from "@/lib/sessao";
 import { prisma } from "@/lib/prisma";
 import { BotaoWhatsapp } from "@/components/BotaoWhatsapp";
 import { PonteDoApp } from "@/components/PonteDoApp";
+import { BloqueioBiometrico } from "@/components/BloqueioBiometrico";
 import { Aviso } from "@/components/ui";
 import {
   IconeAgendamentos,
@@ -68,6 +69,7 @@ export default async function LayoutPortal({ children }: { children: React.React
         </main>
       <BotaoWhatsapp contexto="portal da clínica" />
       <PonteDoApp app="clinica" />
+      <BloqueioBiometrico />
       </div>
     </Provedores>
   );

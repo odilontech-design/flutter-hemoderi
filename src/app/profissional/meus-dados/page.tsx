@@ -3,6 +3,7 @@ import { exigirProfissional } from "@/lib/sessao";
 import { Cartao, Rotulo, Campo, Titulo } from "@/components/ui";
 import { FormularioAcao } from "@/components/FormularioAcao";
 import { CampoTelefone } from "@/components/CampoTelefone";
+import { PreferenciaBiometria } from "@/components/PreferenciaBiometria";
 import { salvarMeusDados } from "@/app/actions/meus-dados";
 import { falhasNaAgendaDoProfissional } from "@/lib/integracoes/google-agenda";
 
@@ -47,6 +48,9 @@ export default async function MeusDados() {
   return (
     <>
       <Titulo>Meus dados</Titulo>
+      <div className="mb-3 max-w-5xl">
+        <PreferenciaBiometria />
+      </div>
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 max-w-5xl">
         <Cartao>
           <div className="font-display font-bold text-bordo text-sm mb-3">Contato e agenda</div>
