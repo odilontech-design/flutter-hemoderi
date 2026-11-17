@@ -197,7 +197,9 @@ async function clienteDoNegocio(nomeDaClinica: string): Promise<{ orgId: number;
   } catch {
     // sem o número, o título usa o código do agendamento
   }
-  return { orgId, numeroDoCliente };
+  // Sem campo de número na organização (hoje não há nenhum), o número do cliente
+  // é o ID da própria organização no PipeDrive — o que aparece na URL dela.
+  return { orgId, numeroDoCliente: numeroDoCliente ?? String(orgId) };
 }
 
 /** A pessoa de contato (o doutor) só se já existir na organização: nada de cadastro novo. */
@@ -466,6 +468,7 @@ export async function registrarNegocioAprovado(pedidoId: string, textoDoRelatori
       numero: true,
       data: true,
       valorServicoCentavos: true,
+      valorRepasseCentavos: true,
       pipedriveNegocioId: true,
       doutorNome: true,
       pacienteNome: true,
@@ -512,11 +515,8 @@ export async function registrarNegocioAprovado(pedidoId: string, textoDoRelatori
     { nomes: ["Produto Hemoderi", "Produto"], chaveFixa: process.env.PIPEDRIVE_CAMPO_PRODUTO, valor: pedido.servico.nome },
     { nomes: ["Data do Procedimento"], chaveFixa: process.env.PIPEDRIVE_CAMPO_DATA_PROCEDIMENTO, valor: isoDeData(pedido.data) },
     { nomes: ["Estado", "UF"], chaveFixa: process.env.PIPEDRIVE_CAMPO_ESTADO, valor: pedido.endereco?.uf ?? pedido.clinica.uf },
-    {
-      nomes: ["Pagamento do Profissional"],
-      chaveFixa: process.env.PIPEDRIVE_CAMPO_STATUS_PAGAMENTO_PROFISSIONAL,
-      valor: situacaoDoRecebimento(pedido.relatorio?.recebimento, pedido.relatorio?.compareceu ?? true),
-    },
+    // No PipeDrive este campo é de dinheiro: o valor que o profissional recebe.
+    { nomes: ["Pagamento do Profissional"], valor: pedido.valorRepasseCentavos / 100 },
   ];
   try {
     const { negocio: camposDoNegocio } = await camposDoPipedrive();

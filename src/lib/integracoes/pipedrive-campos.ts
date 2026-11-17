@@ -39,22 +39,38 @@ export function acharCampo(campos: CampoPipedrive[], nomes: string[]): CampoPipe
  * undefined quando não dá para preencher com segurança (por exemplo, um campo
  * de opções sem a opção correspondente): melhor em branco do que errado.
  */
+/**
+ * A opção do campo para o texto: igual (sem acento e caixa) ou, não havendo,
+ * a ÚNICA cujo rótulo contém o texto ou está contido nele ("Cartão" para
+ * "Cartão de crédito"). Mais de uma parecida é ambiguidade: nenhuma.
+ */
+export function opcaoDoCampo(campo: CampoPipedrive, texto: string): { id: number; label: string } | undefined {
+  const opcoes = campo.options ?? [];
+  const alvo = normalizar(texto);
+  const igual = opcoes.find((o) => normalizar(o.label) === alvo);
+  if (igual) return igual;
+  if (alvo.length < 3) return undefined;
+  const parecidas = opcoes.filter((o) => {
+    const n = normalizar(o.label);
+    return n.length >= 3 && (n.includes(alvo) || alvo.includes(n));
+  });
+  return parecidas.length === 1 ? parecidas[0] : undefined;
+}
+
 export function valorParaCampo(campo: CampoPipedrive, valor: string | number | null | undefined): unknown {
   if (valor === null || valor === undefined || valor === "") return undefined;
   const texto = String(valor);
   switch (campo.field_type) {
-    case "enum": {
-      const opcao = campo.options?.find((o) => normalizar(o.label) === normalizar(texto));
-      return opcao?.id;
-    }
+    case "enum":
+      return opcaoDoCampo(campo, texto)?.id;
     case "set": {
-      const opcao = campo.options?.find((o) => normalizar(o.label) === normalizar(texto));
+      const opcao = opcaoDoCampo(campo, texto);
       return opcao ? [opcao.id] : undefined;
     }
     case "double":
     case "int":
     case "monetary": {
-      const n = Number(texto.replace(",", "."));
+      const n = typeof valor === "number" ? valor : Number(texto.replace(",", "."));
       return Number.isFinite(n) ? n : undefined;
     }
     case "phone":
@@ -87,7 +103,11 @@ export function montarCamposPersonalizados(campos: CampoPipedrive[], especificac
     const campo = acharCampo(campos, e.nomes);
     if (!campo) continue;
     const valor = valorParaCampo(campo, e.valor);
-    if (valor !== undefined) corpo[campo.key] = valor;
+    if (valor !== undefined) {
+      corpo[campo.key] = valor;
+      // Campo de dinheiro leva a moeda junto, em outra chave.
+      if (campo.field_type === "monetary") corpo[`${campo.key}_currency`] = "BRL";
+    }
   }
   return corpo;
 }

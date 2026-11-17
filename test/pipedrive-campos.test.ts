@@ -43,3 +43,12 @@ test("título no padrão: ano, número do cliente e clínica", () => {
   assert.equal(tituloNoPadraoDoCliente({ ano: 2026, numeroDoCliente: "3463", numeroDoPedido: 421, clinica: "Amitat" }), "2026 3463 Amitat");
   assert.equal(tituloNoPadraoDoCliente({ ano: 2026, numeroDoCliente: null, numeroDoPedido: 421, clinica: "Senac Tiradentes" }), "2026-0421 - Senac Tiradentes");
 });
+
+test("opção parecida só vale se for única; dinheiro leva a moeda", () => {
+  const forma: CampoPipedrive = { key: "kf", name: "Forma de Pagamento", field_type: "set", options: [{ id: 1, label: "Pix" }, { id: 2, label: "Cartão" }, { id: 3, label: "Dinheiro" }] };
+  assert.deepEqual(valorParaCampo(forma, "Cartão de crédito"), [2]);
+  const duas: CampoPipedrive = { key: "kd", name: "X", field_type: "enum", options: [{ id: 1, label: "Cartão débito" }, { id: 2, label: "Cartão crédito" }] };
+  assert.equal(valorParaCampo(duas, "Cartão"), undefined);
+  const dinheiro: CampoPipedrive = { key: "kp", name: "Pagamento do Profissional", field_type: "monetary" };
+  assert.deepEqual(montarCamposPersonalizados([dinheiro], [{ nomes: ["Pagamento do Profissional"], valor: 250 }]), { kp: 250, kp_currency: "BRL" });
+});
