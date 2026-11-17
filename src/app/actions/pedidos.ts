@@ -32,6 +32,7 @@ import { enfileirarMensagem, reenviarMensagem } from "@/lib/integracoes/whatsapp
 import { salvarNaAgendaDaEquipe, sincronizarEvento } from "@/lib/integracoes/google-agenda";
 import { marcarNegocioPerdido } from "@/lib/integracoes/pipedrive";
 import { condicaoValida, formaDePagamentoValida } from "@/lib/pagamento";
+import { pagaRepasseNaVisita } from "@/lib/curso-repasse";
 import { pacienteObrigatorio } from "@/lib/paciente-obrigatorio";
 import { procedimentoEscolhido } from "@/lib/procedimentos";
 import { camposFaltando } from "@/lib/cadastro-completo";
@@ -565,6 +566,8 @@ type PedidoParaAlocar = {
   valorServicoCentavos: number;
   /** Profissional adicional: vai na sala e com o equipamento do principal. */
   apoioDeId?: string | null;
+  modalidade?: "PARTICULAR" | "CURSO";
+  grupoId?: string | null;
   servico: {
     id: string;
     duracaoMin: number;
@@ -678,7 +681,7 @@ async function alocarNaTransacao(
       profissionalId,
       equipamentoId,
       status: "ALOCADO",
-      valorRepasseCentavos: repasse.valorCentavos,
+      valorRepasseCentavos: (await pagaRepasseNaVisita(tx, pedido)) ? repasse.valorCentavos : 0,
       ajudaCustoCentavos,
     },
   });
@@ -1868,7 +1871,7 @@ export async function definirValorServico(pedidoId: string, valorTexto: string):
 
   const pedido = await prisma.pedido.findUnique({
     where: { id: pedidoId },
-    select: { numero: true, servicoId: true, profissionalId: true, status: true, clinicaId: true, enderecoId: true },
+    select: { id: true, numero: true, servicoId: true, profissionalId: true, status: true, clinicaId: true, enderecoId: true, modalidade: true, grupoId: true },
   });
   if (!pedido) return { ok: false, erro: "Agendamento não encontrado." };
   if (pedido.status === "CANCELADO") return { ok: false, erro: "Pedido cancelado não tem valor para ajustar." };
@@ -1879,7 +1882,7 @@ export async function definirValorServico(pedidoId: string, valorTexto: string):
       clinicaId: pedido.clinicaId,
       enderecoId: pedido.enderecoId,
     });
-    dados.valorRepasseCentavos = repasse.valorCentavos;
+    dados.valorRepasseCentavos = (await pagaRepasseNaVisita(prisma, pedido)) ? repasse.valorCentavos : 0;
   }
 
   await prisma.pedido.update({ where: { id: pedidoId }, data: dados });

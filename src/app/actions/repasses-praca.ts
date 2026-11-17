@@ -7,6 +7,7 @@ import { lerAbaXlsx } from "@/lib/xlsx-leitor";
 import { lerRegrasDaPlanilha } from "@/lib/repasse-planilha";
 import { rotuloDaPraca } from "@/lib/praca";
 import { repasseDoPedido } from "@/lib/repasse-pedido";
+import { pagaRepasseNaVisita } from "@/lib/curso-repasse";
 
 export type ResultadoImportacao = {
   ok: boolean;
@@ -114,6 +115,8 @@ export async function importarRepassesPraca(
         enderecoId: true,
         valorServicoCentavos: true,
         valorRepasseCentavos: true,
+        modalidade: true,
+        grupoId: true,
         repasse: { select: { id: true, status: true } },
       },
     });
@@ -126,9 +129,10 @@ export async function importarRepassesPraca(
         clinicaId: p.clinicaId,
         enderecoId: p.enderecoId,
       });
-      if (novo.valorCentavos === p.valorRepasseCentavos) continue;
-      await prisma.pedido.update({ where: { id: p.id }, data: { valorRepasseCentavos: novo.valorCentavos } });
-      if (p.repasse) await prisma.repasse.update({ where: { id: p.repasse.id }, data: { valorCentavos: novo.valorCentavos } });
+      const valorFinal = (await pagaRepasseNaVisita(prisma, p)) ? novo.valorCentavos : 0;
+      if (valorFinal === p.valorRepasseCentavos) continue;
+      await prisma.pedido.update({ where: { id: p.id }, data: { valorRepasseCentavos: valorFinal } });
+      if (p.repasse) await prisma.repasse.update({ where: { id: p.repasse.id }, data: { valorCentavos: valorFinal } });
       recalculados++;
     }
     await registrarAuditoria(sessao.usuarioId, "RepassePraca", "tabela", "aplicar-retroativo", `${recalculados} refeito(s), ${jaPagos} já pago(s)`);
