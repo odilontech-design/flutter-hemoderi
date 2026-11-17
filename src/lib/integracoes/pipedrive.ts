@@ -29,6 +29,7 @@
 
 import { prisma } from "@/lib/prisma";
 import { isoDeData } from "@/lib/data";
+import { acharCampo, escolherOrganizacao, montarCamposPersonalizados, nucleoDoNome, tituloNoPadraoDoCliente, type CampoPipedrive, type EspecificacaoDeCampo } from "./pipedrive-campos";
 import {
   FUNIL_PADRAO,
   escolherFunil,
@@ -133,36 +134,79 @@ export async function testarConexao(): Promise<{ ok: true; descricao: string } |
   }
 }
 
-type ItemDeBusca = { data?: { items?: { item: { id: number; name?: string } }[] } } | null;
 
-/** A organização da clínica: a que já existe com o mesmo nome, ou uma nova. */
-async function organizacaoDaClinica(nome: string): Promise<number> {
-  const busca = (await chamar(
-    `/organizations/search?term=${encodeURIComponent(nome)}&fields=name&exact_match=true&limit=1`,
-    "GET"
-  )) as ItemDeBusca;
-  const existente = busca?.data?.items?.[0]?.item.id;
-  if (existente) return existente;
-  const criada = (await chamar("/organizations", "POST", { name: nome })) as { data?: { id?: number } } | null;
-  if (!criada?.data?.id) throw new Error("Resposta do PipeDrive sem id da organização.");
-  return criada.data.id;
+/** Os campos personalizados do PipeDrive (de negócio e de organização), guardados por 10 minutos. */
+let camposEmCache: { negocio: CampoPipedrive[]; organizacao: CampoPipedrive[]; em: number } | null = null;
+
+export async function camposDoPipedrive(): Promise<{ negocio: CampoPipedrive[]; organizacao: CampoPipedrive[] }> {
+  if (camposEmCache && Date.now() - camposEmCache.em < 10 * 60 * 1000) return camposEmCache;
+  const ler = async (caminho: string) =>
+    (((await chamar(`${caminho}?limit=500`, "GET")) as { data?: CampoPipedrive[] | null } | null)?.data ?? []).map((c) => ({
+      key: c.key,
+      name: c.name,
+      field_type: c.field_type,
+      options: c.options,
+    }));
+  const [negocio, organizacao] = await Promise.all([ler("/dealFields"), ler("/organizationFields")]);
+  camposEmCache = { negocio, organizacao, em: Date.now() };
+  return camposEmCache;
 }
 
-/** A pessoa de contato (o doutor do agendamento) dentro da organização. */
-async function pessoaDeContato(nome: string, orgId: number, telefone: string | null): Promise<number> {
+/** Os campos do PipeDrive em texto, para a tela de integrações mostrar o que existe lá. */
+export async function descreverCamposDoPipedrive(): Promise<string[]> {
+  camposEmCache = null;
+  const { negocio, organizacao } = await camposDoPipedrive();
+  const linha = (c: CampoPipedrive) => `${c.name} [${c.field_type}${c.options?.length ? `, ${c.options.length} opções` : ""}]`;
+  const proprios = (campos: CampoPipedrive[]) => campos.filter((c) => /^[0-9a-f]{40}$/.test(c.key));
+  return [
+    `Negócio — campos personalizados: ${proprios(negocio).map(linha).join(" · ") || "nenhum"}`,
+    `Organização — campos personalizados: ${proprios(organizacao).map(linha).join(" · ") || "nenhum"}`,
+  ];
+}
+
+type ItemDeBusca = { data?: { items?: { item: { id: number; name?: string } }[] } } | null;
+
+/** Nomes pelos quais o campo "número do cliente" pode aparecer na organização. */
+const NOMES_DO_NUMERO_DO_CLIENTE = ["Numero do cliente", "Numero cliente", "N do cliente", "Codigo do cliente", "Codigo cliente", "ID do cliente", "Numero", "Codigo", "Cliente numero"];
+
+/**
+ * O cliente do negócio: a organização que JÁ existe no PipeDrive (e o número
+ * dela), nunca uma nova (17/11: cada negócio ganho criava um cliente
+ * duplicado). Sem achar uma só organização com o nome da clínica, devolve
+ * null e o negócio nasce sem cliente — a Stephanie preenche.
+ */
+async function clienteDoNegocio(nomeDaClinica: string): Promise<{ orgId: number; numeroDoCliente: string | null } | null> {
+  const termos = Array.from(new Set([nomeDaClinica.trim(), nucleoDoNome(nomeDaClinica)].filter((t) => t.length >= 2)));
+  const candidatas = new Map<number, { id: number; name: string }>();
+  for (const termo of termos) {
+    const busca = (await chamar(`/organizations/search?term=${encodeURIComponent(termo)}&fields=name&limit=10`, "GET")) as ItemDeBusca;
+    for (const r of busca?.data?.items ?? []) candidatas.set(r.item.id, { id: r.item.id, name: r.item.name ?? "" });
+  }
+  const orgId = escolherOrganizacao(Array.from(candidatas.values()), nomeDaClinica);
+  if (!orgId) return null;
+
+  let numeroDoCliente: string | null = null;
+  try {
+    const chaveFixa = process.env.PIPEDRIVE_CAMPO_NUMERO_CLIENTE?.trim();
+    const chave = chaveFixa || acharCampo((await camposDoPipedrive()).organizacao, NOMES_DO_NUMERO_DO_CLIENTE)?.key;
+    if (chave) {
+      const org = (await chamar(`/organizations/${orgId}`, "GET")) as { data?: Record<string, unknown> } | null;
+      const valor = org?.data?.[chave];
+      if (valor !== null && valor !== undefined && String(valor).trim()) numeroDoCliente = String(valor).trim();
+    }
+  } catch {
+    // sem o número, o título usa o código do agendamento
+  }
+  return { orgId, numeroDoCliente };
+}
+
+/** A pessoa de contato (o doutor) só se já existir na organização: nada de cadastro novo. */
+async function pessoaExistente(nome: string, orgId: number): Promise<number | null> {
   const busca = (await chamar(
     `/persons/search?term=${encodeURIComponent(nome)}&fields=name&exact_match=true&organization_id=${orgId}&limit=1`,
     "GET"
   )) as ItemDeBusca;
-  const existente = busca?.data?.items?.[0]?.item.id;
-  if (existente) return existente;
-  const criada = (await chamar("/persons", "POST", {
-    name: nome,
-    org_id: orgId,
-    ...(telefone ? { phone: [{ value: telefone, primary: true, label: "work" }] } : {}),
-  })) as { data?: { id?: number } } | null;
-  if (!criada?.data?.id) throw new Error("Resposta do PipeDrive sem id da pessoa.");
-  return criada.data.id;
+  return busca?.data?.items?.[0]?.item.id ?? null;
 }
 
 /** Quem é dono de todos os negócios (pedido de 05/11): a Sthefany, ou quem a variável apontar. */
@@ -280,13 +324,18 @@ export async function criarNegocio(pedidoId: string): Promise<void> {
     if (campoNumero) corpo[campoNumero] = String(pedido.numero);
 
     try {
-      const orgId = await organizacaoDaClinica(pedido.clinica.nome);
-      corpo.org_id = orgId;
-      if (pedido.doutorNome?.trim()) {
-        corpo.person_id = await pessoaDeContato(pedido.doutorNome.trim(), orgId, pedido.contatoClinica);
+      // Só o cliente que já existe no PipeDrive (17/11); sem ele, fica em branco.
+      const cliente = await clienteDoNegocio(pedido.clinica.nome);
+      if (cliente) {
+        corpo.org_id = cliente.orgId;
+        corpo.title = tituloNoPadraoDoCliente({ ano: pedido.data.getUTCFullYear(), numeroDoCliente: cliente.numeroDoCliente, numeroDoPedido: pedido.numero, clinica: pedido.clinica.nome });
+        if (pedido.doutorNome?.trim()) {
+          const pessoa = await pessoaExistente(pedido.doutorNome.trim(), cliente.orgId);
+          if (pessoa) corpo.person_id = pessoa;
+        }
       }
     } catch {
-      // Sem organização/pessoa o negócio ainda nasce — o título já traz a clínica.
+      // Sem cliente o negócio ainda nasce — o título já traz a clínica.
     }
     try {
       const dono = await donoDosNegocios();
@@ -423,7 +472,11 @@ export async function registrarNegocioAprovado(pedidoId: string, textoDoRelatori
       procedimentoPaciente: true,
       formaPagamento: true,
       contatoClinica: true,
-      clinica: { select: { nome: true } },
+      clinica: { select: { nome: true, uf: true, perfis: true } },
+      endereco: { select: { uf: true } },
+      servico: { select: { nome: true } },
+      pixPagoEm: true,
+      cartaoPagoEm: true,
       profissional: { select: { nome: true } },
       criadoPor: { select: { email: true } },
       relatorio: { select: { compareceu: true, recebimento: true, pacienteNomeInformado: true, doutorNomeInformado: true, procedimentoInformado: true } },
@@ -445,20 +498,47 @@ export async function registrarNegocioAprovado(pedidoId: string, textoDoRelatori
     status: "won",
     expected_close_date: isoDeData(pedido.data),
   };
-  // Campos personalizados: a chave (hash) de cada um vem do ambiente; sem a
-  // chave, o dado continua no relatório da nota.
-  const campos: [string | undefined, string | null | undefined][] = [
-    [process.env.PIPEDRIVE_CAMPO_NUMERO_PEDIDO, String(pedido.numero)],
-    [process.env.PIPEDRIVE_CAMPO_PACIENTE, pedido.relatorio?.pacienteNomeInformado ?? pedido.pacienteNome],
-    [process.env.PIPEDRIVE_CAMPO_PROFISSIONAL, pedido.profissional?.nome],
-    [process.env.PIPEDRIVE_CAMPO_PROCEDIMENTO, pedido.relatorio?.procedimentoInformado ?? pedido.procedimentoPaciente],
-    [process.env.PIPEDRIVE_CAMPO_FORMA_PAGAMENTO, pedido.formaPagamento],
-    [
-      process.env.PIPEDRIVE_CAMPO_STATUS_PAGAMENTO_PROFISSIONAL,
-      situacaoDoRecebimento(pedido.relatorio?.recebimento, pedido.relatorio?.compareceu ?? true),
-    ],
+  // Campos personalizados: achados pelo NOME que a equipe vê no PipeDrive (17/11:
+  // antes dependiam de chaves em variáveis de ambiente que não existiam e os
+  // negócios nasciam vazios). Uma variável com a chave ainda vence a busca.
+  const pago = Boolean(pedido.pixPagoEm || pedido.cartaoPagoEm || pedido.relatorio?.recebimento === "TOTAL");
+  const especificacoes: EspecificacaoDeCampo[] = [
+    { nomes: ["Numero do pedido", "Numero do agendamento"], chaveFixa: process.env.PIPEDRIVE_CAMPO_NUMERO_PEDIDO, valor: String(pedido.numero) },
+    { nomes: ["Nome do Paciente", "Paciente"], chaveFixa: process.env.PIPEDRIVE_CAMPO_PACIENTE, valor: pedido.relatorio?.pacienteNomeInformado ?? pedido.pacienteNome },
+    { nomes: ["Profissional Hemoderi", "Profissional"], chaveFixa: process.env.PIPEDRIVE_CAMPO_PROFISSIONAL, valor: pedido.profissional?.nome },
+    { nomes: ["Procedimento Realizado", "Procedimento"], chaveFixa: process.env.PIPEDRIVE_CAMPO_PROCEDIMENTO, valor: pedido.relatorio?.procedimentoInformado ?? pedido.procedimentoPaciente },
+    { nomes: ["Forma de Pagamento"], chaveFixa: process.env.PIPEDRIVE_CAMPO_FORMA_PAGAMENTO, valor: pedido.formaPagamento },
+    { nomes: ["Pagamento Realizado"], chaveFixa: process.env.PIPEDRIVE_CAMPO_PAGAMENTO_REALIZADO, valor: pago ? "Sim" : "Não" },
+    { nomes: ["Produto Hemoderi", "Produto"], chaveFixa: process.env.PIPEDRIVE_CAMPO_PRODUTO, valor: pedido.servico.nome },
+    { nomes: ["Data do Procedimento"], chaveFixa: process.env.PIPEDRIVE_CAMPO_DATA_PROCEDIMENTO, valor: isoDeData(pedido.data) },
+    { nomes: ["Estado", "UF"], chaveFixa: process.env.PIPEDRIVE_CAMPO_ESTADO, valor: pedido.endereco?.uf ?? pedido.clinica.uf },
+    {
+      nomes: ["Pagamento do Profissional"],
+      chaveFixa: process.env.PIPEDRIVE_CAMPO_STATUS_PAGAMENTO_PROFISSIONAL,
+      valor: situacaoDoRecebimento(pedido.relatorio?.recebimento, pedido.relatorio?.compareceu ?? true),
+    },
   ];
-  for (const [chave, valor] of campos) if (chave?.trim() && valor) corpo[chave.trim()] = valor;
+  try {
+    const { negocio: camposDoNegocio } = await camposDoPipedrive();
+    Object.assign(corpo, montarCamposPersonalizados(camposDoNegocio, especificacoes));
+  } catch {
+    // Sem ler os campos, só as chaves fixas valem; o relatório na nota continua.
+    Object.assign(corpo, montarCamposPersonalizados([], especificacoes));
+  }
+  // O cliente que já existe no PipeDrive, com o número dele no título (17/11).
+  try {
+    const cliente = await clienteDoNegocio(pedido.clinica.nome);
+    if (cliente) {
+      corpo.org_id = cliente.orgId;
+      corpo.title = tituloNoPadraoDoCliente({ ano: pedido.data.getUTCFullYear(), numeroDoCliente: cliente.numeroDoCliente, numeroDoPedido: pedido.numero, clinica: pedido.clinica.nome });
+      if (doutor?.trim()) {
+        const pessoa = await pessoaExistente(doutor.trim(), cliente.orgId);
+        if (pessoa) corpo.person_id = pessoa;
+      }
+    }
+  } catch {
+    // Sem cliente, o negócio nasce em branco nesse campo e a Stephanie preenche.
+  }
 
   try {
     let negocioId = pedido.pipedriveNegocioId;
@@ -469,13 +549,6 @@ export async function registrarNegocioAprovado(pedidoId: string, textoDoRelatori
     } else {
       const funil = await resolverFunil();
       Object.assign(corpo, { pipeline_id: funil.pipelineId, stage_id: funil.stageId });
-      try {
-        const orgId = await organizacaoDaClinica(pedido.clinica.nome);
-        corpo.org_id = orgId;
-        if (doutor?.trim()) corpo.person_id = await pessoaDeContato(doutor.trim(), orgId, pedido.contatoClinica);
-      } catch {
-        // Sem organização/pessoa o negócio ainda nasce — o título já traz a clínica.
-      }
       try {
         const dono = await donoDosNegocios();
         if (dono) corpo.user_id = dono;

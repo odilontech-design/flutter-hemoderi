@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { exigirAdministradorTecnico } from "@/lib/sessao";
-import { apagarNegociosDeTeste, donoDosNegocios, reatribuirNegocios, testarConexao, usuariosDoPipedrive } from "@/lib/integracoes/pipedrive";
+import { apagarNegociosDeTeste, descreverCamposDoPipedrive, donoDosNegocios, reatribuirNegocios, testarConexao, usuariosDoPipedrive } from "@/lib/integracoes/pipedrive";
 import { reprocessarPedidoPipedrive, reprocessarPendenciasPipedrive } from "@/lib/integracoes/pipedrive-pendencias";
 import { salvarPendentesNaAgendaDaEquipe } from "@/lib/integracoes/google-agenda";
 import { despacharPendentes } from "@/lib/integracoes/whatsapp";
@@ -26,6 +26,16 @@ export async function testarConexaoPipedrive(): Promise<Resultado> {
   await exigirAdministradorTecnico();
   const teste = await testarConexao();
   return teste.ok ? { ok: true, avisos: [teste.descricao] } : { ok: false, erro: teste.erro };
+}
+
+/** Lista os campos personalizados que existem no PipeDrive (negócio e organização), só leitura. */
+export async function mostrarCamposDoPipedrive(): Promise<Resultado> {
+  await exigirAdministradorTecnico();
+  try {
+    return { ok: true, avisos: await descreverCamposDoPipedrive() };
+  } catch (erro) {
+    return { ok: false, erro: erro instanceof Error ? erro.message : "Falhou." };
+  }
 }
 
 /** Apaga do PipeDrive os negócios de clínicas de teste (só o administrador técnico). */
