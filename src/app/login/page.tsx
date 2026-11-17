@@ -26,6 +26,11 @@ export default function Login() {
             Como instalar o app no celular
           </Link>
         </div>
+        <div className="text-center text-[10px] text-white/50 mt-4">
+          <Link href="/privacidade" className="underline">
+            Política de privacidade
+          </Link>
+        </div>
         <div className="text-center text-[10px] text-white/30 mt-6">Dilon Tech</div>
       </div>
     </div>

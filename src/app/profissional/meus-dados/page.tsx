@@ -4,6 +4,7 @@ import { Cartao, Rotulo, Campo, Titulo } from "@/components/ui";
 import { FormularioAcao } from "@/components/FormularioAcao";
 import { CampoTelefone } from "@/components/CampoTelefone";
 import { PreferenciaBiometria } from "@/components/PreferenciaBiometria";
+import { ExcluirConta } from "@/components/ExcluirConta";
 import { salvarMeusDados } from "@/app/actions/meus-dados";
 import { falhasNaAgendaDoProfissional } from "@/lib/integracoes/google-agenda";
 
@@ -136,6 +137,9 @@ export default async function MeusDados() {
             </div>
           </Cartao>
         </div>
+      </div>
+      <div className="mt-3 max-w-5xl">
+        <ExcluirConta tipo="profissional" />
       </div>
     </>
   );

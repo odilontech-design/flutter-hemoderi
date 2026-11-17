@@ -2,6 +2,7 @@ import { prisma } from "@/lib/prisma";
 import { exigirClinica } from "@/lib/sessao";
 import { Aviso, Cartao, Titulo } from "@/components/ui";
 import { PreferenciaBiometria } from "@/components/PreferenciaBiometria";
+import { ExcluirConta } from "@/components/ExcluirConta";
 import { camposFaltando } from "@/lib/cadastro-completo";
 import { formatarCnpj, formatarCpf } from "@/lib/documento";
 import { DadosDaClinica } from "./DadosDaClinica";
@@ -128,6 +129,7 @@ export default async function Configuracoes() {
             }))}
           />
         </Cartao>
+        <ExcluirConta tipo="clinica" />
       </div>
     </>
   );
