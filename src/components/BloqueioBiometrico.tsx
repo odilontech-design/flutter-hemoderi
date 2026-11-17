@@ -26,6 +26,9 @@ export function BloqueioBiometrico() {
   const [nativo, setNativo] = useState(false);
   const saiuEm = useRef<number | null>(null);
   const autenticando = useRef(false);
+  // O prompt da biometria faz o app ir ao segundo plano e voltar: esses eventos
+  // não contam como "saiu do app" (era o que travava o app num laço).
+  const autenticouEm = useRef(0);
 
   const desbloquear = useCallback(async () => {
     if (autenticando.current) return;
@@ -42,15 +45,19 @@ export function BloqueioBiometrico() {
         androidSubtitle: "Confirme que é você",
       });
       saiuEm.current = null;
+      autenticouEm.current = Date.now();
       setEstado("livre");
     } catch {
       setMensagem("Não foi possível confirmar. Toque em Desbloquear para tentar de novo.");
     } finally {
+      autenticouEm.current = Date.now();
       autenticando.current = false;
     }
   }, []);
 
   const bloquearSePreciso = useCallback(async (primeiraVez: boolean) => {
+    // Voltou sem nunca ter saído (ou logo depois do prompt): nada a pedir.
+    if (!primeiraVez && saiuEm.current === null) return;
     let ligado = true;
     try {
       ligado = bloqueioLigado(window.localStorage.getItem(CHAVE_DO_BLOQUEIO));
@@ -94,6 +101,8 @@ export function BloqueioBiometrico() {
         }
         const { App } = await import("@capacitor/app");
         const ouvinte = await App.addListener("appStateChange", ({ isActive }) => {
+          // Eventos causados pelo próprio prompt de biometria não valem.
+          if (autenticando.current || Date.now() - autenticouEm.current < 2500) return;
           if (!isActive) {
             saiuEm.current = Date.now();
             setCobertoNoSegundoPlano(true);
