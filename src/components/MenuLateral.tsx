@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { signOut } from "next-auth/react";
+import { desregistrarAparelho } from "@/lib/ponte-app";
 import { version as versaoDoSistema } from "../../package.json";
 
 export type ItemMenu = { href: string; icone: React.ReactNode; rotulo: string };
@@ -290,7 +291,7 @@ export function MenuLateral({
             </div>
             <button
               type="button"
-              onClick={() => signOut({ callbackUrl: "/login" })}
+              onClick={async () => { await desregistrarAparelho(); void signOut({ callbackUrl: "/login" }); }}
               title="Sair"
               aria-label="Sair"
               className={`shrink-0 w-10 h-10 md:w-7 md:h-7 flex items-center justify-center rounded-full text-white/60
@@ -304,7 +305,7 @@ export function MenuLateral({
           {recolhido && (
             <button
               type="button"
-              onClick={() => signOut({ callbackUrl: "/login" })}
+              onClick={async () => { await desregistrarAparelho(); void signOut({ callbackUrl: "/login" }); }}
               title="Sair"
               aria-label="Sair"
               className="hidden md:flex w-full justify-center pb-3 text-white/60 hover:text-white transition-colors"

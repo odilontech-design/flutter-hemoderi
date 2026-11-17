@@ -85,13 +85,14 @@ let tokenEmCache: { valor: string; expiraEm: number } | null = null;
 export function montarAssertion(
   clienteEmail: string,
   chavePem: string,
-  agora = Math.floor(Date.now() / 1000)
+  agora = Math.floor(Date.now() / 1000),
+  escopo: string = ESCOPO
 ): string {
   const cabecalho = base64url(JSON.stringify({ alg: "RS256", typ: "JWT" }));
   const corpo = base64url(
     JSON.stringify({
       iss: clienteEmail,
-      scope: ESCOPO,
+      scope: escopo,
       aud: URL_TOKEN,
       iat: agora,
       exp: agora + VIDA_DO_TOKEN_S,

@@ -11,6 +11,7 @@
  */
 
 import { prisma } from "@/lib/prisma";
+import { empurrarPorTipo } from "@/lib/push";
 import { formatarData, formatarDataCurta, instanteDoAtendimento } from "@/lib/data";
 import { mensagemDeAtraso, mensagemDeFeedback } from "@/lib/whatsapp-link";
 import { corpoParaDilonZap, descreverErroDeRede, interpretarResposta, mensagemVencida, urlDoDilonZap } from "@/lib/integracoes/dilon-zap";
@@ -221,6 +222,9 @@ export async function enfileirarMensagem(
   // Profissional adicional (apoio): a clínica fala com o atendimento principal;
   // do apoio só saem as mensagens do profissional.
   if (pedido.apoioDeId && !TIPOS_PARA_O_PROFISSIONAL.includes(tipo)) return;
+  // O app (push) é outro canal: sai mesmo com o WhatsApp suspenso. Sem aparelho
+  // cadastrado ou sem Firebase configurado, não faz nada.
+  await empurrarPorTipo(pedidoId, tipo);
   // Envio automático ao cliente suspenso: nem entra na fila, para não despejar
   // um acúmulo de mensagens de teste nos clientes quando for religado.
   // A conta de teste (ata de 03/11) recebe mesmo com o envio pausado.

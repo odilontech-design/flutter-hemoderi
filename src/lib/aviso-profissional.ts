@@ -5,6 +5,7 @@ import { numeroDoPedido } from "@/lib/numeracao";
 import { normalizarTelefone } from "@/lib/slug";
 import { urlBase } from "@/lib/divulgacao";
 import { despacharPendentes } from "@/lib/integracoes/whatsapp";
+import { empurrarAvisoAoProfissional } from "@/lib/push";
 
 /**
  * Aviso automático ao profissional quando o atendimento dele muda (ata de
@@ -100,6 +101,7 @@ export async function avisarProfissionaisAfetados(antes: FotoDoPedido[]): Promis
         create: { pedidoId: foto.id, tipo: "AVISO_PROFISSIONAL", destinatario, texto },
         select: { id: true },
       });
+      await empurrarAvisoAoProfissional(foto.profissionalId, texto);
       if (process.env.WHATSAPP_API_URL) await despacharPendentes(1, mensagem.id);
     } catch (erro) {
       console.error("aviso ao profissional", foto.id, erro);

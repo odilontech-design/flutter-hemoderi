@@ -88,6 +88,8 @@ model Usuario {
   profissionalId String?
   profissional   Profissional? @relation(fields: [profissionalId], references: [id], onDelete: Cascade)
 
+  dispositivos DispositivoPush[]
+
   criadoEm     DateTime  @default(now())
   /// Desligamento é desativação, nunca exclusão: o usuário está preso ao
   /// histórico (pedidos que abriu, repasses que baixou). Apagar não apaga o
@@ -727,7 +729,7 @@ model Profissional {
 
   /// Chave PIX para o repasse. É o único dado bancário guardado — evita
   /// manter agência e conta sem necessidade.
-  chavePix String?
+  chavePix           String?
   /// Quando o próprio profissional trocou a chave pelo portal (ata de 04/11).
   /// O financeiro vê o aviso antes de pagar: troca recente é o primeiro sinal
   /// de um desvio de repasse.
@@ -1060,16 +1062,16 @@ model Pedido {
 
   /// Ids do que foi criado fora daqui, guardados para não duplicar em uma
   /// segunda sincronização e para permitir atualizar o evento existente.
-  googleEventoId     String?
+  googleEventoId       String?
   /// EM QUAL agenda o evento acima foi criado. Sem isto, trocar o
   /// profissional de um atendimento deixaria o evento na agenda do
   /// profissional antigo para sempre: o id do evento só é endereçável junto
   /// com o id da agenda que o contém, e "some da minha agenda quando me
   /// tiram do caso" é o mínimo para alguém confiar no que vê ali.
-  googleAgendaId     String?
+  googleAgendaId       String?
   /// O mesmo atendimento na agenda da equipe (GOOGLE_AGENDA_EQUIPE_ID), sincronizada sozinha (ata de 03/11).
   googleEventoEquipeId String?
-  pipedriveNegocioId String?
+  pipedriveNegocioId   String?
 
   /// Confirmação de que o agendamento foi posto no Google Agenda da equipe
   /// (reunião de 27/10): quem marcou e quando. O link do Google não avisa de
@@ -1233,9 +1235,9 @@ model RelatorioAtendimento {
   ///
   /// Nulo é o normal: significa "saiu como estava marcado". Só é preenchido
   /// quando o profissional de fato altera o campo.
-  clinicaNomeInformado String?
-  enderecoInformado    String?
-  doutorNomeInformado  String?
+  clinicaNomeInformado  String?
+  enderecoInformado     String?
+  doutorNomeInformado   String?
   pacienteNomeInformado String?
   /// O procedimento que de fato foi feito NO PACIENTE (pedido do André, 05/11):
   /// chega preenchido com o agendado e o profissional confirma ou corrige. Nulo
@@ -1716,9 +1718,9 @@ model CobrancaPix {
 
   /// Cobrança do agendamento: o primeiro pedido da visita e o grupo, que
   /// reúne todos os serviços cobrados no mesmo Pix.
-  pedidoId String?
-  pedido   Pedido? @relation("PixDoPedido", fields: [pedidoId], references: [id], onDelete: SetNull)
-  grupoId  String?
+  pedidoId  String?
+  pedido    Pedido?  @relation("PixDoPedido", fields: [pedidoId], references: [id], onDelete: SetNull)
+  grupoId   String?
   /// Pagamento em lote (ata de 03/11): vários atendimentos num Pix só.
   pedidoIds String[] @default([])
 
@@ -1912,4 +1914,25 @@ model EventoAsaas {
   recebidoEm DateTime @default(now())
 
   @@index([recebidoEm])
+}
+
+/// Um aparelho com o app instalado e as notificações aceitas (proposta do app,
+/// 04/11 e 16/11). O token é do Firebase (FCM, que entrega também no iPhone via
+/// APNs). Um token pertence a quem entrou por último naquele aparelho: se outra
+/// pessoa entra no mesmo celular, o token muda de dono, e quem saiu deixa de
+/// receber.
+model DispositivoPush {
+  id         String  @id @default(cuid())
+  usuarioId  String
+  usuario    Usuario @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+  token      String  @unique
+  /// "android" ou "ios".
+  plataforma String
+  /// "clinica" ou "profissional" — qual dos dois apps.
+  app        String
+
+  criadoEm     DateTime @default(now())
+  atualizadoEm DateTime @updatedAt
+
+  @@index([usuarioId])
 }

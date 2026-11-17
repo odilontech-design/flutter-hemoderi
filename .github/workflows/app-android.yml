@@ -1,0 +1,51 @@
+name: App Android (teste)
+
+# Gera o APK de teste dos dois apps (Clínica e Profissional). A casca nativa é
+# gerada aqui, a partir de mobile/<app>; nada de projeto nativo no repositório.
+#
+# Para o push funcionar, cadastre o secret GOOGLE_SERVICES_JSON_CLINICA e
+# GOOGLE_SERVICES_JSON_PROFISSIONAL (o google-services.json de cada app, do
+# Firebase). Sem ele o APK abre e funciona, só não recebe notificação.
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - "mobile/**"
+      - ".github/workflows/app-android.yml"
+
+jobs:
+  apk:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        app: [clinica, profissional]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+      - name: Instalar e gerar o projeto Android
+        working-directory: mobile/${{ matrix.app }}
+        run: |
+          npm install --no-audit --no-fund
+          bash ../scripts/preparar-nativo.sh ${{ matrix.app }}
+      - name: google-services.json (push), se houver
+        working-directory: mobile/${{ matrix.app }}
+        env:
+          JSON_CLINICA: ${{ secrets.GOOGLE_SERVICES_JSON_CLINICA }}
+          JSON_PROFISSIONAL: ${{ secrets.GOOGLE_SERVICES_JSON_PROFISSIONAL }}
+        run: |
+          if [ "${{ matrix.app }}" = "clinica" ]; then CONTEUDO="$JSON_CLINICA"; else CONTEUDO="$JSON_PROFISSIONAL"; fi
+          if [ -n "$CONTEUDO" ]; then echo "$CONTEUDO" > android/app/google-services.json; fi
+      - name: Compilar o APK de teste
+        working-directory: mobile/${{ matrix.app }}/android
+        run: ./gradlew assembleDebug
+      - uses: actions/upload-artifact@v4
+        with:
+          name: hemoderi-${{ matrix.app }}-debug
+          path: mobile/${{ matrix.app }}/android/app/build/outputs/apk/debug/*.apk
