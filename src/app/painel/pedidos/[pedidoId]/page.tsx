@@ -17,6 +17,7 @@ import { EditarAgendamento } from "./EditarAgendamento";
 import { AdicionarServico } from "./AdicionarServico";
 import { EditarVisita } from "./EditarVisita";
 import { AlterarLocal } from "./AlterarLocal";
+import { EditarRepasse } from "./EditarRepasse";
 import { Cartao, SeloStatus, Titulo, Vazio } from "@/components/ui";
 import { codigoDoPedido } from "@/lib/numeracao";
 import { formatarData, formatarDataHora } from "@/lib/data";
@@ -62,6 +63,7 @@ export default async function DetalheDoPedido({
   if (!pedido) notFound();
 
   const relatorio = pedido.relatorio;
+  const repassePago = (await prisma.repasse.findUnique({ where: { pedidoId: pedido.id }, select: { status: true } }))?.status === "PAGO";
 
   // Edição do resumo (ata de 02/10): só para quem atende o telefone e só
   // enquanto o atendimento ainda está de pé.
@@ -228,6 +230,9 @@ export default async function DetalheDoPedido({
           <div>
             <div className="text-gray-400">Repasse</div>
             <div className="text-gray-700">{formatarReais(pedido.valorRepasseCentavos)}</div>
+            {pedido.profissionalId && pedido.status !== "CANCELADO" && perfilPermite(sessao.perfil, "POS_VENDA", "GESTAO") && !repassePago && (
+              <EditarRepasse pedidoId={pedido.id} inicialCentavos={pedido.valorRepasseCentavos} />
+            )}
           </div>
           {pedido.procedimentoPaciente && (
             <div>

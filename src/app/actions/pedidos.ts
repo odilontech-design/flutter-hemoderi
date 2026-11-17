@@ -775,6 +775,36 @@ export async function definirAjudaDeCusto(pedidoId: string, ajudaCusto: string):
   return { ok: true };
 }
 
+/**
+ * O pós-venda (Stephanie) ajusta o repasse de UM agendamento (ligação de 17/11):
+ * no curso, o primeiro paciente leva o valor único e os demais nascem zerados,
+ * e ela corrige qualquer um deles na conferência. Não mexe em repasse já pago.
+ */
+export async function definirRepasseDoPedido(pedidoId: string, valor: string): Promise<Resultado> {
+  const sessao = await exigirInterno();
+  if (!perfilPermite(sessao.perfil, "POS_VENDA", "GESTAO")) {
+    return { ok: false, erro: "Só o pós-venda ajusta o valor do repasse." };
+  }
+  const centavos = ajudaCustoEmCentavos(valor);
+  if (centavos === undefined || centavos === null) return { ok: false, erro: "Repasse: use só números, como 250,00 (ou 0)." };
+
+  const pedido = await prisma.pedido.findUnique({
+    where: { id: pedidoId },
+    select: { id: true, status: true, profissionalId: true, valorRepasseCentavos: true, repasse: { select: { id: true, status: true } } },
+  });
+  if (!pedido) return { ok: false, erro: "Agendamento não encontrado." };
+  if (!pedido.profissionalId || pedido.status === "CANCELADO") return { ok: false, erro: "Só há repasse num atendimento com profissional." };
+  if (pedido.repasse?.status === "PAGO") return { ok: false, erro: "Esse repasse já foi pago e não pode ser alterado." };
+
+  await prisma.pedido.update({ where: { id: pedido.id }, data: { valorRepasseCentavos: centavos } });
+  if (pedido.repasse) await prisma.repasse.update({ where: { id: pedido.repasse.id }, data: { valorCentavos: centavos } });
+  await registrarAuditoria(sessao.usuarioId, "Pedido", pedido.id, "repasse-ajustado", `de R$ ${(pedido.valorRepasseCentavos / 100).toFixed(2)} para R$ ${(centavos / 100).toFixed(2)}`);
+  atualizarTelas();
+  revalidatePath(`/painel/pedidos/${pedido.id}`);
+  revalidatePath("/painel/financeiro");
+  return { ok: true };
+}
+
 class ErroDoGrupo extends Error {}
 
 /**
