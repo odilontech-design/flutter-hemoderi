@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { exigirAdministradorTecnico } from "@/lib/sessao";
-import { apagarNegociosDeTeste, descreverCamposDoPipedrive, donoDosNegocios, reatribuirNegocios, testarConexao, usuariosDoPipedrive } from "@/lib/integracoes/pipedrive";
+import { apagarNegociosDeTeste, descreverCamposDoPipedrive, descreverNegocioDoPedido, donoDosNegocios, reatribuirNegocios, testarConexao, usuariosDoPipedrive } from "@/lib/integracoes/pipedrive";
 import { reprocessarPedidoPipedrive, reprocessarPendenciasPipedrive } from "@/lib/integracoes/pipedrive-pendencias";
 import { salvarPendentesNaAgendaDaEquipe } from "@/lib/integracoes/google-agenda";
 import { despacharPendentes } from "@/lib/integracoes/whatsapp";
@@ -33,6 +33,17 @@ export async function mostrarCamposDoPipedrive(): Promise<Resultado> {
   await exigirAdministradorTecnico();
   try {
     return { ok: true, avisos: await descreverCamposDoPipedrive() };
+  } catch (erro) {
+    return { ok: false, erro: erro instanceof Error ? erro.message : "Falhou." };
+  }
+}
+
+/** Mostra o negócio de um agendamento como está no PipeDrive (para quem não acessa o PipeDrive). */
+export async function conferirNegocioDoPedido(numero: number): Promise<Resultado> {
+  await exigirAdministradorTecnico();
+  if (!Number.isInteger(numero) || numero <= 0) return { ok: false, erro: "Informe o número do agendamento." };
+  try {
+    return { ok: true, avisos: await descreverNegocioDoPedido(numero) };
   } catch (erro) {
     return { ok: false, erro: erro instanceof Error ? erro.message : "Falhou." };
   }

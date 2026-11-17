@@ -16,6 +16,7 @@ import { asaasConfigurado, ambienteAsaas } from "@/lib/integracoes/asaas";
 import { PagamentosCartao } from "./PagamentosCartao";
 import { ReatribuirNegocios } from "./ReatribuirNegocios";
 import { ApagarNegociosDeTeste } from "./ApagarNegociosDeTeste";
+import { ConferirNegocio } from "./ConferirNegocio";
 import { SalvarAgendaPendentes } from "./SalvarAgendaPendentes";
 
 export const dynamic = "force-dynamic";
@@ -209,6 +210,7 @@ export default async function Integracoes() {
           <BotaoAcao acao={mostrarCamposDoPipedrive}>Ver campos do PipeDrive</BotaoAcao>
           <ReatribuirNegocios />
           <ApagarNegociosDeTeste />
+          <ConferirNegocio />
           {pendencias.length > 0 && (
             <BotaoAcao
               acao={reprocessarTodasPipedrive}

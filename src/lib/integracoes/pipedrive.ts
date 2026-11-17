@@ -633,3 +633,49 @@ export async function apagarNegociosDeTeste(limite = 30): Promise<{ feitos: numb
   const restam = Math.max(0, (await prisma.pedido.count({ where: filtro })) - falhas.length);
   return { feitos, falhas, restam };
 }
+
+
+/**
+ * O negócio de um agendamento como está no PipeDrive agora, em texto: título,
+ * situação, dono, cliente e cada campo personalizado preenchido (com o rótulo
+ * da opção, não o id). Para quem não tem acesso ao PipeDrive conferir o que o
+ * sistema mandou. Só leitura.
+ */
+export async function descreverNegocioDoPedido(numeroDoPedido: number): Promise<string[]> {
+  const pedido = await prisma.pedido.findUnique({ where: { numero: numeroDoPedido }, select: { pipedriveNegocioId: true } });
+  if (!pedido) return [`Não há agendamento nº ${numeroDoPedido}.`];
+  if (!pedido.pipedriveNegocioId) return [`O agendamento nº ${numeroDoPedido} ainda não tem negócio no PipeDrive.`];
+  const json = (await chamar(`/deals/${pedido.pipedriveNegocioId}`, "GET")) as { data?: Record<string, unknown> } | null;
+  const d = json?.data;
+  if (!d) return [`O PipeDrive não devolveu o negócio ${pedido.pipedriveNegocioId}.`];
+  const nome = (v: unknown): string => {
+    if (v && typeof v === "object") {
+      const o = v as { name?: string; value?: number };
+      return o.name ? `${o.name}${o.value ? ` (id ${o.value})` : ""}` : String(o.value ?? "");
+    }
+    return v ? String(v) : "em branco";
+  };
+  const { negocio } = await camposDoPipedrive();
+  const campos: string[] = [];
+  for (const c of negocio) {
+    if (!/^[0-9a-f]{40}$/.test(c.key)) continue;
+    const bruto = d[c.key];
+    if (bruto === null || bruto === undefined || bruto === "") {
+      campos.push(`${c.name}: em branco`);
+      continue;
+    }
+    if (c.field_type === "enum" || c.field_type === "set") {
+      const ids = String(bruto).split(",").map((x) => Number(x.trim()));
+      const rotulos = ids.map((id) => c.options?.find((o) => o.id === id)?.label ?? `opção ${id}`);
+      campos.push(`${c.name}: ${rotulos.join(", ")}`);
+    } else {
+      campos.push(`${c.name}: ${String(bruto)}`);
+    }
+  }
+  return [
+    `Negócio ${pedido.pipedriveNegocioId} — título: ${String(d.title ?? "")}`,
+    `Situação: ${String(d.status ?? "")} · valor: ${String(d.value ?? "")} · dono: ${nome(d.user_id)}`,
+    `Cliente (organização): ${nome(d.org_id)} · Pessoa de contato: ${nome(d.person_id)}`,
+    ...campos,
+  ];
+}
