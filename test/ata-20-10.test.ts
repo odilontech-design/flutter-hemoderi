@@ -60,7 +60,7 @@ test("texto do relatório para o grupo: no modelo que a equipe usa à mão", () 
     observacoes: "Finalizado com sucesso",
     mandic: null,
   });
-  assert.match(texto, /^Data: 20\/10\/2026\nHorário: 09:00\nHorário real: 09:05 até 10:00\nEndereço: Rua Exemplo/);
+  assert.match(texto, /^Data: 20\/10\/2026\nHorário: 09:00\nEndereço: Rua Exemplo/);
   assert.match(texto, /Nome da Clínica: Clínica Exemplo\nCirurgião: Dra\. Teste Exemplo\nPaciente: Paciente Exemplo/);
   assert.match(texto, /Serviços Hemoderi: AirFlow – GBT Machine \(1 paciente\) \+ 2× Membranas – PRF/);
   assert.match(texto, /Profissional Hemoderi: Profissional Exemplo\nValor: 350,00\nPagamento \(Sim\/Não\): sim/);

@@ -50,7 +50,7 @@ function valorDoSinal(v: string | null | undefined): string {
 
 export function textoDoRelatorio(d: DadosTextoRelatorio): string {
   const linhas: string[] = [`Data: ${d.data}`, `Horário: ${d.hora}`];
-  if (d.compareceu && (d.inicioReal || d.fimReal)) linhas.push(`Horário real: ${d.inicioReal ?? "—"} até ${d.fimReal ?? "—"}`);
+  // O horário real não vai no texto (nota do PipeDrive etc.): fica só gravado no sistema (André, 18/11).
   if (d.endereco) linhas.push(`Endereço: ${d.endereco}`);
   linhas.push(`Nome da Clínica: ${d.clinica}`);
   linhas.push(`Cirurgião: ${d.doutor ?? ""}`);
