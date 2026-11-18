@@ -150,3 +150,30 @@ export function tituloNoPadraoDoCliente(d: { ano: number; numeroDoCliente: strin
   if (d.numeroDoCliente?.trim()) return `${d.ano} ${d.numeroDoCliente.trim()} ${clinica}`;
   return `${d.ano}-${String(d.numeroDoPedido).padStart(4, "0")} - ${clinica}`;
 }
+
+/**
+ * O número do cliente tirado dos títulos dos negócios que a organização já tem
+ * no PipeDrive (18/11: o número — "4186" em "2026 4186 Instituto Galavini" —
+ * não está em campo nenhum; a equipe o escreve no título). Vale o que mais se
+ * repete. Fora: o padrão do próprio sistema ("2026-0488 - …") e números que
+ * sabidamente não são do cliente (o id da organização e os números de
+ * agendamento, que títulos antigos do sistema usavam). Sem número, null — a
+ * Stephanie cria.
+ */
+export function numeroDoClienteNosTitulos(titulos: string[], naoSao: Set<number>): string | null {
+  const contagem = new Map<string, number>();
+  for (const titulo of titulos) {
+    const m = /^\s*(?:19|20)\d{2}\s+(\d{1,6})\s+\S/.exec(titulo ?? "");
+    if (!m || naoSao.has(Number(m[1]))) continue;
+    contagem.set(m[1], (contagem.get(m[1]) ?? 0) + 1);
+  }
+  let melhor: string | null = null;
+  let vezes = 0;
+  for (const [numero, n] of Array.from(contagem.entries())) {
+    if (n > vezes) {
+      melhor = numero;
+      vezes = n;
+    }
+  }
+  return melhor;
+}

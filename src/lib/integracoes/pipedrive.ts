@@ -29,7 +29,7 @@
 
 import { prisma } from "@/lib/prisma";
 import { isoDeData } from "@/lib/data";
-import { acharCampo, escolherOrganizacao, montarCamposPersonalizados, nucleoDoNome, tituloNoPadraoDoCliente, type CampoPipedrive, type EspecificacaoDeCampo } from "./pipedrive-campos";
+import { acharCampo, escolherOrganizacao, montarCamposPersonalizados, nucleoDoNome, numeroDoClienteNosTitulos, tituloNoPadraoDoCliente, type CampoPipedrive, type EspecificacaoDeCampo } from "./pipedrive-campos";
 import {
   FUNIL_PADRAO,
   escolherFunil,
@@ -255,9 +255,19 @@ async function clienteDoNegocio(clinicaId: string, nomeDaClinica: string, doutor
   } catch {
     // sem o número, o título usa o código do agendamento
   }
-  // Sem campo de número na organização (hoje não há nenhum), o número do cliente
-  // é o ID da própria organização no PipeDrive — o que aparece na URL dela.
-  return { orgId, numeroDoCliente: numeroDoCliente ?? String(orgId), fonte };
+  // Sem campo de número na organização (hoje não há nenhum), o número é o que a
+  // equipe escreve no título dos negócios da organização ("2026 4186 …"). O id
+  // da organização NÃO é o número do cliente (18/11: Galavini é 2714, número 4186).
+  if (!numeroDoCliente) numeroDoCliente = await numeroDoClienteDaOrganizacao(orgId, clinicaId).catch(() => null);
+  return { orgId, numeroDoCliente, fonte };
+}
+
+/** O número do cliente nos títulos dos negócios que a organização já tem. */
+async function numeroDoClienteDaOrganizacao(orgId: number, clinicaId: string): Promise<string | null> {
+  const json = (await chamar(`/organizations/${orgId}/deals?status=all_not_deleted&limit=100`, "GET")) as { data?: { title?: string }[] | null } | null;
+  const titulos = (json?.data ?? []).map((d) => d.title ?? "");
+  const pedidos = await prisma.pedido.findMany({ where: { clinicaId }, select: { numero: true } });
+  return numeroDoClienteNosTitulos(titulos, new Set([orgId, ...pedidos.map((p) => p.numero)]));
 }
 
 /**
@@ -712,8 +722,8 @@ export async function apagarNegociosDeTeste(limite = 30): Promise<{ feitos: numb
 export async function completarClientesDosNegocios(
   limite = 15,
   antesDe?: number
-): Promise<{ ligados: number; jaTinham: number; semCliente: string[]; falhas: string[]; ultimo: number | null; restam: number }> {
-  const vazio = { ligados: 0, jaTinham: 0, semCliente: [], falhas: [], ultimo: null, restam: 0 };
+): Promise<{ ligados: number; jaTinham: number; titulosCorrigidos: number; semCliente: string[]; falhas: string[]; ultimo: number | null; restam: number }> {
+  const vazio = { ligados: 0, jaTinham: 0, titulosCorrigidos: 0, semCliente: [], falhas: [], ultimo: null, restam: 0 };
   if (!configurado()) return { ...vazio, falhas: ["PipeDrive não configurado."] };
   const filtro = {
     apoioDeId: null,
@@ -737,16 +747,26 @@ export async function completarClientesDosNegocios(
   });
   let ligados = 0;
   let jaTinham = 0;
+  let titulosCorrigidos = 0;
   const semCliente: string[] = [];
   const falhas: string[] = [];
   for (const p of pedidos) {
     try {
-      const negocio = (await chamar(`/deals/${p.pipedriveNegocioId}`, "GET")) as { data?: { org_id?: unknown; person_id?: unknown } } | null;
+      const negocio = (await chamar(`/deals/${p.pipedriveNegocioId}`, "GET")) as { data?: { org_id?: unknown; person_id?: unknown; title?: string } } | null;
       const orgAtual = idDaLigacao(negocio?.data?.org_id);
       if (orgAtual) {
         jaTinham++;
         if (!p.clinica.pipedriveOrganizacaoId) {
           await prisma.clinica.update({ where: { id: p.clinicaId }, data: { pipedriveOrganizacaoId: String(orgAtual) } });
+        }
+        // Título que o sistema montou com o id da organização no lugar do número
+        // do cliente (0.39.2–0.39.5): refaz com o número certo, ou o código do agendamento.
+        const ano = p.data.getUTCFullYear();
+        if ((negocio?.data?.title ?? "").startsWith(`${ano} ${orgAtual} `)) {
+          const numeroDoCliente = await numeroDoClienteDaOrganizacao(orgAtual, p.clinicaId).catch(() => null);
+          const title = tituloNoPadraoDoCliente({ ano, numeroDoCliente, numeroDoPedido: p.numero, clinica: p.clinica.nome });
+          await chamar(`/deals/${p.pipedriveNegocioId}`, "PUT", { title });
+          titulosCorrigidos++;
         }
         continue;
       }
@@ -766,7 +786,7 @@ export async function completarClientesDosNegocios(
   }
   const ultimo = pedidos.at(-1)?.numero ?? null;
   const restam = ultimo ? await prisma.pedido.count({ where: { ...filtro, numero: { lt: ultimo } } }) : 0;
-  return { ligados, jaTinham, semCliente, falhas, ultimo, restam };
+  return { ligados, jaTinham, titulosCorrigidos, semCliente, falhas, ultimo, restam };
 }
 
 /**
@@ -817,7 +837,7 @@ export async function descreverNegocioDoPedido(numeroDoPedido: number): Promise<
       try {
         const achado = await acharOrganizacao(pedido.clinicaId, pedido.clinica.nome, pedido.doutorNome);
         return achado
-          ? `Cliente que o sistema liga para "${pedido.clinica.nome}": organização ${achado.orgId} (achada por: ${achado.fonte})`
+          ? `Cliente que o sistema liga para "${pedido.clinica.nome}": organização ${achado.orgId} (achada por: ${achado.fonte}) · número do cliente nos títulos: ${(await numeroDoClienteDaOrganizacao(achado.orgId, pedido.clinicaId).catch(() => null)) ?? "nenhum"}`
           : `O sistema NÃO acha cliente para "${pedido.clinica.nome}" no PipeDrive — ligue à mão uma vez e os próximos seguem.`;
       } catch (erro) {
         return `Busca do cliente falhou: ${descreverErroPipedrive(erro)}`;

@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { acharCampo, escolherOrganizacao, montarCamposPersonalizados, tituloNoPadraoDoCliente, valorParaCampo, type CampoPipedrive } from "../src/lib/integracoes/pipedrive-campos";
+import { acharCampo, escolherOrganizacao, montarCamposPersonalizados, numeroDoClienteNosTitulos, tituloNoPadraoDoCliente, valorParaCampo, type CampoPipedrive } from "../src/lib/integracoes/pipedrive-campos";
 
 const campos: CampoPipedrive[] = [
   { key: "k_paciente", name: "Nome do Paciente", field_type: "varchar" },
@@ -55,4 +55,11 @@ test("opção parecida só vale se for única; dinheiro leva a moeda", () => {
   assert.equal(valorParaCampo(duas, "Cartão"), undefined);
   const dinheiro: CampoPipedrive = { key: "kp", name: "Pagamento do Profissional", field_type: "monetary" };
   assert.deepEqual(montarCamposPersonalizados([dinheiro], [{ nomes: ["Pagamento do Profissional"], valor: 250 }]), { kp: 250, kp_currency: "BRL" });
+});
+
+test("número do cliente vem dos títulos dos negócios da organização", () => {
+  const titulos = ["2025 4186 Instituto Galavini", "2026 4186 Instituto Galavini", "2026-0488 - Dr Daniel - Galavini", "2026 2714 Instituto Galavini", "2026 488 Instituto Galavini — LiteTouch"];
+  assert.equal(numeroDoClienteNosTitulos(titulos, new Set([2714, 488])), "4186");
+  assert.equal(numeroDoClienteNosTitulos(["2026-0488 - Galavini", "Negócio Galavini"], new Set()), null);
+  assert.equal(numeroDoClienteNosTitulos([], new Set()), null);
 });
