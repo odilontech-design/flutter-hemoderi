@@ -207,6 +207,11 @@ model Clinica {
   /// automáticas do WhatsApp mesmo com o envio aos clientes pausado.
   contaDeTeste Boolean @default(false)
 
+  /// A organização (cliente) desta clínica no PipeDrive, aprendida na primeira
+  /// vez que o sistema a acha (18/11: duplicados no PipeDrive deixavam os
+  /// negócios sem cliente). Vale antes de qualquer busca por nome.
+  pipedriveOrganizacaoId String?
+
   financeiroNome      String?
   financeiroDocumento String?
   financeiroTelefone  String?

@@ -175,15 +175,73 @@ const NOMES_DO_NUMERO_DO_CLIENTE = ["Numero do cliente", "Numero cliente", "N do
  * duplicado). Sem achar uma só organização com o nome da clínica, devolve
  * null e o negócio nasce sem cliente — a Stephanie preenche.
  */
-async function clienteDoNegocio(nomeDaClinica: string): Promise<{ orgId: number; numeroDoCliente: string | null } | null> {
+type ClienteAchado = { orgId: number; numeroDoCliente: string | null; fonte: string };
+
+/** O id de um campo de ligação do PipeDrive v1 (org_id/person_id vem como objeto {value, name}). */
+function idDaLigacao(v: unknown): number | null {
+  if (typeof v === "number") return v;
+  if (v && typeof v === "object") {
+    const n = Number((v as { value?: unknown }).value);
+    return Number.isInteger(n) && n > 0 ? n : null;
+  }
+  return null;
+}
+
+/**
+ * Onde achar o cliente, na ordem (18/11: negócios nascendo sem organização):
+ *  1. o que o sistema já aprendeu para esta clínica;
+ *  2. a organização de um negócio anterior da mesma clínica — se a Sthefany
+ *     ligou à mão uma vez, os próximos seguem;
+ *  3. a busca pelo nome (com duplicados, o original);
+ *  4. a organização do doutor, se ele já é contato cadastrado lá.
+ * O achado fica gravado na clínica. Nunca cria organização.
+ */
+async function acharOrganizacao(clinicaId: string, nomeDaClinica: string, doutor: string | null): Promise<{ orgId: number; fonte: string } | null> {
+  const clinica = await prisma.clinica.findUnique({ where: { id: clinicaId }, select: { pipedriveOrganizacaoId: true } });
+  const aprendido = Number(clinica?.pipedriveOrganizacaoId);
+  if (Number.isInteger(aprendido) && aprendido > 0) return { orgId: aprendido, fonte: "já ligado a esta clínica" };
+
+  const anteriores = await prisma.pedido.findMany({
+    where: { clinicaId, apoioDeId: null, pipedriveNegocioId: { not: null } },
+    orderBy: { atualizadoEm: "desc" },
+    take: 4,
+    select: { pipedriveNegocioId: true },
+  });
+  for (const a of anteriores) {
+    try {
+      const negocio = (await chamar(`/deals/${a.pipedriveNegocioId}`, "GET")) as { data?: { org_id?: unknown } } | null;
+      const id = idDaLigacao(negocio?.data?.org_id);
+      if (id) return { orgId: id, fonte: `negócio anterior ${a.pipedriveNegocioId}` };
+    } catch {
+      // negócio apagado ou arquivado: tenta o próximo
+    }
+  }
+
   const termos = Array.from(new Set([nomeDaClinica.trim(), nucleoDoNome(nomeDaClinica)].filter((t) => t.length >= 2)));
   const candidatas = new Map<number, { id: number; name: string }>();
   for (const termo of termos) {
-    const busca = (await chamar(`/organizations/search?term=${encodeURIComponent(termo)}&fields=name&limit=10`, "GET")) as ItemDeBusca;
+    const busca = (await chamar(`/organizations/search?term=${encodeURIComponent(termo)}&fields=name&limit=20`, "GET")) as ItemDeBusca;
     for (const r of busca?.data?.items ?? []) candidatas.set(r.item.id, { id: r.item.id, name: r.item.name ?? "" });
   }
-  const orgId = escolherOrganizacao(Array.from(candidatas.values()), nomeDaClinica);
-  if (!orgId) return null;
+  const porNome = escolherOrganizacao(Array.from(candidatas.values()), nomeDaClinica);
+  if (porNome) return { orgId: porNome, fonte: "nome da clínica" };
+
+  const nomeDoDoutor = doutor?.trim();
+  if (nomeDoDoutor && nomeDoDoutor.length >= 3) {
+    const busca = (await chamar(`/persons/search?term=${encodeURIComponent(nomeDoDoutor)}&fields=name&exact_match=true&limit=10`, "GET")) as {
+      data?: { items?: { item: { id: number; organization?: { id?: number } | null } }[] };
+    } | null;
+    const orgs = new Set((busca?.data?.items ?? []).map((r) => r.item.organization?.id).filter((x): x is number => Boolean(x)));
+    if (orgs.size === 1) return { orgId: Array.from(orgs)[0], fonte: "organização do contato do doutor" };
+  }
+  return null;
+}
+
+async function clienteDoNegocio(clinicaId: string, nomeDaClinica: string, doutor: string | null): Promise<ClienteAchado | null> {
+  const achado = await acharOrganizacao(clinicaId, nomeDaClinica, doutor);
+  if (!achado) return null;
+  const { orgId, fonte } = achado;
+  await prisma.clinica.update({ where: { id: clinicaId }, data: { pipedriveOrganizacaoId: String(orgId) } }).catch(() => undefined);
 
   let numeroDoCliente: string | null = null;
   try {
@@ -199,16 +257,39 @@ async function clienteDoNegocio(nomeDaClinica: string): Promise<{ orgId: number;
   }
   // Sem campo de número na organização (hoje não há nenhum), o número do cliente
   // é o ID da própria organização no PipeDrive — o que aparece na URL dela.
-  return { orgId, numeroDoCliente: numeroDoCliente ?? String(orgId) };
+  return { orgId, numeroDoCliente: numeroDoCliente ?? String(orgId), fonte };
 }
 
-/** A pessoa de contato (o doutor) só se já existir na organização: nada de cadastro novo. */
-async function pessoaExistente(nome: string, orgId: number): Promise<number | null> {
-  const busca = (await chamar(
-    `/persons/search?term=${encodeURIComponent(nome)}&fields=name&exact_match=true&organization_id=${orgId}&limit=1`,
-    "GET"
-  )) as ItemDeBusca;
-  return busca?.data?.items?.[0]?.item.id ?? null;
+/**
+ * A pessoa de contato (o doutor) só se já existir na organização: nada de
+ * cadastro novo. Primeiro pelo nome exato; senão, se a organização tiver UM
+ * contato só, é ele.
+ */
+async function pessoaExistente(nome: string | null, orgId: number): Promise<number | null> {
+  if (nome?.trim()) {
+    const busca = (await chamar(
+      `/persons/search?term=${encodeURIComponent(nome.trim())}&fields=name&exact_match=true&organization_id=${orgId}&limit=1`,
+      "GET"
+    )) as ItemDeBusca;
+    const id = busca?.data?.items?.[0]?.item.id;
+    if (id) return id;
+  }
+  const contatos = (await chamar(`/organizations/${orgId}/persons?limit=2`, "GET").catch(() => null)) as { data?: { id: number }[] | null } | null;
+  return contatos?.data?.length === 1 ? contatos.data[0].id : null;
+}
+
+/** Põe no corpo do negócio o cliente, o contato e o título no padrão; devolve o que achou. */
+async function ligarCliente(
+  corpo: Record<string, unknown>,
+  p: { clinicaId: string; clinica: string; doutor: string | null; ano: number; numeroDoPedido: number }
+): Promise<ClienteAchado | null> {
+  const cliente = await clienteDoNegocio(p.clinicaId, p.clinica, p.doutor);
+  if (!cliente) return null;
+  corpo.org_id = cliente.orgId;
+  corpo.title = tituloNoPadraoDoCliente({ ano: p.ano, numeroDoCliente: cliente.numeroDoCliente, numeroDoPedido: p.numeroDoPedido, clinica: p.clinica });
+  const pessoa = await pessoaExistente(p.doutor, cliente.orgId).catch(() => null);
+  if (pessoa) corpo.person_id = pessoa;
+  return cliente;
 }
 
 /** Quem é dono de todos os negócios (pedido de 05/11): a Sthefany, ou quem a variável apontar. */
@@ -291,6 +372,7 @@ export async function criarNegocio(pedidoId: string): Promise<void> {
       quantidade: true,
       valorServicoCentavos: true,
       pipedriveNegocioId: true,
+      clinicaId: true,
       doutorNome: true,
       contatoClinica: true,
       clinica: { select: { nome: true } },
@@ -327,15 +409,7 @@ export async function criarNegocio(pedidoId: string): Promise<void> {
 
     try {
       // Só o cliente que já existe no PipeDrive (17/11); sem ele, fica em branco.
-      const cliente = await clienteDoNegocio(pedido.clinica.nome);
-      if (cliente) {
-        corpo.org_id = cliente.orgId;
-        corpo.title = tituloNoPadraoDoCliente({ ano: pedido.data.getUTCFullYear(), numeroDoCliente: cliente.numeroDoCliente, numeroDoPedido: pedido.numero, clinica: pedido.clinica.nome });
-        if (pedido.doutorNome?.trim()) {
-          const pessoa = await pessoaExistente(pedido.doutorNome.trim(), cliente.orgId);
-          if (pessoa) corpo.person_id = pessoa;
-        }
-      }
+      await ligarCliente(corpo, { clinicaId: pedido.clinicaId, clinica: pedido.clinica.nome, doutor: pedido.doutorNome, ano: pedido.data.getUTCFullYear(), numeroDoPedido: pedido.numero });
     } catch {
       // Sem cliente o negócio ainda nasce — o título já traz a clínica.
     }
@@ -470,6 +544,7 @@ export async function registrarNegocioAprovado(pedidoId: string, textoDoRelatori
       valorServicoCentavos: true,
       valorRepasseCentavos: true,
       pipedriveNegocioId: true,
+      clinicaId: true,
       doutorNome: true,
       pacienteNome: true,
       procedimentoPaciente: true,
@@ -527,15 +602,7 @@ export async function registrarNegocioAprovado(pedidoId: string, textoDoRelatori
   }
   // O cliente que já existe no PipeDrive, com o número dele no título (17/11).
   try {
-    const cliente = await clienteDoNegocio(pedido.clinica.nome);
-    if (cliente) {
-      corpo.org_id = cliente.orgId;
-      corpo.title = tituloNoPadraoDoCliente({ ano: pedido.data.getUTCFullYear(), numeroDoCliente: cliente.numeroDoCliente, numeroDoPedido: pedido.numero, clinica: pedido.clinica.nome });
-      if (doutor?.trim()) {
-        const pessoa = await pessoaExistente(doutor.trim(), cliente.orgId);
-        if (pessoa) corpo.person_id = pessoa;
-      }
-    }
+    await ligarCliente(corpo, { clinicaId: pedido.clinicaId, clinica: pedido.clinica.nome, doutor, ano: pedido.data.getUTCFullYear(), numeroDoPedido: pedido.numero });
   } catch {
     // Sem cliente, o negócio nasce em branco nesse campo e a Stephanie preenche.
   }
@@ -636,13 +703,83 @@ export async function apagarNegociosDeTeste(limite = 30): Promise<{ feitos: numb
 
 
 /**
+ * Completa o cliente dos negócios que já nasceram sem organização (18/11).
+ * Só mexe no negócio SEM organização: o que a Sthefany já ligou à mão fica
+ * como está (e ensina o sistema qual é o cliente daquela clínica). Nunca cria
+ * organização nem contato. Em lotes, do agendamento mais novo para o mais
+ * antigo; `antesDe` marca de onde continuar.
+ */
+export async function completarClientesDosNegocios(
+  limite = 15,
+  antesDe?: number
+): Promise<{ ligados: number; jaTinham: number; semCliente: string[]; falhas: string[]; ultimo: number | null; restam: number }> {
+  const vazio = { ligados: 0, jaTinham: 0, semCliente: [], falhas: [], ultimo: null, restam: 0 };
+  if (!configurado()) return { ...vazio, falhas: ["PipeDrive não configurado."] };
+  const filtro = {
+    apoioDeId: null,
+    pipedriveNegocioId: { not: null },
+    clinica: { contaDeTeste: false },
+    criadoEm: { gte: new Date("2026-10-01T00:00:00Z") },
+  };
+  const pedidos = await prisma.pedido.findMany({
+    where: { ...filtro, ...(antesDe ? { numero: { lt: antesDe } } : {}) },
+    orderBy: { numero: "desc" },
+    take: limite,
+    select: {
+      numero: true,
+      data: true,
+      clinicaId: true,
+      pipedriveNegocioId: true,
+      doutorNome: true,
+      clinica: { select: { nome: true, pipedriveOrganizacaoId: true } },
+      relatorio: { select: { doutorNomeInformado: true } },
+    },
+  });
+  let ligados = 0;
+  let jaTinham = 0;
+  const semCliente: string[] = [];
+  const falhas: string[] = [];
+  for (const p of pedidos) {
+    try {
+      const negocio = (await chamar(`/deals/${p.pipedriveNegocioId}`, "GET")) as { data?: { org_id?: unknown; person_id?: unknown } } | null;
+      const orgAtual = idDaLigacao(negocio?.data?.org_id);
+      if (orgAtual) {
+        jaTinham++;
+        if (!p.clinica.pipedriveOrganizacaoId) {
+          await prisma.clinica.update({ where: { id: p.clinicaId }, data: { pipedriveOrganizacaoId: String(orgAtual) } });
+        }
+        continue;
+      }
+      const corpo: Record<string, unknown> = {};
+      const doutor = p.relatorio?.doutorNomeInformado ?? p.doutorNome;
+      const cliente = await ligarCliente(corpo, { clinicaId: p.clinicaId, clinica: p.clinica.nome, doutor, ano: p.data.getUTCFullYear(), numeroDoPedido: p.numero });
+      if (!cliente) {
+        semCliente.push(`nº ${p.numero} (${p.clinica.nome})`);
+        continue;
+      }
+      if (idDaLigacao(negocio?.data?.person_id)) delete corpo.person_id;
+      await chamar(`/deals/${p.pipedriveNegocioId}`, "PUT", corpo);
+      ligados++;
+    } catch (erro) {
+      falhas.push(`nº ${p.numero}: ${descreverErroPipedrive(erro)}`);
+    }
+  }
+  const ultimo = pedidos.at(-1)?.numero ?? null;
+  const restam = ultimo ? await prisma.pedido.count({ where: { ...filtro, numero: { lt: ultimo } } }) : 0;
+  return { ligados, jaTinham, semCliente, falhas, ultimo, restam };
+}
+
+/**
  * O negócio de um agendamento como está no PipeDrive agora, em texto: título,
  * situação, dono, cliente e cada campo personalizado preenchido (com o rótulo
  * da opção, não o id). Para quem não tem acesso ao PipeDrive conferir o que o
  * sistema mandou. Só leitura.
  */
 export async function descreverNegocioDoPedido(numeroDoPedido: number): Promise<string[]> {
-  const pedido = await prisma.pedido.findUnique({ where: { numero: numeroDoPedido }, select: { pipedriveNegocioId: true } });
+  const pedido = await prisma.pedido.findUnique({
+    where: { numero: numeroDoPedido },
+    select: { pipedriveNegocioId: true, clinicaId: true, doutorNome: true, clinica: { select: { nome: true } } },
+  });
   if (!pedido) return [`Não há agendamento nº ${numeroDoPedido}.`];
   if (!pedido.pipedriveNegocioId) return [`O agendamento nº ${numeroDoPedido} ainda não tem negócio no PipeDrive.`];
   const json = (await chamar(`/deals/${pedido.pipedriveNegocioId}`, "GET")) as { data?: Record<string, unknown> } | null;
@@ -676,6 +813,16 @@ export async function descreverNegocioDoPedido(numeroDoPedido: number): Promise<
     `Negócio ${pedido.pipedriveNegocioId} — título: ${String(d.title ?? "")}`,
     `Situação: ${String(d.status ?? "")} · valor: ${String(d.value ?? "")} · dono: ${nome(d.user_id)}`,
     `Cliente (organização): ${nome(d.org_id)} · Pessoa de contato: ${nome(d.person_id)}`,
+    await (async () => {
+      try {
+        const achado = await acharOrganizacao(pedido.clinicaId, pedido.clinica.nome, pedido.doutorNome);
+        return achado
+          ? `Cliente que o sistema liga para "${pedido.clinica.nome}": organização ${achado.orgId} (achada por: ${achado.fonte})`
+          : `O sistema NÃO acha cliente para "${pedido.clinica.nome}" no PipeDrive — ligue à mão uma vez e os próximos seguem.`;
+      } catch (erro) {
+        return `Busca do cliente falhou: ${descreverErroPipedrive(erro)}`;
+      }
+    })(),
     ...campos,
   ];
 }

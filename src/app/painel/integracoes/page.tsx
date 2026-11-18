@@ -17,6 +17,7 @@ import { PagamentosCartao } from "./PagamentosCartao";
 import { ReatribuirNegocios } from "./ReatribuirNegocios";
 import { ApagarNegociosDeTeste } from "./ApagarNegociosDeTeste";
 import { ConferirNegocio } from "./ConferirNegocio";
+import { CompletarClientes } from "./CompletarClientes";
 import { SalvarAgendaPendentes } from "./SalvarAgendaPendentes";
 
 export const dynamic = "force-dynamic";
@@ -211,6 +212,7 @@ export default async function Integracoes() {
           <ReatribuirNegocios />
           <ApagarNegociosDeTeste />
           <ConferirNegocio />
+          <CompletarClientes />
           {pendencias.length > 0 && (
             <BotaoAcao
               acao={reprocessarTodasPipedrive}

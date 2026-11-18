@@ -123,16 +123,16 @@ export function nucleoDoNome(nome: string): string {
 /**
  * Entre as organizações que a busca devolveu, a da clínica — só se for UMA.
  * Nome igual, ou um contendo o outro (o PipeDrive pode ter o número do cliente
- * no nome: "4170 Senac Tiradentes"). Mais de uma é ambiguidade, e nenhuma é
- * cliente fora do PipeDrive: nos dois casos fica em branco, que a Stephanie
- * preenche — melhor que criar um cliente duplicado.
+ * no nome: "4170 Senac Tiradentes"). Várias com o MESMO nome são os duplicados
+ * que o sistema antigo criava (18/11): vale a mais antiga (menor id), que é o
+ * cliente original. Parecidas só valem se for uma; nenhuma é cliente fora do
+ * PipeDrive e fica em branco — melhor que criar um cliente duplicado.
  */
 export function escolherOrganizacao(candidatas: { id: number; name: string }[], nomeDaClinica: string): number | null {
   const alvo = nucleoDoNome(nomeDaClinica);
   if (!alvo) return null;
   const iguais = candidatas.filter((c) => nucleoDoNome(c.name) === alvo);
-  if (iguais.length === 1) return iguais[0].id;
-  if (iguais.length > 1) return null;
+  if (iguais.length >= 1) return Math.min(...iguais.map((c) => c.id));
   const parecidas = candidatas.filter((c) => {
     const n = nucleoDoNome(c.name);
     return n && (n.includes(alvo) || alvo.includes(n));

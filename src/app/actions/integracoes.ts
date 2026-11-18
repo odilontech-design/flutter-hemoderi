@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { exigirAdministradorTecnico } from "@/lib/sessao";
-import { apagarNegociosDeTeste, descreverCamposDoPipedrive, descreverNegocioDoPedido, donoDosNegocios, reatribuirNegocios, testarConexao, usuariosDoPipedrive } from "@/lib/integracoes/pipedrive";
+import { apagarNegociosDeTeste, completarClientesDosNegocios, descreverCamposDoPipedrive, descreverNegocioDoPedido, donoDosNegocios, reatribuirNegocios, testarConexao, usuariosDoPipedrive } from "@/lib/integracoes/pipedrive";
 import { reprocessarPedidoPipedrive, reprocessarPendenciasPipedrive } from "@/lib/integracoes/pipedrive-pendencias";
 import { salvarPendentesNaAgendaDaEquipe } from "@/lib/integracoes/google-agenda";
 import { despacharPendentes } from "@/lib/integracoes/whatsapp";
@@ -47,6 +47,12 @@ export async function conferirNegocioDoPedido(numero: number): Promise<Resultado
   } catch (erro) {
     return { ok: false, erro: erro instanceof Error ? erro.message : "Falhou." };
   }
+}
+
+/** Liga ao cliente que já existe os negócios que nasceram sem organização, em lotes. */
+export async function completarClientesPipedrive(antesDe?: number): Promise<Awaited<ReturnType<typeof completarClientesDosNegocios>>> {
+  await exigirAdministradorTecnico();
+  return completarClientesDosNegocios(15, antesDe);
 }
 
 /** Apaga do PipeDrive os negócios de clínicas de teste (só o administrador técnico). */

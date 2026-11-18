@@ -34,7 +34,11 @@ test("monta só o que dá para preencher, e a chave fixa vence a busca", () => {
 test("só escolhe a organização quando há uma só; senão deixa em branco", () => {
   assert.equal(escolherOrganizacao([{ id: 1, name: "Senac Tiradentes" }], "Clínica Senac Tiradentes"), 1);
   assert.equal(escolherOrganizacao([{ id: 7, name: "4170 Senac Tiradentes" }], "Senac Tiradentes"), 7);
-  assert.equal(escolherOrganizacao([{ id: 1, name: "Senac Tiradentes" }, { id: 2, name: "Senac Tiradentes" }], "Senac Tiradentes"), null);
+  // Duplicados do sistema antigo: vale o original (o mais antigo).
+  assert.equal(escolherOrganizacao([{ id: 9, name: "Senac Tiradentes" }, { id: 2, name: "senac tiradentes" }], "Senac Tiradentes"), 2);
+  assert.equal(escolherOrganizacao([{ id: 4186, name: "Instituto Galavini" }, { id: 15001, name: "Instituto Galavini" }], "Instituto Galavini"), 4186);
+  // Parecidas diferentes continuam ambíguas.
+  assert.equal(escolherOrganizacao([{ id: 1, name: "Senac Tiradentes Centro" }, { id: 2, name: "Senac Tiradentes Leste" }], "Senac Tiradentes"), null);
   assert.equal(escolherOrganizacao([{ id: 3, name: "Outra Clínica" }], "Senac Tiradentes"), null);
   assert.equal(escolherOrganizacao([], "Senac Tiradentes"), null);
 });
