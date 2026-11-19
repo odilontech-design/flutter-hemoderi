@@ -4,6 +4,7 @@ import { formatarDataHora } from "@/lib/data";
 import { formatarReais } from "@/lib/dinheiro";
 import { rotuloDaForma, rotuloDaSituacao } from "@/lib/recebimento";
 import { tamanhoLegivel } from "@/lib/anexos-relatorio";
+import { mostraHorarioReal } from "@/lib/relatorio-texto";
 
 export const INCLUIR_ADICIONAIS = {
   adicionais: { select: { quantidade: true, servico: { select: { nome: true } } } },
@@ -27,8 +28,11 @@ export function RelatorioPreenchido({
   relatorio,
   paraClinica = false,
   procedimentoAgendado = null,
+  servicoAgendado = null,
 }: {
   relatorio: RelatorioCompleto;
+  /** O serviço do agendamento; decide, com os adicionais, se o horário real aparece. */
+  servicoAgendado?: string | null;
   /** O procedimento que estava no agendamento; vale quando o profissional não corrigiu. */
   procedimentoAgendado?: string | null;
   /**
@@ -49,7 +53,17 @@ export function RelatorioPreenchido({
           <div className="text-gray-400">Compareceu</div>
           <div className="text-gray-700">{relatorio.compareceu ? "Sim" : "Não"}</div>
         </div>
-        {/* O horário real (início e fim) fica gravado no sistema para o cálculo de horas por equipamento, mas não é mostrado aqui (André, 18/11). */}
+        {/* Horário real só na Sedação e nos equipamentos locados (19/11); nos demais fica só gravado (18/11). */}
+        {relatorio.compareceu &&
+          (relatorio.inicioReal || relatorio.fimReal) &&
+          mostraHorarioReal([relatorio.servicoRealizado?.nome ?? servicoAgendado, ...relatorio.adicionais.map((a) => a.servico.nome)]) && (
+            <div>
+              <div className="text-gray-400">Horário real</div>
+              <div className="text-gray-700">
+                {relatorio.inicioReal ?? "—"} até {relatorio.fimReal ?? "—"}
+              </div>
+            </div>
+          )}
         {relatorio.compareceu && (
           <div className="sm:col-span-2">
             <div className="text-gray-400">Procedimento realizado no paciente</div>

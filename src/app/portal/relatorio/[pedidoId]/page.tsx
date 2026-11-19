@@ -47,7 +47,7 @@ export default async function RelatorioDaClinica({ params }: { params: { pedidoI
             {pedido.doutorNome ? ` · Dr(a). ${pedido.doutorNome}` : ""}
           </div>
         </div>
-        <RelatorioPreenchido relatorio={pedido.relatorio} paraClinica procedimentoAgendado={pedido.procedimentoPaciente} />
+        <RelatorioPreenchido relatorio={pedido.relatorio} paraClinica procedimentoAgendado={pedido.procedimentoPaciente} servicoAgendado={pedido.servico?.nome} />
         <div className="mt-6 pt-4 border-t border-gray-100">
           <Link href="/portal/historico" className="text-xs font-semibold text-bordo hover:underline">
             ← Voltar ao histórico

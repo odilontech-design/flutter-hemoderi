@@ -48,9 +48,18 @@ function valorDoSinal(v: string | null | undefined): string {
   return v.trim();
 }
 
+/**
+ * O horário real (início e fim) só aparece na Sedação e nos equipamentos
+ * locados, em que a hora de uso conta (Sthefany, 19/11). Nos demais fica só
+ * gravado no sistema (André, 18/11).
+ */
+export function mostraHorarioReal(nomesDosServicos: (string | null | undefined)[]): boolean {
+  return nomesDosServicos.some((n) => /seda[çc][aã]o|loca[çc][aã]o/i.test(n ?? ""));
+}
+
 export function textoDoRelatorio(d: DadosTextoRelatorio): string {
   const linhas: string[] = [`Data: ${d.data}`, `Horário: ${d.hora}`];
-  // O horário real não vai no texto (nota do PipeDrive etc.): fica só gravado no sistema (André, 18/11).
+  const comHorarioReal = d.compareceu && (d.inicioReal || d.fimReal) && mostraHorarioReal([d.servico, ...d.adicionais.map((a) => a.nome)]);
   if (d.endereco) linhas.push(`Endereço: ${d.endereco}`);
   linhas.push(`Nome da Clínica: ${d.clinica}`);
   linhas.push(`Cirurgião: ${d.doutor ?? ""}`);
@@ -67,6 +76,8 @@ export function textoDoRelatorio(d: DadosTextoRelatorio): string {
     linhas.push(`Pagamento (Sim/Não): ${recebeu}`);
     const forma = d.formaRecebimento ? rotuloDaForma(d.formaRecebimento) : (d.formaDoCliente ?? "");
     linhas.push(`Forma de Pagamento: ${forma}`);
+    // Na posição do modelo da equipe: logo depois da forma de pagamento.
+    if (comHorarioReal) linhas.push(`Horário real: ${d.inicioReal ?? "—"} até ${d.fimReal ?? "—"}`);
     if (d.valorRecebido) linhas.push(`Valor recebido: ${d.valorRecebido}`);
     if (d.observacaoRecebimento) linhas.push(`Pagamento fora do habitual: ${d.observacaoRecebimento}`);
     const sinal = (nome: string) => valorDoSinal(d.sinais[nome]);

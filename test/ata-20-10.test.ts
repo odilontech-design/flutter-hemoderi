@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { lerResponsavelFinanceiro } from "../src/lib/responsavel-financeiro";
-import { textoDoRelatorio } from "../src/lib/relatorio-texto";
+import { mostraHorarioReal, textoDoRelatorio } from "../src/lib/relatorio-texto";
 
 const campos = (o: Record<string, string>) => (n: string) => o[n] ?? "";
 
@@ -82,4 +82,11 @@ test("texto do relatório: Orçamento e PG só no atendimento Mandic", () => {
   const com = textoDoRelatorio({ ...base, mandic: { orcamento: "1234", pg: "5678" } });
   assert.match(com, /Destro=\nOrçamento =1234\nPG=5678\nObs:/);
   assert.doesNotMatch(textoDoRelatorio({ ...base, mandic: null }), /PG=|Orçamento/);
+});
+
+test("horário real só na Sedação e nos equipamentos locados (19/11)", () => {
+  assert.equal(mostraHorarioReal(["Sedação Consciente – Grande São Paulo"]), true);
+  assert.equal(mostraHorarioReal(["Mandic – Locação de Laser LiteTouch"]), true);
+  assert.equal(mostraHorarioReal(["AirFlow – GBT Machine", "Stickybone + Membranas + Piezo + Sedação"]), true);
+  assert.equal(mostraHorarioReal(["AirFlow – GBT Machine (1 paciente)", "Membranas – PRF", null]), false);
 });

@@ -356,7 +356,7 @@ export default async function DetalheDoPedido({
           <Vazio>Nenhum relatório enviado ainda.</Vazio>
         ) : (
           <div className="space-y-4">
-            <RelatorioPreenchido relatorio={relatorio} procedimentoAgendado={pedido.procedimentoPaciente} />
+            <RelatorioPreenchido relatorio={relatorio} procedimentoAgendado={pedido.procedimentoPaciente} servicoAgendado={pedido.servico?.nome} />
 
             <div className="pt-3 border-t border-gray-100 text-xs">
               {relatorio.aprovadoEm ? (

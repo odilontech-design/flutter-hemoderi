@@ -244,7 +244,7 @@ export default async function Relatorio({
               Este relatório já foi conferido pela central e o valor do profissional está liberado. Para corrigir
               alguma coisa, fale com a central.
             </Aviso>
-            {enviado && <RelatorioPreenchido relatorio={enviado} procedimentoAgendado={pedido.procedimentoPaciente} />}
+            {enviado && <RelatorioPreenchido relatorio={enviado} procedimentoAgendado={pedido.procedimentoPaciente} servicoAgendado={pedido.servico?.nome} />}
           </div>
         ) : (
           <FormularioRelatorio
