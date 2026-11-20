@@ -18,6 +18,7 @@ import { AdicionarServico } from "./AdicionarServico";
 import { EditarVisita } from "./EditarVisita";
 import { AlterarLocal } from "./AlterarLocal";
 import { EditarRepasse } from "./EditarRepasse";
+import { PacientesAMais, type PacienteAMais } from "../PacientesAMais";
 import { Cartao, SeloStatus, Titulo, Vazio } from "@/components/ui";
 import { codigoDoPedido } from "@/lib/numeracao";
 import { formatarData, formatarDataHora } from "@/lib/data";
@@ -63,6 +64,19 @@ export default async function DetalheDoPedido({
   if (!pedido) notFound();
 
   const relatorio = pedido.relatorio;
+  // Pacientes a mais (19/11): quem pode agir vê as ações; o número do atendimento criado vem de uma busca só.
+  const idsGerados = (relatorio?.pacientesExtras ?? []).map((p) => p.pedidoGeradoId).filter((x): x is string => Boolean(x));
+  const numerosGerados = new Map(
+    (idsGerados.length ? await prisma.pedido.findMany({ where: { id: { in: idsGerados } }, select: { id: true, numero: true } }) : []).map((p) => [p.id, p.numero])
+  );
+  const pacientesAMais: PacienteAMais[] = (relatorio?.pacientesExtras ?? []).map((p) => ({
+    id: p.id,
+    nome: p.nome,
+    procedimento: p.procedimento,
+    pedidoGeradoId: p.pedidoGeradoId,
+    numeroGerado: p.pedidoGeradoId ? (numerosGerados.get(p.pedidoGeradoId) ?? null) : null,
+    acrescentadoPelaEquipe: Boolean(p.acrescentadoPorId),
+  }));
   const repassePago = (await prisma.repasse.findUnique({ where: { pedidoId: pedido.id }, select: { status: true } }))?.status === "PAGO";
 
   // Edição do resumo (ata de 02/10): só para quem atende o telefone e só
@@ -362,6 +376,9 @@ export default async function DetalheDoPedido({
         ) : (
           <div className="space-y-4">
             <RelatorioPreenchido relatorio={relatorio} procedimentoAgendado={pedido.procedimentoPaciente} servicoAgendado={pedido.servico?.nome} />
+            {!pedido.apoioDeId && relatorio.compareceu && perfilPermite(sessao.perfil, "POS_VENDA", "LOGISTICA", "COMERCIAL") && (
+              <PacientesAMais pedidoId={pedido.id} pacientes={pacientesAMais} podeCriar={pedido.status === "REALIZADO"} />
+            )}
 
             <div className="pt-3 border-t border-gray-100 text-xs">
               {relatorio.aprovadoEm ? (

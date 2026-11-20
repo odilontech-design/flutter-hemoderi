@@ -9,6 +9,7 @@ import { mostraHorarioReal } from "@/lib/relatorio-texto";
 export const INCLUIR_ADICIONAIS = {
   adicionais: { select: { quantidade: true, servico: { select: { nome: true } } } },
   servicoRealizado: { select: { nome: true } },
+  pacientesExtras: { select: { id: true, nome: true, procedimento: true, pedidoGeradoId: true, acrescentadoPorId: true }, orderBy: { ordem: "asc" as const } },
   // Só o nome: o arquivo sai pela rota autorizada, nunca junto da página.
   comprovante: { select: { nome: true } },
   anexos: { select: { id: true, nome: true, tamanho: true }, orderBy: { criadoEm: "asc" as const } },
@@ -153,6 +154,18 @@ export function RelatorioPreenchido({
             </div>
           ))}
           {relatorio.servicosAdicionais && <div className="text-amber-800">{relatorio.servicosAdicionais}</div>}
+        </div>
+      )}
+
+      {relatorio.compareceu && relatorio.pacientesExtras.length > 0 && (
+        <div className="text-xs">
+          <div className="text-gray-400 mb-0.5">Pacientes a mais atendidos ({relatorio.pacientesExtras.length})</div>
+          {relatorio.pacientesExtras.map((p) => (
+            <div key={p.id} className="text-amber-800">
+              {p.nome} — {p.procedimento}
+              {p.acrescentadoPorId && !paraClinica ? <span className="text-gray-400"> (acrescentado pela equipe)</span> : null}
+            </div>
+          ))}
         </div>
       )}
 

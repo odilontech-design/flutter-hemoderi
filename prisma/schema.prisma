@@ -1325,6 +1325,9 @@ model RelatorioAtendimento {
   /// o texto livre continua para o que não cabe no catálogo, mas o que cabe
   /// vira linha aqui, e é a linha que o pós-venda consegue transformar em valor.
   adicionais RelatorioServicoAdicional[]
+  /// Pacientes atendidos além do agendado (Joyce, 19/11): o profissional informa
+  /// no relatório, ou a equipe acrescenta sem devolver o relatório.
+  pacientesExtras RelatorioPacienteExtra[]
 
   @@index([profissionalId])
   @@index([aprovadoEm])
@@ -1368,6 +1371,31 @@ model RelatorioAnexo {
 /// Um serviço a mais num relatório. Declarado por quem atendeu e conferido
 /// pela central na aprovação — a presença aqui NÃO altera o valor do pedido
 /// nem o repasse sozinha.
+/// Paciente atendido além do que estava na agenda (Joyce, 19/11: "teve mais um
+/// paciente, não foi informado"). Nasce no relatório do profissional ou
+/// acrescentado pela equipe; o pós-venda/logística pode transformar em um
+/// atendimento próprio (cobrança, repasse e negócio no PipeDrive) — aí
+/// `pedidoGeradoId` guarda qual, e a linha não é criada de novo.
+model RelatorioPacienteExtra {
+  id String @id @default(cuid())
+
+  relatorioId String
+  relatorio   RelatorioAtendimento @relation(fields: [relatorioId], references: [id], onDelete: Cascade)
+
+  nome          String
+  procedimento  String
+  ordem         Int      @default(0)
+
+  /// Quem acrescentou depois do envio (nulo = veio do relatório do profissional).
+  acrescentadoPorId String?
+  criadoEm          DateTime @default(now())
+
+  /// O atendimento criado para este paciente, quando a equipe o gerou.
+  pedidoGeradoId String? @unique
+
+  @@index([relatorioId])
+}
+
 model RelatorioServicoAdicional {
   id String @id @default(cuid())
 

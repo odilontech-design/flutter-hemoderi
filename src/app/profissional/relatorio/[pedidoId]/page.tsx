@@ -46,6 +46,7 @@ export default async function Relatorio({
       relatorio: {
         include: {
           adicionais: { select: { servicoId: true, quantidade: true } },
+          pacientesExtras: { select: { nome: true, procedimento: true, pedidoGeradoId: true }, orderBy: { ordem: "asc" } },
           // Só o nome: o arquivo em si nunca vem junto da página.
           comprovante: { select: { nome: true } },
           // Anexos: nome e tamanho; o arquivo sai por /api/anexos, com sessão.
@@ -81,6 +82,7 @@ export default async function Relatorio({
         servico: enviado.servicoRealizado?.nome ?? pedido.servico.nome,
         quantidade: enviado.quantidade,
         adicionais: enviado.adicionais.map((a) => ({ nome: a.servico.nome, quantidade: a.quantidade })),
+        pacientesExtras: enviado.pacientesExtras,
         justificativaAdicionais: enviado.servicosAdicionais,
         compareceu: enviado.compareceu,
         inicioReal: enviado.inicioReal,
@@ -258,6 +260,7 @@ export default async function Relatorio({
             servicoRealizadoInicial={r?.servicoRealizadoId ?? pedido.servico.id}
             precos={precos}
             adicionaisIniciais={r?.adicionais ?? []}
+            pacientesExtrasIniciais={r?.pacientesExtras.map(({ nome, procedimento }) => ({ nome, procedimento })) ?? []}
             comprovanteAtual={r?.comprovante?.nome ?? null}
             anexosGuardados={r?.anexos ?? []}
             mandic={mandic}

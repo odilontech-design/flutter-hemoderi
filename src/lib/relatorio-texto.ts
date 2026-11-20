@@ -1,5 +1,6 @@
 import { NAO_SE_APLICA } from "@/lib/relatorio";
 import { rotuloDaForma } from "@/lib/recebimento";
+import { linhasDosPacientesExtras, type PacienteExtra } from "@/lib/pacientes-extras";
 
 /**
  * O relatório em texto, para colar no grupo de WhatsApp da equipe.
@@ -24,6 +25,8 @@ export type DadosTextoRelatorio = {
   servico: string;
   quantidade: number;
   adicionais: { nome: string; quantidade: number }[];
+  /** Pacientes atendidos além do agendado (19/11). */
+  pacientesExtras?: PacienteExtra[];
   justificativaAdicionais: string | null;
   /** O valor do serviço, em reais, como a equipe escreve ("350,00"). */
   valor: string | null;
@@ -66,6 +69,7 @@ export function textoDoRelatorio(d: DadosTextoRelatorio): string {
   linhas.push(`Paciente: ${d.paciente ?? ""}`);
   if (!d.compareceu) linhas.push("Paciente não compareceu");
   linhas.push(`Procedimento que foi realizado no paciente: ${d.procedimento ?? ""}`);
+  if (d.compareceu) linhas.push(...linhasDosPacientesExtras(d.pacientesExtras ?? []));
   const servicos = [`${d.servico}${d.quantidade > 1 ? ` × ${d.quantidade}` : ""}`, ...d.adicionais.map((a) => `${a.quantidade}× ${a.nome}`)];
   linhas.push(`Serviços Hemoderi: ${servicos.join(" + ")}`);
   if (d.justificativaAdicionais) linhas.push(`Justificativa dos adicionais: ${d.justificativaAdicionais}`);

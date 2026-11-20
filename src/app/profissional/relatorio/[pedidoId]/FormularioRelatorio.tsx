@@ -400,6 +400,78 @@ function BlocoAjudaDeCusto({ valores }: { valores: ValoresRelatorio }) {
   );
 }
 
+type LinhaPaciente = { chave: number; nome: string; procedimento: string };
+
+/**
+ * "Atendeu mais pacientes do que o agendado?" (Joyce, 19/11: no 0481 teve mais
+ * um paciente que não estava na agenda e a equipe só soube depois). Sim abre a
+ * lista: nome e procedimento de cada paciente a mais, obrigatórios. A central
+ * vê no relatório e transforma em atendimento próprio, com cobrança e repasse.
+ */
+function PacientesAMais({ iniciais, quantidadeAgendada }: { iniciais: { nome: string; procedimento: string }[]; quantidadeAgendada: number }) {
+  const [resposta, setResposta] = useState(iniciais.length > 0 ? "sim" : "nao");
+  const proxima = useRef(iniciais.length + 1);
+  const [linhas, setLinhas] = useState<LinhaPaciente[]>(
+    iniciais.length > 0 ? iniciais.map((p, i) => ({ chave: i, ...p })) : [{ chave: 0, nome: "", procedimento: "" }]
+  );
+  const alterar = (chave: number, mudanca: Partial<LinhaPaciente>) =>
+    setLinhas((atuais) => atuais.map((l) => (l.chave === chave ? { ...l, ...mudanca } : l)));
+
+  return (
+    <div className="rounded-xl border border-gray-200 p-3 space-y-3">
+      <div>
+        <Rotulo>Atendeu mais pacientes do que o agendado?</Rotulo>
+        <Selecao name="maisPacientes" value={resposta} onChange={(e) => setResposta(e.target.value)}>
+          <option value="nao">Não, só o que estava agendado</option>
+          <option value="sim">Sim, atendi paciente(s) a mais</option>
+        </Selecao>
+        <div className="text-[10px] text-gray-400 mt-1">
+          Agendado: {quantidadeAgendada} {quantidadeAgendada === 1 ? "paciente/serviço" : "pacientes/serviços"}. Se atendeu alguém que não estava na agenda, informe aqui — assim a central cobra e registra certo.
+        </div>
+      </div>
+
+      {resposta === "sim" && (
+        <div className="space-y-3">
+          {linhas.map((linha, i) => (
+            <div key={linha.chave} className="rounded-lg bg-gray-50 p-2.5 space-y-2">
+              <div className="flex items-center justify-between">
+                <div className="text-[11px] font-semibold text-gray-600">Paciente a mais {linhas.length > 1 ? i + 1 : ""}</div>
+                {linhas.length > 1 && (
+                  <button type="button" onClick={() => setLinhas((atuais) => atuais.filter((l) => l.chave !== linha.chave))} className="text-[11px] text-red-600 hover:underline">
+                    remover
+                  </button>
+                )}
+              </div>
+              <div>
+                <Rotulo>Nome do paciente</Rotulo>
+                <Campo name="extraNome" value={linha.nome} maxLength={200} autoComplete="off" onChange={(e) => alterar(linha.chave, { nome: e.target.value })} />
+              </div>
+              <div>
+                <Rotulo>O que foi feito neste paciente</Rotulo>
+                <Campo
+                  name="extraProcedimento"
+                  list="lista-procedimentos"
+                  value={linha.procedimento}
+                  maxLength={150}
+                  autoComplete="off"
+                  onChange={(e) => alterar(linha.chave, { procedimento: e.target.value })}
+                />
+              </div>
+            </div>
+          ))}
+          <button
+            type="button"
+            onClick={() => setLinhas((atuais) => [...atuais, { chave: proxima.current++, nome: "", procedimento: "" }])}
+            className="text-xs font-semibold text-bordo hover:underline"
+          >
+            + Adicionar outro paciente
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function FormularioRelatorio({
   pedidoId,
   horaPrevista,
@@ -411,6 +483,7 @@ export function FormularioRelatorio({
   servicoRealizadoInicial,
   precos,
   adicionaisIniciais,
+  pacientesExtrasIniciais = [],
   comprovanteAtual,
   anexosGuardados,
   mandic = false,
@@ -427,6 +500,8 @@ export function FormularioRelatorio({
   /** Preço de tabela de cada serviço para o cliente deste atendimento, já em texto. */
   precos: Record<string, string>;
   adicionaisIniciais: { servicoId: string; quantidade: number }[];
+  /** Pacientes a mais já informados, quando é uma correção. */
+  pacientesExtrasIniciais?: { nome: string; procedimento: string }[];
   /** Nome do comprovante já enviado, quando é uma correção. */
   comprovanteAtual: string | null;
   /** Anexos já enviados, quando é uma correção. */
@@ -538,6 +613,8 @@ export function FormularioRelatorio({
             iniciais={adicionaisIniciais}
             justificativaInicial={valores.servicosAdicionais ?? ""}
           />
+
+          <PacientesAMais iniciais={pacientesExtrasIniciais} quantidadeAgendada={quantidadeAgendada} />
 
           <div className="grid grid-cols-2 gap-2">
             <div>

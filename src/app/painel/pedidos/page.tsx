@@ -32,6 +32,7 @@ import { TabelaEsteira } from "./TabelaEsteira";
 import { AcoesEmMassa } from "./AcoesEmMassa";
 import { ValorServico } from "./ValorServico";
 import { perfilPermite } from "@/lib/papeis";
+import { PacientesAMais } from "./PacientesAMais";
 import { AgendaCompartilhada } from "@/components/AgendaCompartilhada";
 import { IconeCheck, IconeMapa, IconeRelogio, IconeUsuarioMais } from "@/components/Icones";
 import { agendaDaEquipe } from "@/lib/integracoes/google-api";
@@ -125,6 +126,12 @@ export default async function Esteira({
       .findMany({ where: { ativo: true, familia: { not: null } }, distinct: ["familia"], orderBy: { familia: "asc" }, select: { familia: true } })
       .then((l) => l.map((x) => x.familia!).filter(Boolean)),
   ]);
+
+  // Número dos atendimentos criados para pacientes a mais (19/11), numa busca só para a página.
+  const idsGerados = pedidos.flatMap((p) => p.relatorio?.pacientesExtras.map((x) => x.pedidoGeradoId).filter((id): id is string => Boolean(id)) ?? []);
+  const numeroGerado = new Map(
+    (idsGerados.length ? await prisma.pedido.findMany({ where: { id: { in: idsGerados } }, select: { id: true, numero: true } }) : []).map((p) => [p.id, p.numero])
+  );
 
   // Só quem está "Confirmado" mostra o seletor de alocar (ver AcoesPedido) —
   // é só para esses que vale calcular quem está livre. Com dezenas de
@@ -502,6 +509,11 @@ export default async function Esteira({
                       <strong>Endereço do dia:</strong> {pedido.relatorio.enderecoInformado}
                     </div>
                   )}
+                  {pedido.relatorio?.compareceu && (pedido.relatorio.pacientesExtras.length ?? 0) > 0 && (
+                    <div className="text-[11px] font-semibold text-amber-800">
+                      ⚠ O profissional informou {pedido.relatorio.pacientesExtras.length} paciente(s) a mais além do agendado — veja abaixo e crie o atendimento de cada um.
+                    </div>
+                  )}
                   {pedido.relatorio?.doutorNomeInformado && (
                     <div className="text-[11px] text-amber-800">
                       <strong>Quem recebeu:</strong> {pedido.relatorio.doutorNomeInformado}
@@ -530,6 +542,20 @@ export default async function Esteira({
                       </summary>
                       <div className="px-3 pb-3 pt-1">
                         <RelatorioPreenchido relatorio={pedido.relatorio} procedimentoAgendado={pedido.procedimentoPaciente} servicoAgendado={pedido.servico?.nome} />
+                        {!pedido.apoioDeId && pedido.relatorio.compareceu && perfilPermite(sessao.perfil, "POS_VENDA", "LOGISTICA", "COMERCIAL") && (
+                          <PacientesAMais
+                            pedidoId={pedido.id}
+                            podeCriar={pedido.status === "REALIZADO"}
+                            pacientes={pedido.relatorio.pacientesExtras.map((x) => ({
+                              id: x.id,
+                              nome: x.nome,
+                              procedimento: x.procedimento,
+                              pedidoGeradoId: x.pedidoGeradoId,
+                              numeroGerado: x.pedidoGeradoId ? (numeroGerado.get(x.pedidoGeradoId) ?? null) : null,
+                              acrescentadoPelaEquipe: Boolean(x.acrescentadoPorId),
+                            }))}
+                          />
+                        )}
                       </div>
                     </details>
                   )}

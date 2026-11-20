@@ -1,5 +1,6 @@
 "use server";
 
+import { chaveDoPaciente, lerPacientesExtras, type PacienteExtra } from "@/lib/pacientes-extras";
 import { avisarCancelamentoDoProfissional } from "@/lib/aviso-equipe";
 import { pedeOrcamentoEPg } from "@/lib/mandic";
 import { revalidatePath } from "next/cache";
@@ -149,6 +150,16 @@ export async function enviarRelatorio(_anterior: Resultado, dados: FormData): Pr
 
   const quantidade = Number(dados.get("quantidade") ?? 1);
 
+  // Pacientes atendidos além do agendado (Joyce, 19/11): o profissional diz
+  // quem foi e o que foi feito, em vez de a central descobrir depois.
+  let pacientesExtras: PacienteExtra[] = [];
+  if (compareceu && String(dados.get("maisPacientes") ?? "") === "sim") {
+    const lido = lerPacientesExtras(dados.getAll("extraNome"), dados.getAll("extraProcedimento"));
+    if (!lido.ok) return { ok: false, erro: lido.erro };
+    if (lido.lista.length === 0) return { ok: false, erro: "Informe o paciente a mais atendido (nome e procedimento), ou responda que não houve." };
+    pacientesExtras = lido.lista;
+  }
+
   // O serviço principal pode ser trocado pelo profissional (ata de 02/10).
   // Igual ao agendado não é "troca" — fica nulo, e só divergência é guardada.
   let servicoRealizadoId: string | null = null;
@@ -288,6 +299,16 @@ export async function enviarRelatorio(_anterior: Resultado, dados: FormData): Pr
     }
     if (anexosParaGravar.length > 0) {
       await tx.relatorioAnexo.createMany({ data: anexosParaGravar.map((a) => ({ relatorioId: relatorio.id, ...a })) });
+    }
+
+    // Pacientes a mais: a lista é a do envio, exceto os que a equipe já
+    // transformou em atendimento — esses ficam, e não se duplicam.
+    const jaGerados = await tx.relatorioPacienteExtra.findMany({ where: { relatorioId: relatorio.id, pedidoGeradoId: { not: null } }, select: { nome: true } });
+    const chavesGeradas = new Set(jaGerados.map((g) => chaveDoPaciente(g.nome)));
+    await tx.relatorioPacienteExtra.deleteMany({ where: { relatorioId: relatorio.id, pedidoGeradoId: null } });
+    const novos = pacientesExtras.filter((p) => !chavesGeradas.has(chaveDoPaciente(p.nome)));
+    if (novos.length > 0) {
+      await tx.relatorioPacienteExtra.createMany({ data: novos.map((p, i) => ({ relatorioId: relatorio.id, nome: p.nome, procedimento: p.procedimento, ordem: i })) });
     }
 
     // A lista inteira é substituída: reenviar o relatório é reenviar o que

@@ -25,6 +25,7 @@ export async function textoDoRelatorioDoPedido(pedidoId: string): Promise<string
         include: {
           servicoRealizado: { select: { nome: true } },
           adicionais: { select: { quantidade: true, servico: { select: { nome: true } } } },
+          pacientesExtras: { select: { nome: true, procedimento: true }, orderBy: { ordem: "asc" } },
         },
       },
     },
@@ -48,6 +49,7 @@ export async function textoDoRelatorioDoPedido(pedidoId: string): Promise<string
     servico: r.servicoRealizado?.nome ?? pedido.servico.nome,
     quantidade: r.quantidade,
     adicionais: r.adicionais.map((a) => ({ nome: a.servico.nome, quantidade: a.quantidade })),
+    pacientesExtras: r.pacientesExtras,
     justificativaAdicionais: r.servicosAdicionais,
     compareceu: r.compareceu,
     inicioReal: r.inicioReal,
