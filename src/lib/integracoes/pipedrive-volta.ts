@@ -38,18 +38,44 @@ function centavos(v: unknown): number | null {
 }
 
 /** O que importa do negócio, lido pela API (formato v1, o mesmo que o sistema escreve). */
-export async function lerNegocio(negocioId: string): Promise<NegocioLido | null> {
+export type ChavesDoNegocio = { valor: string; repasse?: string; profissional?: string; paciente?: string; pago?: string };
+
+export async function lerNegocio(negocioId: string): Promise<{ negocio: NegocioLido; chaves: ChavesDoNegocio } | null> {
   const json = (await chamarPipedrive(`/deals/${negocioId}`, "GET")) as { data?: Record<string, unknown> | null } | null;
   const d = json?.data;
   if (!d) return null;
   const { negocio: campos } = await camposDoPipedrive();
   const repasse = acharCampo(campos, ["Pagamento do Profissional"]);
+  const profissional = acharCampo(campos, ["Profissional Hemoderi", "Profissional"]);
+  const paciente = acharCampo(campos, ["Nome do Paciente", "Paciente"]);
+  const pago = acharCampo(campos, ["Pagamento Realizado"]);
   return {
-    valorCentavos: centavos(d.value),
-    repasseCentavos: repasse ? centavos(d[repasse.key]) : null,
-    profissional: textoDoCampo(acharCampo(campos, ["Profissional Hemoderi", "Profissional"]), d),
-    paciente: textoDoCampo(acharCampo(campos, ["Nome do Paciente", "Paciente"]), d),
-    pago: simOuNao(textoDoCampo(acharCampo(campos, ["Pagamento Realizado"]), d)),
+    negocio: {
+      valorCentavos: centavos(d.value),
+      repasseCentavos: repasse ? centavos(d[repasse.key]) : null,
+      profissional: textoDoCampo(profissional, d),
+      paciente: textoDoCampo(paciente, d),
+      pago: simOuNao(textoDoCampo(pago, d)),
+    },
+    chaves: { valor: "value", repasse: repasse?.key, profissional: profissional?.key, paciente: paciente?.key, pago: pago?.key },
+  };
+}
+
+/**
+ * Só o que MUDOU entra (18/11–20/11: negócios antigos guardam o repasse de
+ * quando foram criados; sem este filtro, mexer em qualquer campo de um deles
+ * sobrescreveria um repasse corrigido no sistema pelo valor velho). `mudados`
+ * nulo = pedido explícito de puxar tudo (botão da tela de integrações).
+ */
+function soOQueMudou(negocio: NegocioLido, chaves: ChavesDoNegocio, mudados: string[] | null): NegocioLido {
+  if (!mudados) return negocio;
+  const mudou = (chave?: string) => Boolean(chave) && mudados.includes(chave as string);
+  return {
+    valorCentavos: mudou(chaves.valor) ? negocio.valorCentavos : null,
+    repasseCentavos: mudou(chaves.repasse) ? negocio.repasseCentavos : null,
+    profissional: mudou(chaves.profissional) ? negocio.profissional : null,
+    paciente: mudou(chaves.paciente) ? negocio.paciente : null,
+    pago: mudou(chaves.pago) ? negocio.pago : null,
   };
 }
 
@@ -63,7 +89,11 @@ async function registrar(pedidoId: string, negocioId: string, sucesso: boolean, 
  * Aplica no agendamento o que mudou no negócio. Devolve o que fez e o que
  * ficou para conferir; nunca lança (o webhook responde 200 de qualquer jeito).
  */
-export async function aplicarNegocioNoSistema(negocioId: string): Promise<{ feitas: string[]; conflitos: string[]; ignorado?: string }> {
+export async function aplicarNegocioNoSistema(
+  negocioId: string,
+  opcoes: { mudados?: string[] | null; simular?: boolean } = {}
+): Promise<{ feitas: string[]; conflitos: string[]; ignorado?: string }> {
+  const { mudados = null, simular = false } = opcoes;
   const pedido = await prisma.pedido.findFirst({
     where: { pipedriveNegocioId: negocioId, apoioDeId: null },
     select: {
@@ -85,8 +115,9 @@ export async function aplicarNegocioNoSistema(negocioId: string): Promise<{ feit
   if (!pedido) return { feitas: [], conflitos: [], ignorado: "negócio sem agendamento no sistema" };
 
   try {
-    const negocio = await lerNegocio(negocioId);
-    if (!negocio) return { feitas: [], conflitos: [], ignorado: "o PipeDrive não devolveu o negócio" };
+    const lido = await lerNegocio(negocioId);
+    if (!lido) return { feitas: [], conflitos: [], ignorado: "o PipeDrive não devolveu o negócio" };
+    const negocio = soOQueMudou(lido.negocio, lido.chaves, mudados);
 
     const [pix, cartao, profissionais] = await Promise.all([
       prisma.cobrancaPix.count({ where: { OR: [{ pedidoId: pedido.id }, { pedidoIds: { has: pedido.id } }], status: { in: ["ATIVA", "CONCLUIDA"] } } }),
@@ -110,6 +141,8 @@ export async function aplicarNegocioNoSistema(negocioId: string): Promise<{ feit
       },
       profissionais
     );
+
+    if (simular) return { feitas: decisao.feitas, conflitos: decisao.conflitos };
 
     if (decisao.feitas.length > 0) {
       await prisma.$transaction(async (tx) => {
@@ -152,14 +185,58 @@ export async function aplicarNegocioNoSistema(negocioId: string): Promise<{ feit
   }
 }
 
-/** O aviso do webhook: só negócio, e só o que uma pessoa mexeu (não a própria integração). */
+/** Cada aviso recebido fica registrado (mesmo o ignorado): é como se sabe que o PipeDrive está chegando. */
+async function registrarAviso(negocioId: string | null, resultado: string) {
+  await prisma.sincronizacaoExterna
+    .create({ data: { sistema: "PIPEDRIVE", entidade: "PipedriveWebhook", entidadeId: negocioId ?? "?", acao: "aviso", sucesso: true, referencia: resultado.slice(0, 250) } })
+    .catch(() => undefined);
+}
+
+/** O aviso do webhook: só negócio, só o que uma pessoa mexeu e só os campos que mudaram. */
 export async function processarAvisoDoPipedrive(corpo: unknown): Promise<string> {
   const aviso = lerAvisoDoPipedrive(corpo);
-  if (!aviso.ehNegocio || !aviso.negocioId) return "ignorado: não é negócio";
-  if (aviso.feitoPelaApi) return "ignorado: feito pela integração";
-  if (!pipedriveConfigurado()) return "ignorado: PipeDrive não configurado";
-  const r = await aplicarNegocioNoSistema(aviso.negocioId);
-  return r.ignorado ? `ignorado: ${r.ignorado}` : `${r.feitas.length} mudança(s), ${r.conflitos.length} para conferir`;
+  let resultado: string;
+  if (!aviso.ehNegocio || !aviso.negocioId) resultado = "ignorado: não é negócio";
+  else if (aviso.feitoPelaApi) resultado = "ignorado: feito pela integração";
+  else if (!pipedriveConfigurado()) resultado = "ignorado: PipeDrive não configurado";
+  else if (aviso.camposMudados === null) resultado = "ignorado: o aviso não traz o valor anterior";
+  else if (aviso.camposMudados.length === 0) resultado = "ignorado: nenhum campo mudou";
+  else {
+    const r = await aplicarNegocioNoSistema(aviso.negocioId, { mudados: aviso.camposMudados });
+    resultado = r.ignorado ? `ignorado: ${r.ignorado}` : `${r.feitas.length} mudança(s), ${r.conflitos.length} para conferir`;
+  }
+  await registrarAviso(aviso.negocioId, resultado);
+  return resultado;
+}
+
+/** Os últimos avisos que o PipeDrive mandou, para a tela de integrações. */
+export async function ultimosAvisosDoPipedrive(limite = 6): Promise<{ quando: Date; negocio: string; resultado: string }[]> {
+  const linhas = await prisma.sincronizacaoExterna.findMany({
+    where: { sistema: "PIPEDRIVE", entidade: "PipedriveWebhook" },
+    orderBy: { criadaEm: "desc" },
+    take: limite,
+    select: { criadaEm: true, entidadeId: true, referencia: true },
+  });
+  return linhas.map((l) => ({ quando: l.criadaEm, negocio: l.entidadeId, resultado: l.referencia ?? "" }));
+}
+
+/**
+ * Puxa à mão o que está no negócio de um agendamento (botão da tela de
+ * integrações): serve para aplicar o que a equipe já mudou no PipeDrive antes
+ * do caminho de volta e para conferir sem esperar um aviso. Compara tudo;
+ * `simular` só mostra o que mudaria.
+ */
+export async function puxarNegocioDoPedido(numero: number, simular: boolean): Promise<string[]> {
+  const pedido = await prisma.pedido.findUnique({ where: { numero }, select: { pipedriveNegocioId: true } });
+  if (!pedido) return [`Não há agendamento nº ${numero}.`];
+  if (!pedido.pipedriveNegocioId) return [`O agendamento nº ${numero} não tem negócio no PipeDrive.`];
+  const r = await aplicarNegocioNoSistema(pedido.pipedriveNegocioId, { simular });
+  if (r.ignorado) return [`Nada feito: ${r.ignorado}.`];
+  const linhas = [
+    ...r.feitas.map((f) => `${simular ? "Mudaria" : "Mudou"} — ${f}`),
+    ...r.conflitos.map((c) => `Não muda sozinho — ${c}`),
+  ];
+  return linhas.length ? linhas : ["O agendamento já está igual ao negócio do PipeDrive."];
 }
 
 export const USUARIO_DO_WEBHOOK = "hemoderi";

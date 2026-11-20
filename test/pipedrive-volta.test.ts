@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { decidirVolta, lerAvisoDoPipedrive, simOuNao, type PedidoParaVolta } from "../src/lib/integracoes/pipedrive-volta-regras";
+import { camposQueMudaram, decidirVolta, lerAvisoDoPipedrive, simOuNao, type PedidoParaVolta } from "../src/lib/integracoes/pipedrive-volta-regras";
 
 const base: PedidoParaVolta = {
   valorServicoCentavos: 150000,
@@ -62,4 +62,14 @@ test("profissional que não existe no sistema vira pendência; Não desfaz só a
   assert.equal(decidirVolta({ ...vazio, pago: false }, { ...base, baixaPeloPipedrive: true }, profs).baixa, false);
   assert.equal(decidirVolta({ ...vazio, pago: false }, base, profs).baixa, undefined);
   assert.equal(decidirVolta({ ...vazio, pago: true }, { ...base, pagoNoSistema: true }, profs).baixa, undefined);
+});
+
+test("campos que mudaram: v2 (só o que mudou) e v1 (objeto inteiro); sem valor anterior, nada", () => {
+  // v2: previous traz só o que mudou, e custom_fields vem aninhado.
+  assert.deepEqual(camposQueMudaram({ value: 100, custom_fields: { abc: "Rogério" } }, { value: 150, custom_fields: { abc: "Rogério Silva", xyz: 1 } }), ["value", "abc"]);
+  // v1: previous é o objeto inteiro; só o que difere conta.
+  assert.deepEqual(camposQueMudaram({ title: "A", value: 100, abc: "x" }, { title: "A", value: 100, abc: "y" }), ["abc"]);
+  assert.deepEqual(camposQueMudaram({ title: "A" }, { title: "A" }), []);
+  assert.equal(camposQueMudaram(undefined, { value: 1 }), null);
+  assert.deepEqual(lerAvisoDoPipedrive({ meta: { entity: "deal", entity_id: "9", change_source: "app" }, previous: { value: 1 }, data: { id: 9, value: 2 } }).camposMudados, ["value"]);
 });

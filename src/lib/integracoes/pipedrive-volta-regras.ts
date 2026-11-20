@@ -16,11 +16,40 @@
 
 import { normalizar } from "./pipedrive-campos";
 
-export type AvisoDoPipedrive = { negocioId: string | null; feitoPelaApi: boolean; ehNegocio: boolean };
+export type AvisoDoPipedrive = {
+  negocioId: string | null;
+  feitoPelaApi: boolean;
+  ehNegocio: boolean;
+  /**
+   * Os campos que MUDARAM neste aviso (chaves como o PipeDrive as chama: "value"
+   * e o hash de cada campo personalizado). Null quando o aviso não traz o valor
+   * anterior — aí não dá para saber o que mudou e nada é aplicado sozinho.
+   */
+  camposMudados: string[] | null;
+};
+
+/** Os campos cujo valor difere entre o anterior e o atual (o v1 manda o objeto inteiro; o v2, só o que mudou). */
+export function camposQueMudaram(anterior: unknown, atual: unknown): string[] | null {
+  if (!anterior || typeof anterior !== "object") return null;
+  const ant = anterior as Record<string, unknown>;
+  const cur = (atual && typeof atual === "object" ? atual : {}) as Record<string, unknown>;
+  const mudou = (a: unknown, b: unknown) => JSON.stringify(a ?? null) !== JSON.stringify(b ?? null);
+  const chaves: string[] = [];
+  for (const k of Object.keys(ant)) {
+    if (k === "custom_fields") {
+      const a = (ant.custom_fields ?? {}) as Record<string, unknown>;
+      const c = (cur.custom_fields ?? {}) as Record<string, unknown>;
+      for (const h of Object.keys(a)) if (mudou(a[h], c[h])) chaves.push(h);
+    } else if (mudou(ant[k], cur[k])) {
+      chaves.push(k);
+    }
+  }
+  return chaves;
+}
 
 /** Lê o aviso (webhook v1 ou v2): qual negócio, e se foi a própria integração que mexeu. */
 export function lerAvisoDoPipedrive(corpo: unknown): AvisoDoPipedrive {
-  const c = (corpo ?? {}) as { meta?: Record<string, unknown>; data?: { id?: unknown } | null; current?: { id?: unknown } | null };
+  const c = (corpo ?? {}) as { meta?: Record<string, unknown>; data?: { id?: unknown } | null; current?: { id?: unknown } | null; previous?: unknown };
   const meta = c.meta ?? {};
   const entidade = String(meta.entity ?? meta.object ?? "").toLowerCase();
   const id = meta.entity_id ?? meta.id ?? c.data?.id ?? c.current?.id ?? null;
@@ -29,6 +58,7 @@ export function lerAvisoDoPipedrive(corpo: unknown): AvisoDoPipedrive {
     negocioId: id !== null && id !== undefined && /^\d+$/.test(String(id)) ? String(id) : null,
     feitoPelaApi: origem === "api",
     ehNegocio: entidade === "deal",
+    camposMudados: camposQueMudaram(c.previous, c.data ?? c.current),
   };
 }
 

@@ -6,7 +6,7 @@ import { exigirAdministradorTecnico, exigirInterno } from "@/lib/sessao";
 import { apagarNegociosDeTeste, completarClientesDosNegocios, descreverCamposDoPipedrive, descreverNegocioDoPedido, donoDosNegocios, reatribuirNegocios, testarConexao, usuariosDoPipedrive } from "@/lib/integracoes/pipedrive";
 import { reprocessarPedidoPipedrive, reprocessarPendenciasPipedrive } from "@/lib/integracoes/pipedrive-pendencias";
 import { salvarPendentesNaAgendaDaEquipe } from "@/lib/integracoes/google-agenda";
-import { ativarCaminhoDeVolta, marcarAlteracaoConferida } from "@/lib/integracoes/pipedrive-volta";
+import { ativarCaminhoDeVolta, marcarAlteracaoConferida, puxarNegocioDoPedido } from "@/lib/integracoes/pipedrive-volta";
 import { perfilPermite } from "@/lib/papeis";
 import { despacharPendentes } from "@/lib/integracoes/whatsapp";
 import type { Resultado } from "./pedidos";
@@ -166,4 +166,20 @@ export async function conferirAlteracaoDoPipedrive(pedidoId: string): Promise<Re
   await marcarAlteracaoConferida(pedidoId, sessao.usuarioId);
   revalidatePath("/painel");
   return { ok: true };
+}
+
+/** Compara (ou puxa) o que está no negócio de um agendamento com o sistema — caminho de volta à mão. */
+export async function puxarDoPipedrive(numero: number, simular: boolean): Promise<Resultado> {
+  await exigirAdministradorTecnico();
+  if (!Number.isInteger(numero) || numero <= 0) return { ok: false, erro: "Informe o número do agendamento." };
+  try {
+    const linhas = await puxarNegocioDoPedido(numero, simular);
+    if (!simular) {
+      revalidatePath("/painel/integracoes");
+      revalidatePath("/painel/pedidos");
+    }
+    return { ok: true, avisos: linhas };
+  } catch (erro) {
+    return { ok: false, erro: erro instanceof Error ? erro.message : "Falhou." };
+  }
 }

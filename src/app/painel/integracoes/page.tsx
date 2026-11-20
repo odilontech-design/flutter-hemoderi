@@ -18,6 +18,8 @@ import { ReatribuirNegocios } from "./ReatribuirNegocios";
 import { ApagarNegociosDeTeste } from "./ApagarNegociosDeTeste";
 import { ConferirNegocio } from "./ConferirNegocio";
 import { CompletarClientes } from "./CompletarClientes";
+import { PuxarDoPipedrive } from "./PuxarDoPipedrive";
+import { ultimosAvisosDoPipedrive } from "@/lib/integracoes/pipedrive-volta";
 import { SalvarAgendaPendentes } from "./SalvarAgendaPendentes";
 
 export const dynamic = "force-dynamic";
@@ -70,6 +72,7 @@ export default async function Integracoes() {
   const porId = new Map(pedidos.map((p) => [p.id, p]));
 
   const configurado = pipedriveConfigurado();
+  const avisosDoPipedrive = configurado ? await ultimosAvisosDoPipedrive() : [];
 
   // A situação das outras integrações (revisão de 25/10): a fila do WhatsApp
   // não aparecia em tela nenhuma, e as três primeiras mensagens reais falharam
@@ -85,7 +88,7 @@ export default async function Integracoes() {
     prisma.mensagemWhatsapp.findFirst({ where: { status: "ENVIADA" }, orderBy: { enviadaEm: "desc" }, select: { enviadaEm: true } }),
     prisma.sincronizacaoExterna.count({ where: { sistema: "GOOGLE_AGENDA", sucesso: false, criadaEm: { gte: umDiaAtras }, acao: { endsWith: "-equipe" } } }),
     prisma.sincronizacaoExterna.findFirst({
-      where: { sistema: "PIPEDRIVE", sucesso: true },
+      where: { sistema: "PIPEDRIVE", sucesso: true, entidade: "Pedido" },
       orderBy: { criadaEm: "desc" },
       select: { criadaEm: true },
     }),
@@ -214,6 +217,7 @@ export default async function Integracoes() {
           <ApagarNegociosDeTeste />
           <ConferirNegocio />
           <CompletarClientes />
+          <PuxarDoPipedrive />
           <BotaoAcao acao={ativarCaminhoDeVoltaPipedrive} confirmar="Cadastrar no PipeDrive o aviso que traz para o sistema as alterações de valor, repasse, profissional, paciente e pagamento?">
             Ativar caminho de volta (PipeDrive → sistema)
           </BotaoAcao>
@@ -225,6 +229,23 @@ export default async function Integracoes() {
             >
               Reprocessar pendências
             </BotaoAcao>
+          )}
+        </div>
+      )}
+
+      {configurado && (
+        <div className="mb-3 rounded-lg border border-gray-200 bg-white p-3 text-[11px] text-gray-600">
+          <div className="font-semibold text-gray-700 mb-1">Últimos avisos recebidos do PipeDrive (caminho de volta)</div>
+          {avisosDoPipedrive.length === 0 ? (
+            <div>Nenhum aviso recebido ainda. Altere um negócio no PipeDrive e atualize esta tela.</div>
+          ) : (
+            <ul className="space-y-0.5">
+              {avisosDoPipedrive.map((a, i) => (
+                <li key={i}>
+                  {formatarDataHora(a.quando)} · negócio {a.negocio} · {a.resultado}
+                </li>
+              ))}
+            </ul>
           )}
         </div>
       )}
