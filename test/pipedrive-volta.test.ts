@@ -20,8 +20,8 @@ const profs = [
 const vazio = { valorCentavos: null, repasseCentavos: null, profissional: null, paciente: null, pago: null };
 
 test("aviso do PipeDrive: v2 e v1, e o que a própria integração mexeu", () => {
-  assert.deepEqual(lerAvisoDoPipedrive({ meta: { entity: "deal", entity_id: "15802", change_source: "app" } }), { negocioId: "15802", feitoPelaApi: false, ehNegocio: true });
-  assert.deepEqual(lerAvisoDoPipedrive({ meta: { object: "deal", id: 15802, change_source: "api" } }), { negocioId: "15802", feitoPelaApi: true, ehNegocio: true });
+  assert.deepEqual(lerAvisoDoPipedrive({ meta: { entity: "deal", entity_id: "15802", change_source: "app" } }), { negocioId: "15802", feitoPelaApi: false, ehNegocio: true, camposMudados: null });
+  assert.deepEqual(lerAvisoDoPipedrive({ meta: { object: "deal", id: 15802, change_source: "api" } }), { negocioId: "15802", feitoPelaApi: true, ehNegocio: true, camposMudados: null });
   assert.equal(lerAvisoDoPipedrive({ meta: { entity: "person", entity_id: "3" } }).ehNegocio, false);
   assert.equal(lerAvisoDoPipedrive(null).negocioId, null);
 });
