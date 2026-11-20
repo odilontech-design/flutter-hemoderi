@@ -69,6 +69,9 @@ async function chamar(caminho: string, metodo: "GET" | "POST" | "PUT" | "DELETE"
   return json;
 }
 
+/** Para o caminho de volta (pipedrive-volta.ts) ler o negócio e registrar o aviso. */
+export const chamarPipedrive = chamar;
+
 type Funil = { pipelineId: number; stageId: number; descricao: string };
 
 /** Por processo: o funil não muda de id entre um agendamento e outro. */
@@ -565,6 +568,7 @@ export async function registrarNegocioAprovado(pedidoId: string, textoDoRelatori
       servico: { select: { nome: true } },
       pixPagoEm: true,
       cartaoPagoEm: true,
+      pagoConfirmadoEm: true,
       profissional: { select: { nome: true } },
       criadoPor: { select: { email: true } },
       relatorio: { select: { compareceu: true, recebimento: true, pacienteNomeInformado: true, doutorNomeInformado: true, procedimentoInformado: true } },
@@ -589,7 +593,7 @@ export async function registrarNegocioAprovado(pedidoId: string, textoDoRelatori
   // Campos personalizados: achados pelo NOME que a equipe vê no PipeDrive (17/11:
   // antes dependiam de chaves em variáveis de ambiente que não existiam e os
   // negócios nasciam vazios). Uma variável com a chave ainda vence a busca.
-  const pago = Boolean(pedido.pixPagoEm || pedido.cartaoPagoEm || pedido.relatorio?.recebimento === "TOTAL");
+  const pago = Boolean(pedido.pixPagoEm || pedido.cartaoPagoEm || pedido.pagoConfirmadoEm || pedido.relatorio?.recebimento === "TOTAL");
   const especificacoes: EspecificacaoDeCampo[] = [
     { nomes: ["Numero do pedido", "Numero do agendamento"], chaveFixa: process.env.PIPEDRIVE_CAMPO_NUMERO_PEDIDO, valor: String(pedido.numero) },
     { nomes: ["Nome do Paciente", "Paciente"], chaveFixa: process.env.PIPEDRIVE_CAMPO_PACIENTE, valor: pedido.relatorio?.pacienteNomeInformado ?? pedido.pacienteNome },

@@ -187,13 +187,14 @@ export async function pixDoAgendamento(pedidoId: string, gerar: boolean): Promis
 
   const membros = await prisma.pedido.findMany({
     where: { apoioDeId: null, clinicaId: sessao.clinicaId, ...(pedido.grupoId ? { grupoId: pedido.grupoId } : { id: pedido.id }) },
-    select: { id: true, status: true, formaPagamento: true, valorServicoCentavos: true, pixPagoEm: true, data: true, servico: { select: { nome: true } } },
+    select: { id: true, status: true, formaPagamento: true, valorServicoCentavos: true, pixPagoEm: true, pagoConfirmadoEm: true, data: true, servico: { select: { nome: true } } },
   });
   const ativos = membros.filter((m) => m.status !== "CANCELADO");
   if (ativos.length === 0) return { ok: false, erro: "Este agendamento foi cancelado." };
   if (ativos.some((m) => m.formaPagamento !== "Pix")) return { ok: false, erro: "A forma de pagamento deste agendamento não é Pix." };
 
-  const pagoEm = ativos.find((m) => m.pixPagoEm)?.pixPagoEm;
+  // Pago no Pix, ou baixa dada pelo financeiro no PipeDrive (20/11): não gera outro QR Code.
+  const pagoEm = ativos.find((m) => m.pixPagoEm)?.pixPagoEm ?? ativos.find((m) => m.pagoConfirmadoEm)?.pagoConfirmadoEm;
   if (pagoEm) return { ok: true, pago: true, pagoEm: pagoEm.toISOString() };
 
   if (!ativos.every((m) => STATUS_QUE_PAGAM.includes(m.status))) {
@@ -271,11 +272,11 @@ export async function pixEmLote(pedidoIds: string[], gerar: boolean): Promise<Pi
   const grupos = escolhidos.map((p) => p.grupoId).filter((g): g is string => Boolean(g));
   const membros = await prisma.pedido.findMany({
     where: { apoioDeId: null, clinicaId: sessao.clinicaId, OR: [{ id: { in: escolhidos.map((p) => p.id) } }, ...(grupos.length ? [{ grupoId: { in: grupos } }] : [])] },
-    select: { id: true, status: true, valorServicoCentavos: true, pixPagoEm: true, cartaoPagoEm: true, faturaId: true, data: true, servico: { select: { nome: true } } },
+    select: { id: true, status: true, valorServicoCentavos: true, pixPagoEm: true, cartaoPagoEm: true, pagoConfirmadoEm: true, faturaId: true, data: true, servico: { select: { nome: true } } },
     orderBy: { id: "asc" },
   });
   const cobraveis = membros.filter(
-    (m) => m.status !== "CANCELADO" && STATUS_QUE_PAGAM.includes(m.status) && !m.pixPagoEm && !m.cartaoPagoEm && !m.faturaId
+    (m) => m.status !== "CANCELADO" && STATUS_QUE_PAGAM.includes(m.status) && !m.pixPagoEm && !m.cartaoPagoEm && !m.pagoConfirmadoEm && !m.faturaId
   );
   if (cobraveis.length === 0) return { ok: true, pago: true, pagoEm: new Date().toISOString() };
   const valorCentavos = cobraveis.reduce((soma, m) => soma + m.valorServicoCentavos, 0);
@@ -334,10 +335,10 @@ export async function cartaoEmLote(pedidoIds: string[], parcelas: number): Promi
   const grupos = escolhidos.map((p) => p.grupoId).filter((g): g is string => Boolean(g));
   const membros = await prisma.pedido.findMany({
     where: { apoioDeId: null, clinicaId: sessao.clinicaId, OR: [{ id: { in: escolhidos.map((p) => p.id) } }, ...(grupos.length ? [{ grupoId: { in: grupos } }] : [])] },
-    select: { id: true, status: true, valorServicoCentavos: true, pixPagoEm: true, cartaoPagoEm: true, faturaId: true, data: true, servico: { select: { nome: true } } },
+    select: { id: true, status: true, valorServicoCentavos: true, pixPagoEm: true, cartaoPagoEm: true, pagoConfirmadoEm: true, faturaId: true, data: true, servico: { select: { nome: true } } },
   });
   const cobraveis = membros.filter(
-    (m) => m.status !== "CANCELADO" && STATUS_QUE_PAGAM.includes(m.status) && !m.pixPagoEm && !m.cartaoPagoEm && !m.faturaId
+    (m) => m.status !== "CANCELADO" && STATUS_QUE_PAGAM.includes(m.status) && !m.pixPagoEm && !m.cartaoPagoEm && !m.pagoConfirmadoEm && !m.faturaId
   );
   if (cobraveis.length === 0) return { ok: false, erro: "Esses atendimentos já estão pagos ou estão na fatura do mês." };
   const valorCentavos = cobraveis.reduce((soma, m) => soma + m.valorServicoCentavos, 0);

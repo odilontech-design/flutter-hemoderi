@@ -8,6 +8,10 @@ import { STATUS_ATIVOS, STATUS_PENDENTES } from "@/lib/pedido";
 import { estrelas, formatarMedia, mediaDeNotas, respostasEscritas } from "@/lib/avaliacao";
 import { MostrarEstrelas } from "@/components/Estrelas";
 import { falhasRecentes } from "@/lib/integracoes/google-agenda";
+import { alteracoesDoPipedriveParaConferir } from "@/lib/integracoes/pipedrive-volta";
+import { conferirAlteracaoDoPipedrive } from "@/app/actions/integracoes";
+import { perfilPermite } from "@/lib/papeis";
+import { codigoDoPedido } from "@/lib/numeracao";
 import { Aviso } from "@/components/ui";
 import { FiltroProdutividade } from "./FiltroProdutividade";
 import { formatarAtraso, statusDeChegada } from "@/lib/atraso";
@@ -163,6 +167,8 @@ export default async function Hoje({ searchParams }: { searchParams: { servico?:
   // continua confiando na agenda do celular do profissional, que parou de
   // receber há duas semanas.
   const falhasNaAgenda = await falhasRecentes();
+  // O que a equipe mudou no PipeDrive e as travas seguraram (caminho de volta, 20/11).
+  const alteracoesDoPipe = perfilPermite(sessao.perfil, "POS_VENDA", "GESTAO") ? await alteracoesDoPipedriveParaConferir() : [];
 
   const mediaGeral = mediaDeNotas(todasAsNotas.map((a) => a.nota));
 
@@ -244,6 +250,26 @@ export default async function Hoje({ searchParams }: { searchParams: { servico?:
   return (
     <>
       <Titulo>Hoje · {formatarData(hoje)}</Titulo>
+
+      {alteracoesDoPipe.length > 0 && (
+        <div className="mb-4">
+          <Aviso tom="alerta">
+            <strong>Alterações do PipeDrive para conferir ({alteracoesDoPipe.length}):</strong> mudaram no PipeDrive, mas não passaram sozinhas
+            para o sistema porque a cobrança já foi emitida ou o repasse já foi pago. Acerte no agendamento, se for o caso, e marque como conferido.
+            <ul className="mt-2 space-y-2">
+              {alteracoesDoPipe.slice(0, 15).map((a) => (
+                <li key={a.pedidoId} className="flex flex-wrap items-start gap-2">
+                  <Link href={`/painel/pedidos/${a.pedidoId}`} className="font-semibold text-bordo hover:underline">
+                    {codigoDoPedido(a.numero, a.clinica, a.data)}
+                  </Link>
+                  <span className="flex-1 min-w-[200px]">{a.erro}</span>
+                  <BotaoAcao acao={conferirAlteracaoDoPipedrive.bind(null, a.pedidoId)}>conferido</BotaoAcao>
+                </li>
+              ))}
+            </ul>
+          </Aviso>
+        </div>
+      )}
 
       {falhasNaAgenda > 0 && (
         <div className="mb-4">

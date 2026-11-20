@@ -255,6 +255,11 @@ export default async function DetalheDoPedido({
                     Cartão pago em {formatarDataHora(pedido.cartaoPagoEm)}
                   </span>
                 )}
+                {pedido.pagoConfirmadoEm && (
+                  <span className="ml-2 text-[10px] font-semibold text-green-700">
+                    Baixa no PipeDrive em {formatarDataHora(pedido.pagoConfirmadoEm)}
+                  </span>
+                )}
               </div>
             </div>
           )}

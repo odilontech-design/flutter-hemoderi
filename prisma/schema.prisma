@@ -969,6 +969,9 @@ model Pedido {
   pixPagoEm    DateTime?
   /// Pago com cartão pelo Asaas (ata de 03/11), à vista ou parcelado.
   cartaoPagoEm DateTime?
+  /// Baixa dada pelo financeiro no PipeDrive ("Pagamento Realizado = Sim",
+  /// caminho de volta de 20/11): pago por fora do Pix e do cartão do sistema.
+  pagoConfirmadoEm DateTime?
   cobrancasPix CobrancaPix[] @relation("PixDoPedido")
 
   /// Quem vai atender. Em SOLICITADO é o profissional que a clínica pediu no

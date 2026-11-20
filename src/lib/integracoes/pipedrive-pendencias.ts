@@ -71,7 +71,9 @@ export async function reprocessarPendenciasPipedrive(
     take: 500,
     select: { entidadeId: true, acao: true, sucesso: true, erro: true, criadaEm: true },
   });
-  const pedidoIds = [...new Set(pendenciasDeSincronizacao(tentativas).map((p) => p.entidadeId))];
+  // O que veio do PipeDrive e as travas seguraram (caminho de volta) se confere à mão:
+  // reprocessar aqui escreveria o valor do sistema por cima do que a equipe mudou lá.
+  const pedidoIds = [...new Set(pendenciasDeSincronizacao(tentativas.filter((t) => t.acao !== "volta-pipedrive")).map((p) => p.entidadeId))];
   if (pedidoIds.length === 0) return { feitos: 0, restam: 0 };
 
   const teste = await testarConexao();

@@ -45,11 +45,11 @@ export async function reciboDoAgendamento(pedidoId: string, clinicaId: string | 
   if (ativos.length === 0) return { ok: false, erro: "Agendamento cancelado." };
 
   const pago = (p: (typeof ativos)[number]) =>
-    Boolean(p.pixPagoEm || p.cartaoPagoEm) || p.fatura?.status === "PAGA" || (p.status === "REALIZADO" && recebidoNoAto(p.relatorio?.recebimento));
+    Boolean(p.pixPagoEm || p.cartaoPagoEm || p.pagoConfirmadoEm) || p.fatura?.status === "PAGA" || (p.status === "REALIZADO" && recebidoNoAto(p.relatorio?.recebimento));
   if (!ativos.every(pago)) return { ok: false, erro: "O recibo fica disponível depois da confirmação do pagamento." };
 
   const datas = ativos
-    .map((p) => p.pixPagoEm ?? p.cartaoPagoEm ?? p.fatura?.pagaEm ?? p.relatorio?.aprovadoEm ?? null)
+    .map((p) => p.pixPagoEm ?? p.cartaoPagoEm ?? p.pagoConfirmadoEm ?? p.fatura?.pagaEm ?? p.relatorio?.aprovadoEm ?? null)
     .filter((d): d is Date => d !== null);
   const emissao = datas.length ? new Date(Math.max(...datas.map((d) => d.getTime()))) : new Date();
   const primeiro = ativos[0];

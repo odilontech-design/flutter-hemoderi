@@ -2,10 +2,12 @@
 
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
-import { exigirAdministradorTecnico } from "@/lib/sessao";
+import { exigirAdministradorTecnico, exigirInterno } from "@/lib/sessao";
 import { apagarNegociosDeTeste, completarClientesDosNegocios, descreverCamposDoPipedrive, descreverNegocioDoPedido, donoDosNegocios, reatribuirNegocios, testarConexao, usuariosDoPipedrive } from "@/lib/integracoes/pipedrive";
 import { reprocessarPedidoPipedrive, reprocessarPendenciasPipedrive } from "@/lib/integracoes/pipedrive-pendencias";
 import { salvarPendentesNaAgendaDaEquipe } from "@/lib/integracoes/google-agenda";
+import { ativarCaminhoDeVolta, marcarAlteracaoConferida } from "@/lib/integracoes/pipedrive-volta";
+import { perfilPermite } from "@/lib/papeis";
 import { despacharPendentes } from "@/lib/integracoes/whatsapp";
 import type { Resultado } from "./pedidos";
 
@@ -148,4 +150,20 @@ export async function reatribuirNegociosPipedrive(aPartirDe?: string): Promise<{
   await exigirAdministradorTecnico();
   const r = await reatribuirNegocios(40, aPartirDe);
   return { ok: r.falhas.length === 0, erro: r.falhas[0], ...r };
+}
+
+/** Cadastra no PipeDrive o aviso de negócio alterado (caminho de volta, 20/11). */
+export async function ativarCaminhoDeVoltaPipedrive(): Promise<Resultado> {
+  await exigirAdministradorTecnico();
+  const r = await ativarCaminhoDeVolta(process.env.NEXTAUTH_URL?.trim() || "https://app.hemoderi.com.br");
+  return r.ok ? { ok: true, avisos: [r.mensagem] } : { ok: false, erro: r.mensagem };
+}
+
+/** O financeiro confere à mão uma alteração do PipeDrive que as travas seguraram. */
+export async function conferirAlteracaoDoPipedrive(pedidoId: string): Promise<Resultado> {
+  const sessao = await exigirInterno();
+  if (!perfilPermite(sessao.perfil, "POS_VENDA", "GESTAO")) return { ok: false, erro: "Só o pós-venda confere as alterações do PipeDrive." };
+  await marcarAlteracaoConferida(pedidoId, sessao.usuarioId);
+  revalidatePath("/painel");
+  return { ok: true };
 }
