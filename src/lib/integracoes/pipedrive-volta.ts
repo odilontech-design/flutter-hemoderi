@@ -136,7 +136,10 @@ export async function aplicarNegocioNoSistema(
         paciente: pedido.relatorio?.pacienteNomeInformado ?? pedido.pacienteNome,
         pagoNoSistema,
         baixaPeloPipedrive: Boolean(pedido.pagoConfirmadoEm),
-        cobrancaEmitida: pagoNoSistema || Boolean(pedido.faturaId) || pix > 0 || cartao > 0,
+        // Só cobrança DO SISTEMA trava o valor (Pix, cartão pelo Asaas, fatura). O
+        // "recebeu no ato" declarado pelo profissional não trava (20/11: o
+        // financeiro corrige o valor no PipeDrive e o sistema acata).
+        cobrancaEmitida: Boolean(pedido.pixPagoEm || pedido.cartaoPagoEm || pedido.faturaId) || pix > 0 || cartao > 0,
         repassePago: pedido.repasse?.status === "PAGO",
       },
       profissionais
