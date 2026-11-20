@@ -6,7 +6,7 @@ import { exigirAdministradorTecnico, exigirInterno } from "@/lib/sessao";
 import { apagarNegociosDeTeste, completarClientesDosNegocios, descreverCamposDoPipedrive, descreverNegocioDoPedido, donoDosNegocios, reatribuirNegocios, testarConexao, usuariosDoPipedrive } from "@/lib/integracoes/pipedrive";
 import { reprocessarPedidoPipedrive, reprocessarPendenciasPipedrive } from "@/lib/integracoes/pipedrive-pendencias";
 import { salvarPendentesNaAgendaDaEquipe } from "@/lib/integracoes/google-agenda";
-import { ativarCaminhoDeVolta, marcarAlteracaoConferida, puxarNegocioDoPedido } from "@/lib/integracoes/pipedrive-volta";
+import { ativarCaminhoDeVolta, estadoDoCaminhoDeVolta, marcarAlteracaoConferida, puxarNegocioDoPedido } from "@/lib/integracoes/pipedrive-volta";
 import { perfilPermite } from "@/lib/papeis";
 import { despacharPendentes } from "@/lib/integracoes/whatsapp";
 import type { Resultado } from "./pedidos";
@@ -179,6 +179,16 @@ export async function puxarDoPipedrive(numero: number, simular: boolean): Promis
       revalidatePath("/painel/pedidos");
     }
     return { ok: true, avisos: linhas };
+  } catch (erro) {
+    return { ok: false, erro: erro instanceof Error ? erro.message : "Falhou." };
+  }
+}
+
+/** Como está o aviso no PipeDrive (ativo? última entrega? resposta?). */
+export async function verEstadoDoCaminhoDeVolta(): Promise<Resultado> {
+  await exigirAdministradorTecnico();
+  try {
+    return { ok: true, avisos: await estadoDoCaminhoDeVolta() };
   } catch (erro) {
     return { ok: false, erro: erro instanceof Error ? erro.message : "Falhou." };
   }

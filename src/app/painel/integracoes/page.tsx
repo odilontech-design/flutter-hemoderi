@@ -8,7 +8,7 @@ import { registrarAvisoDePagamentoBradesco, testarConexaoBradesco } from "@/app/
 import { codigoDoPedido } from "@/lib/numeracao";
 import { formatarData, formatarDataHora } from "@/lib/data";
 import { pendenciasDeSincronizacao } from "@/lib/sincronizacao";
-import { reenviarFalhasWhatsapp, reprocessarPipedrive, reprocessarTodasPipedrive, testarConexaoPipedrive, verificarDonoPipedrive, mostrarCamposDoPipedrive, ativarCaminhoDeVoltaPipedrive } from "@/app/actions/integracoes";
+import { reenviarFalhasWhatsapp, reprocessarPipedrive, reprocessarTodasPipedrive, testarConexaoPipedrive, verificarDonoPipedrive, mostrarCamposDoPipedrive, ativarCaminhoDeVoltaPipedrive, verEstadoDoCaminhoDeVolta } from "@/app/actions/integracoes";
 import { integracaoConfigurada as googleConfigurado, agendaDaEquipe } from "@/lib/integracoes/google-api";
 import { configuradoBradesco } from "@/lib/integracoes/bradesco-pix";
 import { pipedriveConfigurado } from "@/lib/integracoes/pipedrive";
@@ -221,6 +221,7 @@ export default async function Integracoes() {
           <BotaoAcao acao={ativarCaminhoDeVoltaPipedrive} confirmar="Cadastrar no PipeDrive o aviso que traz para o sistema as alterações de valor, repasse, profissional, paciente e pagamento?">
             Ativar caminho de volta (PipeDrive → sistema)
           </BotaoAcao>
+          <BotaoAcao acao={verEstadoDoCaminhoDeVolta}>Ver estado do aviso no PipeDrive</BotaoAcao>
           {pendencias.length > 0 && (
             <BotaoAcao
               acao={reprocessarTodasPipedrive}

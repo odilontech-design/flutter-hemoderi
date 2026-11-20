@@ -255,9 +255,11 @@ export async function ativarCaminhoDeVolta(urlDoSistema: string): Promise<{ ok: 
   if (!pipedriveConfigurado()) return { ok: false, mensagem: "PipeDrive não configurado." };
   const endereco = `${urlDoSistema.replace(/\/$/, "")}/api/pipedrive/webhook`;
   try {
-    const existentes = ((await chamarPipedrive("/webhooks", "GET")) as { data?: { id: number; subscription_url?: string; event_object?: string; is_active?: number | boolean }[] | null } | null)?.data ?? [];
+    const existentes = ((await chamarPipedrive("/webhooks", "GET")) as { data?: AvisoCadastrado[] | null } | null)?.data ?? [];
     const igual = existentes.find((w) => w.subscription_url === endereco && w.event_object === "deal");
-    if (igual) return { ok: true, mensagem: `Já estava ativo (aviso ${igual.id} → ${endereco}).` };
+    if (igual && Boolean(Number(igual.is_active ?? 1))) return { ok: true, mensagem: `Já estava ativo (aviso ${igual.id} → ${endereco}). ${resumoDoAviso(igual)}` };
+    // Aviso que o PipeDrive desativou (falhas seguidas) ou criado com a senha antiga: apaga e cadastra de novo.
+    if (igual) await chamarPipedrive(`/webhooks/${igual.id}`, "DELETE");
     const criado = (await chamarPipedrive("/webhooks", "POST", {
       subscription_url: endereco,
       event_action: "change",
@@ -307,4 +309,34 @@ export async function marcarAlteracaoConferida(pedidoId: string, usuarioId: stri
     data: { sistema: "PIPEDRIVE", entidade: "Pedido", entidadeId: pedidoId, acao: ACAO_VOLTA, sucesso: true, erro: null },
   });
   await registrarAuditoria(usuarioId, "Pedido", pedidoId, `${ACAO_VOLTA}-conferido`, "Alteração do PipeDrive conferida à mão.");
+}
+
+type AvisoCadastrado = {
+  id: number;
+  subscription_url?: string;
+  event_object?: string;
+  event_action?: string;
+  is_active?: number | boolean;
+  last_delivery_time?: string | null;
+  last_http_status?: number | string | null;
+  remove_reason?: string | null;
+  version?: string;
+};
+
+function resumoDoAviso(w: AvisoCadastrado): string {
+  const ativo = Boolean(Number(w.is_active ?? 1)) ? "ativo" : "DESATIVADO pelo PipeDrive";
+  return `Estado no PipeDrive: ${ativo}; última entrega: ${w.last_delivery_time ?? "nunca"}; resposta do sistema na última entrega: ${w.last_http_status ?? "—"}${w.remove_reason ? `; motivo: ${w.remove_reason}` : ""}.`;
+}
+
+/**
+ * Como está o aviso no PipeDrive: se está ativo, quando foi a última entrega e
+ * o que o sistema respondeu (401 = senha não confere; 200 = chegou). É o que
+ * separa "ninguém mexeu em nenhum negócio" de "o PipeDrive não consegue entregar".
+ */
+export async function estadoDoCaminhoDeVolta(): Promise<string[]> {
+  if (!pipedriveConfigurado()) return ["PipeDrive não configurado."];
+  const avisos = ((await chamarPipedrive("/webhooks", "GET")) as { data?: AvisoCadastrado[] | null } | null)?.data ?? [];
+  const deNegocio = avisos.filter((w) => w.subscription_url?.includes("/api/pipedrive/webhook"));
+  if (deNegocio.length === 0) return ["Nenhum aviso cadastrado no PipeDrive para o sistema. Clique em \"Ativar caminho de volta\"."];
+  return deNegocio.map((w) => `Aviso ${w.id} (${w.event_object ?? "?"}/${w.event_action ?? "?"}, versão ${w.version ?? "?"}) → ${w.subscription_url}. ${resumoDoAviso(w)}`);
 }
