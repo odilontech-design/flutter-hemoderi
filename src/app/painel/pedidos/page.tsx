@@ -13,7 +13,7 @@ import { formatarReais } from "@/lib/dinheiro";
 import { etapaDoPerfil, etapasDoPerfil } from "@/lib/esteira";
 import { formatarAtraso, houveAtraso, minutosDeAtraso } from "@/lib/atraso";
 import { hojeUTC } from "@/lib/data";
-import { profissionaisIndisponiveis } from "@/lib/alocacao";
+import { profissionaisIndisponiveisEmLote } from "@/lib/alocacao";
 
 /** Marca no seletor quem declarou ausência no horário — alocável, com aviso. */
 const AVISO_AUSENTE = "⚠ marcou ausência";
@@ -142,15 +142,11 @@ export default async function Esteira({
   const indisponiveisPorPedido = new Map<string, Set<string>>();
   // Ausentes continuam na lista (ata de 13/10), só com o aviso no nome.
   const ausentesPorPedido = new Map<string, Set<string>>();
-  await Promise.all(
-    pedidos
-      .filter((p) => p.status === "CONFIRMADO")
-      .map(async (p) => {
-        const { ocupados, ausentes } = await profissionaisIndisponiveis(p.data, p.horaInicio, p.duracaoMin, p.id);
-        indisponiveisPorPedido.set(p.id, ocupados);
-        ausentesPorPedido.set(p.id, ausentes);
-      })
-  );
+  const emLote = await profissionaisIndisponiveisEmLote(pedidos.filter((p) => p.status === "CONFIRMADO"));
+  emLote.forEach(({ ocupados, ausentes }, id) => {
+    indisponiveisPorPedido.set(id, ocupados);
+    ausentesPorPedido.set(id, ausentes);
+  });
 
   // Os serviços de UM agendamento (mesmo grupo) ainda em andamento aparecem
   // juntos, num cartão só, com uma alocação só. Grupo de um membro na lista

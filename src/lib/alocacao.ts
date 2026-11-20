@@ -578,6 +578,50 @@ export async function profissionaisIndisponiveis(
 }
 
 /**
+ * Quem está ocupado ou ausente em cada um dos pedidos, com DUAS consultas no
+ * total (a lista de Agendamentos chamava `profissionaisIndisponiveis` uma vez
+ * por pedido confirmado: duas consultas cada, dezenas por abertura de tela).
+ * O resultado de cada pedido é o mesmo que a função de um pedido só devolveria.
+ */
+export async function profissionaisIndisponiveisEmLote(
+  pedidos: { id: string; data: Date; horaInicio: string; duracaoMin: number }[]
+): Promise<Map<string, { ocupados: Set<string>; ausentes: Set<string> }>> {
+  const resultado = new Map<string, { ocupados: Set<string>; ausentes: Set<string> }>();
+  if (pedidos.length === 0) return resultado;
+  const datas = Array.from(new Map(pedidos.map((p) => [p.data.getTime(), p.data])).values());
+
+  const [pedidosDoDia, bloqueiosDoDia] = await Promise.all([
+    prisma.pedido.findMany({
+      where: { data: { in: datas }, status: { in: STATUS_ATIVOS }, profissionalId: { not: null } },
+      select: { id: true, data: true, profissionalId: true, horaInicio: true, duracaoMin: true },
+    }),
+    prisma.bloqueio.findMany({
+      where: { data: { in: datas } },
+      select: { data: true, profissionalId: true, horaInicio: true, horaFim: true },
+    }),
+  ]);
+
+  for (const p of pedidos) {
+    const alvo = intervaloDe(p.horaInicio, p.duracaoMin);
+    const dia = p.data.getTime();
+    const ocupados = new Set<string>();
+    for (const o of pedidosDoDia) {
+      if (o.id === p.id || o.data.getTime() !== dia || !o.profissionalId) continue;
+      if (haSobreposicao(alvo, intervaloDe(o.horaInicio, o.duracaoMin))) ocupados.add(o.profissionalId);
+    }
+    const ausentes = new Set<string>();
+    for (const b of bloqueiosDoDia) {
+      if (b.data.getTime() !== dia) continue;
+      const ausencia =
+        b.horaInicio && b.horaFim ? { inicio: paraMinutos(b.horaInicio), fim: paraMinutos(b.horaFim) } : { inicio: 0, fim: 24 * 60 };
+      if (haSobreposicao(alvo, ausencia)) ausentes.add(b.profissionalId);
+    }
+    resultado.set(p.id, { ocupados, ausentes });
+  }
+  return resultado;
+}
+
+/**
  * Primeiro equipamento livre no horário — usado ao alocar serviço que exige.
  *
  * `tipoEquipamento` restringe a busca ao tipo que o serviço pede (casa com

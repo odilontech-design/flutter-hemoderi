@@ -4,8 +4,12 @@ import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { precisaAvisar, type Aviso } from "@/lib/avisos";
 
-/** De quanto em quanto tempo os avisos são consultados — só com a aba à vista. */
-const INTERVALO_MS = 60_000;
+/**
+ * De quanto em quanto tempo os avisos são consultados — só com a aba à vista.
+ * 2 min (era 1): cada consulta é uma invocação de função na Vercel e há dezenas
+ * de abas abertas o dia inteiro; ao voltar para a aba a consulta é imediata.
+ */
+const INTERVALO_MS = 120_000;
 
 const chaveDoMarcador = (area: string, chave: string) => `hemoderi:aviso:${area}:${chave}`;
 
