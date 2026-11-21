@@ -1,0 +1,93 @@
+name: App iOS — enviar para o TestFlight
+
+# Gera o app do iPhone num Mac do GitHub e já envia para o App Store Connect
+# (TestFlight). Rode pela aba Actions → "Run workflow" e escolha o app.
+#
+# Antes da primeira execução (uma vez só):
+#  1. Conta Apple Developer da Hemoderi (organização) ativa.
+#  2. No App Store Connect, criar o app com o identificador br.com.hemoderi.clinica
+#     (e br.com.hemoderi.profissional) — o envio falha se o app não existir lá.
+#  3. Chave de API do App Store Connect (Usuários e acesso → Integrações →
+#     App Store Connect API → papel "App Manager") e os secrets:
+#       APPLE_TEAM_ID                 (10 letras/números, em Membership)
+#       APP_STORE_CONNECT_KEY_ID      (ID da chave)
+#       APP_STORE_CONNECT_ISSUER_ID   (Issuer ID, no topo da página de chaves)
+#       APP_STORE_CONNECT_KEY_P8      (conteúdo do arquivo .p8 baixado — uma vez só)
+# A assinatura (certificado e perfil) é automática: o Xcode cria com a chave de API.
+# Só iPhone (TARGETED_DEVICE_FAMILY=1): com iPad a Apple exige capturas de iPad também.
+on:
+  workflow_dispatch:
+    inputs:
+      app:
+        description: "Qual app"
+        type: choice
+        options: [ambos, clinica, profissional]
+        default: ambos
+
+jobs:
+  ios:
+    runs-on: macos-15
+    strategy:
+      fail-fast: false
+      matrix:
+        app: ${{ fromJSON(inputs.app == 'ambos' && '["clinica","profissional"]' || format('["{0}"]', inputs.app)) }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Conferir os secrets da Apple
+        env:
+          TEAM: ${{ secrets.APPLE_TEAM_ID }}
+          KEY_ID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
+          ISSUER: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
+          P8: ${{ secrets.APP_STORE_CONNECT_KEY_P8 }}
+        run: |
+          for V in TEAM KEY_ID ISSUER P8; do
+            if [ -z "${!V}" ]; then echo "::error::Falta um dos secrets da Apple (APPLE_TEAM_ID, APP_STORE_CONNECT_KEY_ID, APP_STORE_CONNECT_ISSUER_ID, APP_STORE_CONNECT_KEY_P8)."; exit 1; fi
+          done
+      - name: Gerar o projeto iOS
+        working-directory: mobile/${{ matrix.app }}
+        run: |
+          npm install --no-audit --no-fund
+          bash ../scripts/preparar-nativo.sh ${{ matrix.app }}
+      - name: Notificações (push) no projeto
+        working-directory: mobile/${{ matrix.app }}/ios/App
+        run: |
+          cat > App/App.entitlements <<'PLIST'
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0"><dict><key>aps-environment</key><string>production</string></dict></plist>
+          PLIST
+          sudo gem install xcodeproj --no-document >/dev/null
+          ruby -e 'require "xcodeproj"; p = Xcodeproj::Project.open("App.xcodeproj"); p.targets.find { |t| t.name == "App" }.build_configurations.each { |c| c.build_settings["CODE_SIGN_ENTITLEMENTS"] = "App/App.entitlements" }; p.save'
+      - name: Compilar e enviar ao TestFlight
+        working-directory: mobile/${{ matrix.app }}/ios/App
+        env:
+          TEAM: ${{ secrets.APPLE_TEAM_ID }}
+          KEY_ID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
+          ISSUER: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
+          P8: ${{ secrets.APP_STORE_CONNECT_KEY_P8 }}
+        run: |
+          echo "$P8" > "$RUNNER_TEMP/chave.p8"
+          VERSAO="$(node -p "require('../../package.json').version")"
+          ALVO=$([ -d App.xcworkspace ] && echo "-workspace App.xcworkspace" || echo "-project App.xcodeproj")
+          AUTENTICACAO="-allowProvisioningUpdates -authenticationKeyPath $RUNNER_TEMP/chave.p8 -authenticationKeyID $KEY_ID -authenticationKeyIssuerID $ISSUER"
+          xcodebuild $ALVO -scheme App -configuration Release -destination 'generic/platform=iOS' \
+            -archivePath "$RUNNER_TEMP/App.xcarchive" $AUTENTICACAO \
+            DEVELOPMENT_TEAM="$TEAM" CODE_SIGN_STYLE=Automatic TARGETED_DEVICE_FAMILY=1 \
+            MARKETING_VERSION="$VERSAO" CURRENT_PROJECT_VERSION="${{ github.run_number }}" archive
+          cat > "$RUNNER_TEMP/exportar.plist" <<PLIST
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0"><dict>
+            <key>method</key><string>app-store-connect</string>
+            <key>destination</key><string>upload</string>
+            <key>teamID</key><string>$TEAM</string>
+            <key>signingStyle</key><string>automatic</string>
+          </dict></plist>
+          PLIST
+          xcodebuild -exportArchive -archivePath "$RUNNER_TEMP/App.xcarchive" -exportOptionsPlist "$RUNNER_TEMP/exportar.plist" \
+            -exportPath "$RUNNER_TEMP/saida" $AUTENTICACAO
+          rm -f "$RUNNER_TEMP/chave.p8"
+          echo "Enviado ao App Store Connect. Em alguns minutos aparece no TestFlight."

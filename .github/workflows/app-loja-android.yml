@@ -1,0 +1,86 @@
+name: App Android — versão para a loja (AAB)
+
+# Gera o arquivo que vai para o Google Play (.aab), assinado com a chave de
+# envio. Rode pela aba Actions → "Run workflow" e escolha o app.
+#
+# Secrets necessários: ANDROID_KEYSTORE_BASE64 e ANDROID_KEYSTORE_SENHA (do
+# workflow "gerar chave de envio") e GOOGLE_SERVICES_JSON_CLINICA /
+# GOOGLE_SERVICES_JSON_PROFISSIONAL (push). O número da versão é o número da
+# execução, sempre maior que o anterior, como a loja exige.
+#
+# Opcional: com o secret PLAY_CONTA_DE_SERVICO_JSON (conta de serviço com acesso
+# ao Google Play Console), o arquivo já sobe para o teste interno. O PRIMEIRO
+# envio de cada app tem de ser feito à mão no Play Console.
+on:
+  workflow_dispatch:
+    inputs:
+      app:
+        description: "Qual app"
+        type: choice
+        options: [ambos, clinica, profissional]
+        default: ambos
+
+jobs:
+  aab:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        app: ${{ fromJSON(inputs.app == 'ambos' && '["clinica","profissional"]' || format('["{0}"]', inputs.app)) }}
+    env:
+      TEM_CONTA_PLAY: ${{ secrets.PLAY_CONTA_DE_SERVICO_JSON != '' && 'sim' || '' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+      - name: Gerar o projeto Android
+        working-directory: mobile/${{ matrix.app }}
+        env:
+          NUMERO_DA_VERSAO: ${{ github.run_number }}
+        run: |
+          npm install --no-audit --no-fund
+          bash ../scripts/preparar-nativo.sh ${{ matrix.app }}
+      - name: google-services.json (push)
+        working-directory: mobile/${{ matrix.app }}
+        env:
+          JSON_CLINICA: ${{ secrets.GOOGLE_SERVICES_JSON_CLINICA }}
+          JSON_PROFISSIONAL: ${{ secrets.GOOGLE_SERVICES_JSON_PROFISSIONAL }}
+        run: |
+          if [ "${{ matrix.app }}" = "clinica" ]; then CONTEUDO="$JSON_CLINICA"; else CONTEUDO="$JSON_PROFISSIONAL"; fi
+          if [ -z "$CONTEUDO" ]; then echo "::error::Falta o google-services.json deste app (secret)."; exit 1; fi
+          echo "$CONTEUDO" > android/app/google-services.json
+      - name: Compilar o AAB
+        working-directory: mobile/${{ matrix.app }}/android
+        run: ./gradlew bundleRelease
+      - name: Assinar com a chave de envio
+        working-directory: mobile/${{ matrix.app }}/android
+        env:
+          CHAVE: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          SENHA: ${{ secrets.ANDROID_KEYSTORE_SENHA }}
+        run: |
+          if [ -z "$CHAVE" ] || [ -z "$SENHA" ]; then echo "::error::Faltam ANDROID_KEYSTORE_BASE64 e ANDROID_KEYSTORE_SENHA."; exit 1; fi
+          echo "$CHAVE" | base64 -d > "$RUNNER_TEMP/envio.jks"
+          AAB=app/build/outputs/bundle/release/app-release.aab
+          jarsigner -keystore "$RUNNER_TEMP/envio.jks" -storepass "$SENHA" -keypass "$SENHA" -sigalg SHA256withRSA -digestalg SHA-256 "$AAB" hemoderi
+          jarsigner -verify "$AAB"
+          rm -f "$RUNNER_TEMP/envio.jks"
+          mkdir -p "$GITHUB_WORKSPACE/saida"
+          cp "$AAB" "$GITHUB_WORKSPACE/saida/hemoderi-${{ matrix.app }}-${{ github.run_number }}.aab"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: hemoderi-${{ matrix.app }}-loja-${{ github.run_number }}
+          path: saida/*.aab
+      - name: Enviar para o teste interno do Google Play (se configurado)
+        if: env.TEM_CONTA_PLAY == 'sim'
+        uses: r0adkll/upload-google-play@v1
+        with:
+          serviceAccountJsonPlainText: ${{ secrets.PLAY_CONTA_DE_SERVICO_JSON }}
+          packageName: br.com.hemoderi.${{ matrix.app }}
+          releaseFiles: saida/*.aab
+          track: internal
+          status: draft

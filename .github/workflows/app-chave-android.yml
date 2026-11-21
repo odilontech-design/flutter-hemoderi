@@ -1,0 +1,43 @@
+name: App Android — gerar chave de envio (uma vez só)
+
+# Gera a CHAVE DE ENVIO (upload key) dos apps no Google Play. Roda uma vez só.
+# A chave fica protegida pela senha do secret ANDROID_KEYSTORE_SENHA, que você
+# cadastra ANTES de rodar. O resultado sai como arquivo para baixar, que fica
+# guardado só por 1 dia: baixe, guarde num lugar seguro (gerenciador de senhas)
+# e copie o conteúdo de chave-base64.txt para o secret ANDROID_KEYSTORE_BASE64.
+# Depois apague o arquivo da execução no GitHub.
+#
+# Com o "Play App Signing" (padrão do Google Play), esta é só a chave de ENVIO:
+# se um dia ela se perder, o Google troca por outra. A chave que assina o app
+# para os celulares fica com o Google.
+on:
+  workflow_dispatch:
+
+jobs:
+  chave:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+      - name: Gerar a chave
+        env:
+          SENHA: ${{ secrets.ANDROID_KEYSTORE_SENHA }}
+        run: |
+          if [ -z "$SENHA" ] || [ ${#SENHA} -lt 12 ]; then
+            echo "::error::Cadastre antes o secret ANDROID_KEYSTORE_SENHA (mínimo 12 caracteres)."
+            exit 1
+          fi
+          mkdir chave
+          keytool -genkeypair -v -keystore chave/hemoderi-envio.jks -alias hemoderi \
+            -keyalg RSA -keysize 4096 -validity 10000 \
+            -storepass "$SENHA" -keypass "$SENHA" \
+            -dname "CN=Hemoderi, O=Hemoderi, L=Sao Paulo, ST=SP, C=BR"
+          base64 -w0 chave/hemoderi-envio.jks > chave/chave-base64.txt
+          keytool -list -v -keystore chave/hemoderi-envio.jks -storepass "$SENHA" | grep -E "SHA1|SHA256" > chave/impressoes-digitais.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: chave-de-envio-android
+          path: chave/
+          retention-days: 1

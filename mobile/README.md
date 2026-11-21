@@ -35,12 +35,6 @@ O workflow `.github/workflows/app-android.yml` gera o APK de teste dos dois apps
 Para o iPhone é preciso um macOS (Codemagic ou GitHub Actions macOS) e a conta
 Apple Developer da Hemoderi.
 
-## O que falta para publicar
-1. Contas Apple Developer e Google Play da Hemoderi (D-U-N-S, 25/11).
-2. Projeto no Firebase com os dois apps (`br.com.hemoderi.*`), os arquivos
-   `google-services.json` (Android) e `GoogleService-Info.plist` (iOS) e a chave
-   APNs cadastrada no Firebase.
-3. Ícone, nome e capturas de tela das lojas; política de privacidade em URL;
-   exclusão de conta dentro do app; contas de teste para a revisão.
-4. Assinatura: keystore Android e certificados/perfis da Apple.
-5. Entrada por biometria (próxima etapa).
+## Publicar nas lojas
+O passo a passo, os textos das fichas, as respostas dos formulários de
+privacidade e as notas para a revisão estão em [`LOJAS.md`](LOJAS.md).
