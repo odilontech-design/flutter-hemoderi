@@ -850,3 +850,51 @@ export async function descreverNegocioDoPedido(numeroDoPedido: number): Promise<
     ...campos,
   ];
 }
+
+/**
+ * Os funis e as etapas do PipeDrive, e onde estão hoje os últimos negócios
+ * criados pelo sistema (21/11: a equipe move o negócio de funil e o André quer
+ * que a integração considere isso — antes de decidir a regra, ver o que existe).
+ * Só leitura.
+ */
+export async function descreverFunisDoPipedrive(amostra = 30): Promise<string[]> {
+  const funis = ((await chamar("/pipelines", "GET")) as { data?: { id: number; name: string; active?: boolean }[] | null } | null)?.data ?? [];
+  const etapas =
+    ((await chamar("/stages", "GET")) as { data?: { id: number; name: string; pipeline_id: number; order_nr?: number }[] | null } | null)?.data ?? [];
+  const nomeDaEtapa = new Map(etapas.map((e) => [e.id, e.name]));
+  const nomeDoFunil = new Map(funis.map((f) => [f.id, f.name]));
+  let ondeNasce = "não encontrado";
+  try {
+    ondeNasce = (await resolverFunil()).descricao;
+  } catch (erro) {
+    ondeNasce = descreverErroPipedrive(erro);
+  }
+  const linhas = [`Negócios novos do sistema nascem em: ${ondeNasce}`];
+  for (const f of funis) {
+    const desteFunil = etapas.filter((e) => e.pipeline_id === f.id).sort((a, b) => (a.order_nr ?? 0) - (b.order_nr ?? 0));
+    linhas.push(`Funil "${f.name}" (id ${f.id}): ${desteFunil.map((e) => e.name).join(" → ") || "sem etapas"}`);
+  }
+
+  const pedidos = await prisma.pedido.findMany({
+    where: { apoioDeId: null, pipedriveNegocioId: { not: null }, clinica: { contaDeTeste: false } },
+    orderBy: { numero: "desc" },
+    take: amostra,
+    select: { pipedriveNegocioId: true },
+  });
+  const contagem = new Map<string, number>();
+  let lidos = 0;
+  for (const p of pedidos) {
+    try {
+      const d = ((await chamar(`/deals/${p.pipedriveNegocioId}`, "GET")) as { data?: { pipeline_id?: number; stage_id?: number; status?: string } | null } | null)?.data;
+      if (!d) continue;
+      lidos++;
+      const chave = `${nomeDoFunil.get(d.pipeline_id ?? 0) ?? `funil ${d.pipeline_id}`} › ${nomeDaEtapa.get(d.stage_id ?? 0) ?? `etapa ${d.stage_id}`} (${d.status ?? "?"})`;
+      contagem.set(chave, (contagem.get(chave) ?? 0) + 1);
+    } catch {
+      // negócio apagado: fica fora da amostra
+    }
+  }
+  linhas.push(`Onde estão hoje os ${lidos} negócios mais recentes do sistema:`);
+  for (const [onde, n] of Array.from(contagem.entries()).sort((a, b) => b[1] - a[1])) linhas.push(`  ${n} em ${onde}`);
+  return linhas;
+}

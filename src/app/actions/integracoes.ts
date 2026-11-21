@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { exigirAdministradorTecnico, exigirInterno } from "@/lib/sessao";
-import { apagarNegociosDeTeste, completarClientesDosNegocios, descreverCamposDoPipedrive, descreverNegocioDoPedido, donoDosNegocios, reatribuirNegocios, testarConexao, usuariosDoPipedrive } from "@/lib/integracoes/pipedrive";
+import { apagarNegociosDeTeste, completarClientesDosNegocios, descreverCamposDoPipedrive, descreverFunisDoPipedrive, descreverNegocioDoPedido, donoDosNegocios, reatribuirNegocios, testarConexao, usuariosDoPipedrive } from "@/lib/integracoes/pipedrive";
 import { reprocessarPedidoPipedrive, reprocessarPendenciasPipedrive } from "@/lib/integracoes/pipedrive-pendencias";
 import { salvarPendentesNaAgendaDaEquipe } from "@/lib/integracoes/google-agenda";
 import { ativarCaminhoDeVolta, estadoDoCaminhoDeVolta, marcarAlteracaoConferida, puxarNegocioDoPedido } from "@/lib/integracoes/pipedrive-volta";
@@ -189,6 +189,16 @@ export async function verEstadoDoCaminhoDeVolta(): Promise<Resultado> {
   await exigirAdministradorTecnico();
   try {
     return { ok: true, avisos: await estadoDoCaminhoDeVolta() };
+  } catch (erro) {
+    return { ok: false, erro: erro instanceof Error ? erro.message : "Falhou." };
+  }
+}
+
+/** Os funis e etapas do PipeDrive e onde estão os últimos negócios do sistema. */
+export async function mostrarFunisDoPipedrive(): Promise<Resultado> {
+  await exigirAdministradorTecnico();
+  try {
+    return { ok: true, avisos: await descreverFunisDoPipedrive() };
   } catch (erro) {
     return { ok: false, erro: erro instanceof Error ? erro.message : "Falhou." };
   }

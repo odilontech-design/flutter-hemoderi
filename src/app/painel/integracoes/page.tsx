@@ -8,7 +8,7 @@ import { registrarAvisoDePagamentoBradesco, testarConexaoBradesco } from "@/app/
 import { codigoDoPedido } from "@/lib/numeracao";
 import { formatarData, formatarDataHora } from "@/lib/data";
 import { pendenciasDeSincronizacao } from "@/lib/sincronizacao";
-import { reenviarFalhasWhatsapp, reprocessarPipedrive, reprocessarTodasPipedrive, testarConexaoPipedrive, verificarDonoPipedrive, mostrarCamposDoPipedrive, ativarCaminhoDeVoltaPipedrive, verEstadoDoCaminhoDeVolta } from "@/app/actions/integracoes";
+import { reenviarFalhasWhatsapp, reprocessarPipedrive, reprocessarTodasPipedrive, testarConexaoPipedrive, verificarDonoPipedrive, mostrarCamposDoPipedrive, ativarCaminhoDeVoltaPipedrive, verEstadoDoCaminhoDeVolta, mostrarFunisDoPipedrive } from "@/app/actions/integracoes";
 import { integracaoConfigurada as googleConfigurado, agendaDaEquipe } from "@/lib/integracoes/google-api";
 import { configuradoBradesco } from "@/lib/integracoes/bradesco-pix";
 import { pipedriveConfigurado } from "@/lib/integracoes/pipedrive";
@@ -213,6 +213,7 @@ export default async function Integracoes() {
           <BotaoAcao acao={testarConexaoPipedrive}>Testar conexão</BotaoAcao>
           <BotaoAcao acao={verificarDonoPipedrive}>Quem é o dono dos negócios?</BotaoAcao>
           <BotaoAcao acao={mostrarCamposDoPipedrive}>Ver campos do PipeDrive</BotaoAcao>
+          <BotaoAcao acao={mostrarFunisDoPipedrive}>Ver funis do PipeDrive</BotaoAcao>
           <ReatribuirNegocios />
           <ApagarNegociosDeTeste />
           <ConferirNegocio />
